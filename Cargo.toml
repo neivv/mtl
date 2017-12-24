@@ -1,0 +1,41 @@
+[package]
+name = "mtl"
+version = "0.1.0"
+authors = ["Markus Heikkinen <ittevien@gmail.com>"]
+
+[lib]
+name = "mtl"
+crate-type = ["cdylib"]
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+debug = true
+panic = "abort"
+overflow-checks = true
+
+[dependencies]
+backtrace = "0.3"
+byteorder = "1.1"
+chrono = "0.4"
+failure = "0.1.1"
+fern = "0.4"
+kernel32-sys = "0.2.2"
+lazy_static = "0.2"
+libc = "0.2"
+log = "0.3"
+rust-ini = "0.10"
+scopeguard = "0.3.2"
+serde = "1.0.15"
+serde_derive = "1.0.15"
+thread_local = "0.3.5"
+toml = "0.4.5"
+user32-sys = "0.2"
+
+[dependencies.winapi]
+version = "0.3"
+features = ["heapapi", "libloaderapi", "processthreadsapi", "winuser"]
+
+[dependencies.samase_shim]
+path = "../samase/samase_shim"
