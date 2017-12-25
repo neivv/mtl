@@ -23,12 +23,14 @@ pub struct Timers {
 
 pub struct Config {
     pub timers: Timers,
+    pub return_cargo_softcode: bool,
 }
 
 impl Config {
     pub fn requires_frame_hook(&self) -> bool {
         let Config {
             ref timers,
+            return_cargo_softcode: _,
         } = *self;
         let Timers {
             ref hallucination_death,
@@ -47,10 +49,30 @@ impl Config {
             stim.is_some() || ensnare.is_some() || lockdown.is_some() || irradiate.is_some() ||
             stasis.is_some() || plague.is_some() || maelstrom.is_some() || acid_spores.is_some()
     }
+
+    pub fn requires_order_hook(&self) -> bool {
+        let Config {
+            timers: _,
+            return_cargo_softcode,
+        } = *self;
+        return_cargo_softcode
+    }
 }
 
 lazy_static! {
     static ref CONFIG: Mutex<Option<Arc<Config>>> = Mutex::new(None);
+}
+
+fn bool_field(out: &mut bool, value: &str, field: &'static str) -> Result<(), Error> {
+    match value {
+        "true" | "True" | "1" | "y" | "Y" => *out = true,
+        "false" | "False" | "0" | "n" | "N" => *out = true,
+        _ => {
+            let msg = format!("Invalid value `{}` for bool {}", value, field);
+            return Err(Context::new(msg).into());
+        }
+    }
+    Ok(())
 }
 
 fn u32_field(out: &mut Option<u32>, value: &str, field_name: &'static str) -> Result<(), Error> {
@@ -84,6 +106,7 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
     let ini = Ini::read_from(&mut data)
         .map_err(|e| e.context("Unable to read ini"))?;
     let mut timers: Timers = Default::default();
+    let mut return_cargo_softcode = false;
     if let Some(section) = ini.section(Some("timers")) {
         for (key, val) in section {
             match &**key {
@@ -129,12 +152,23 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
                         timers.unit_deaths.push((UnitId(unit_id), time));
                     }
                 }
-                x => return Err(Context::new(format!("unknown field timers.{}", x)).into()),
+                x => return Err(Context::new(format!("unknown key timers.{}", x)).into()),
+            }
+        }
+    }
+    if let Some(section) = ini.section(Some("orders")) {
+        for (key, val) in section {
+            match &**key {
+                "return_cargo_softcode" => {
+                    bool_field(&mut return_cargo_softcode, val, "return_cargo_softcode")?
+                }
+                x => return Err(Context::new(format!("unknown key {}", x)).into()),
             }
         }
     }
     Ok(Config {
         timers,
+        return_cargo_softcode,
     })
 }
 

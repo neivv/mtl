@@ -13,7 +13,9 @@ unsafe impl Send for Unit {}
 pub struct UnitId(pub u16);
 
 pub mod id {
+    #![allow(dead_code)]
     use super::UnitId;
+    pub const COMMAND_CENTER: UnitId = UnitId(0x6a);
     pub const NONE: UnitId = UnitId(0xe4);
     pub const ANY_UNIT: UnitId = UnitId(0xe5);
 }

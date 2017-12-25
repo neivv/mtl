@@ -22,6 +22,7 @@ mod bw;
 mod config;
 mod frame_hook;
 mod order;
+mod order_hook;
 mod unit;
 mod windows;
 

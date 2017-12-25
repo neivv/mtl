@@ -8,6 +8,8 @@ use winapi::um::processthreadsapi::{GetCurrentProcess, TerminateProcess};
 
 use bw;
 use config;
+use order::OrderId;
+use unit::UnitId;
 use windows;
 
 struct GlobalFunc<T: Copy>(Option<T>);
@@ -76,6 +78,20 @@ static mut ISSUE_ORDER: GlobalFunc<
     unsafe extern fn(*mut bw::Unit, u32, u32, u32, *mut bw::Unit, u32)
 > = GlobalFunc(None);
 
+pub fn issue_order(
+    unit: *mut bw::Unit,
+    order: OrderId,
+    x: u32,
+    y: u32,
+    target: *mut bw::Unit,
+    fow_unit: UnitId,
+) {
+    assert!(x < 0x10000);
+    assert!(y < 0x10000);
+    assert!(unit != null_mut());
+    unsafe { ISSUE_ORDER.get()(unit, order.0 as u32, x, y, target, fow_unit.0 as u32) }
+}
+
 static mut READ_FILE: GlobalFunc<fn(*const u8, *mut usize) -> *mut u8> = GlobalFunc(None);
 pub fn read_file(name: &str) -> Option<&'static [u8]> {
     // Uh, should work fine
@@ -112,6 +128,17 @@ pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
         let result = ((*api).hook_step_objects)(::frame_hook::frame_hook, 0);
         if result == 0 {
             fatal("Couldn't hook step_objects");
+        }
+    }
+    if config.requires_order_hook() {
+        ISSUE_ORDER.init(((*api).get_region)().map(|x| mem::transmute(x)), "issue_order");
+        let result = ((*api).hook_step_order)(::order_hook::order_hook);
+        if result == 0 {
+            fatal("Couldn't hook step_order");
+        }
+        let result = ((*api).hook_step_order_hidden)(::order_hook::hidden_order_hook);
+        if result == 0 {
+            fatal("Couldn't hook step_order_hidden");
         }
     }
 }
