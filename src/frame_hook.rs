@@ -88,7 +88,26 @@ ome2_thread_local! {
 pub unsafe extern fn frame_hook() {
     let config = config();
     let timers = &config.timers;
+    let game = bw::game();
     let mut tracked = tracked().borrow_mut();
+    if (*game).frame_count == 0 {
+        *tracked = TrackedSpells::new();
+        if let Some(max) = config.supplies.zerg_max {
+            for x in &mut (*game).zerg_supply_max {
+                *x = max;
+            }
+        }
+        if let Some(max) = config.supplies.terran_max {
+            for x in &mut (*game).terran_supply_max {
+                *x = max;
+            }
+        }
+        if let Some(max) = config.supplies.protoss_max {
+            for x in &mut (*game).protoss_supply_max {
+                *x = max;
+            }
+        }
+    }
     tracked.remove_dead_units();
     for unit in unit::alive_units() {
         let t = &mut *tracked;

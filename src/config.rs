@@ -21,8 +21,16 @@ pub struct Timers {
     pub acid_spores: Option<u32>,
 }
 
+#[derive(Default)]
+pub struct Supplies {
+    pub zerg_max: Option<u32>,
+    pub terran_max: Option<u32>,
+    pub protoss_max: Option<u32>,
+}
+
 pub struct Config {
     pub timers: Timers,
+    pub supplies: Supplies,
     pub return_cargo_softcode: bool,
 }
 
@@ -30,6 +38,7 @@ impl Config {
     pub fn requires_frame_hook(&self) -> bool {
         let Config {
             ref timers,
+            ref supplies,
             return_cargo_softcode: _,
         } = *self;
         let Timers {
@@ -45,14 +54,22 @@ impl Config {
             ref maelstrom,
             ref acid_spores,
         } = *timers;
+        let Supplies {
+            ref zerg_max,
+            ref terran_max,
+            ref protoss_max,
+        } = *supplies;
         hallucination_death.is_some() || !unit_deaths.is_empty() || matrix.is_some() ||
             stim.is_some() || ensnare.is_some() || lockdown.is_some() || irradiate.is_some() ||
-            stasis.is_some() || plague.is_some() || maelstrom.is_some() || acid_spores.is_some()
+            stasis.is_some() || plague.is_some() || maelstrom.is_some() ||
+            acid_spores.is_some() || zerg_max.is_some() || terran_max.is_some() ||
+            protoss_max.is_some()
     }
 
     pub fn requires_order_hook(&self) -> bool {
         let Config {
             timers: _,
+            supplies: _,
             return_cargo_softcode,
         } = *self;
         return_cargo_softcode
@@ -107,6 +124,7 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
         .map_err(|e| e.context("Unable to read ini"))?;
     let mut timers: Timers = Default::default();
     let mut return_cargo_softcode = false;
+    let mut supplies: Supplies = Default::default();
     if let Some(section) = ini.section(Some("timers")) {
         for (key, val) in section {
             match &**key {
@@ -156,6 +174,16 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
             }
         }
     }
+    if let Some(section) = ini.section(Some("supplies")) {
+        for (key, val) in section {
+            match &**key {
+                "zerg_max" => u32_field(&mut supplies.zerg_max, val, "zerg_max")?,
+                "terran_max" => u32_field(&mut supplies.terran_max, val, "terran_max")?,
+                "protoss_max" => u32_field(&mut supplies.protoss_max, val, "protoss_max")?,
+                x => return Err(Context::new(format!("unknown key supplies.{}", x)).into()),
+            }
+        }
+    }
     if let Some(section) = ini.section(Some("orders")) {
         for (key, val) in section {
             match &**key {
@@ -168,6 +196,7 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
     }
     Ok(Config {
         timers,
+        supplies,
         return_cargo_softcode,
     })
 }
