@@ -91,6 +91,7 @@ pub unsafe extern fn frame_hook() {
     let game = bw::game();
     let mut tracked = tracked().borrow_mut();
     if (*game).frame_count == 0 {
+        bw::init_game_start_vars();
         *tracked = TrackedSpells::new();
         if let Some(max) = config.supplies.zerg_max {
             for x in &mut (*game).zerg_supply_max {

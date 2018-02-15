@@ -32,47 +32,28 @@ pub struct Config {
     pub timers: Timers,
     pub supplies: Supplies,
     pub return_cargo_softcode: bool,
+    pub zerg_building_training: bool,
 }
 
 impl Config {
-    pub fn requires_frame_hook(&self) -> bool {
-        let Config {
-            ref timers,
-            ref supplies,
-            return_cargo_softcode: _,
-        } = *self;
-        let Timers {
-            ref hallucination_death,
-            ref unit_deaths,
-            ref matrix,
-            ref stim,
-            ref ensnare,
-            ref lockdown,
-            ref irradiate,
-            ref stasis,
-            ref plague,
-            ref maelstrom,
-            ref acid_spores,
-        } = *timers;
-        let Supplies {
-            ref zerg_max,
-            ref terran_max,
-            ref protoss_max,
-        } = *supplies;
-        hallucination_death.is_some() || !unit_deaths.is_empty() || matrix.is_some() ||
-            stim.is_some() || ensnare.is_some() || lockdown.is_some() || irradiate.is_some() ||
-            stasis.is_some() || plague.is_some() || maelstrom.is_some() ||
-            acid_spores.is_some() || zerg_max.is_some() || terran_max.is_some() ||
-            protoss_max.is_some()
-    }
-
     pub fn requires_order_hook(&self) -> bool {
         let Config {
             timers: _,
             supplies: _,
             return_cargo_softcode,
+            zerg_building_training: _,
         } = *self;
         return_cargo_softcode
+    }
+
+    pub fn requires_secondary_order_hook(&self) -> bool {
+        let Config {
+            timers: _,
+            supplies: _,
+            return_cargo_softcode: _,
+            zerg_building_training,
+        } = *self;
+        zerg_building_training
     }
 }
 
@@ -124,6 +105,7 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
         .map_err(|e| e.context("Unable to read ini"))?;
     let mut timers: Timers = Default::default();
     let mut return_cargo_softcode = false;
+    let mut zerg_building_training = false;
     let mut supplies: Supplies = Default::default();
     if let Some(section) = ini.section(Some("timers")) {
         for (key, val) in section {
@@ -190,6 +172,9 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
                 "return_cargo_softcode" => {
                     bool_field(&mut return_cargo_softcode, val, "return_cargo_softcode")?
                 }
+                "zerg_training" => {
+                    bool_field(&mut zerg_building_training, val, "zerg_training")?
+                }
                 x => return Err(Context::new(format!("unknown key {}", x)).into()),
             }
         }
@@ -198,6 +183,7 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
         timers,
         supplies,
         return_cargo_softcode,
+        zerg_building_training,
     })
 }
 

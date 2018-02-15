@@ -225,6 +225,13 @@ pub struct Unit {
     pub _dc130: [u8; 0x20],
 }
 
+#[repr(C, packed)]
+pub struct DatTable {
+    pub data: *mut c_void,
+    pub entry_size: u32,
+    pub entries: u32,
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

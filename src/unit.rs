@@ -57,6 +57,10 @@ impl Unit {
         unsafe { OrderId((*self.0).order) }
     }
 
+    pub fn secondary_order(&self) -> OrderId {
+        unsafe { OrderId((*self.0).secondary_order) }
+    }
+
     pub fn is_hallucination(&self) -> bool {
         unsafe { (*self.0).flags & 0x40000000 != 0 }
     }

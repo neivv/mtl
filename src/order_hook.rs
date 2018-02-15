@@ -34,3 +34,25 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
 pub unsafe extern fn hidden_order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_void)) {
     order_hook(u, orig);
 }
+
+pub unsafe extern fn secondary_order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_void)) {
+    use order::id::*;
+
+    let unit = Unit(u as *mut bw::Unit);
+    match unit.secondary_order() {
+        TRAIN => {
+            let config = config();
+            if config.zerg_building_training {
+                let group_flags =
+                    (bw::units_dat()[0x2c].data as *mut u8).offset(unit.id().0 as isize);
+                let orig_flags = *group_flags;
+                *group_flags &= !0x1;
+                orig(u);
+                *group_flags = orig_flags;
+            } else {
+                orig(u);
+            }
+        }
+        _ => orig(u),
+    }
+}

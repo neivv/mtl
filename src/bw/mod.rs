@@ -1,6 +1,8 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 
+use std::slice;
+
 use samase;
 
 pub mod structs;
@@ -17,15 +19,24 @@ pub fn frame_count() -> u32 {
     unsafe { (*game()).frame_count }
 }
 
-lazy_static! {
-    static ref SAMASE_UNITS_DAT: usize =
-        samase::read_file("arr\\units.dat").unwrap().as_ptr() as usize;
+pub fn units_dat() -> &'static [DatTable] {
+    unsafe {
+        assert_ne!(UNITS_DAT, !0);
+        let dat = UNITS_DAT as *mut DatTable;
+        slice::from_raw_parts_mut(dat, 0x35)
+    }
+}
+
+static mut UNITS_DAT: usize = !0;
+
+pub unsafe fn init_game_start_vars() {
+    UNITS_DAT = samase::units_dat() as usize;
 }
 
 pub fn collision_rect(unit: UnitId) -> Rect {
     unsafe {
         assert!(unit.0 < 0xe4);
-        let dat = *SAMASE_UNITS_DAT as *const u8;
-        *(dat.offset(0x3124 + unit.0 as isize * 8) as *const Rect)
+        let collision = units_dat()[0x26].data as *const Rect;
+        *collision.offset(unit.0 as isize)
     }
 }

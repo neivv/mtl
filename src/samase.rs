@@ -78,6 +78,12 @@ static mut ISSUE_ORDER: GlobalFunc<
     unsafe extern fn(*mut bw::Unit, u32, u32, u32, *mut bw::Unit, u32)
 > = GlobalFunc(None);
 
+static mut UNITS_DAT: GlobalFunc<unsafe extern fn() -> *mut bw::DatTable> = GlobalFunc(None);
+
+pub fn units_dat() -> *mut bw::DatTable {
+    unsafe { UNITS_DAT.get()() }
+}
+
 pub fn issue_order(
     unit: *mut bw::Unit,
     order: OrderId,
@@ -110,6 +116,14 @@ pub fn read_file(name: &str) -> Option<&'static [u8]> {
 pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
     ::init();
 
+    let required_version = 2;
+    if (*api).version < required_version {
+        fatal(&format!(
+            "Newer samase is required. (Plugin API version {}, this plugin requires version {})",
+            (*api).version, required_version,
+        ));
+    }
+
     GAME.init(((*api).game)().map(|x| mem::transmute(x)), "Game object");
     FIRST_ACTIVE_UNIT.init(
         ((*api).first_active_unit)().map(|x| mem::transmute(x)),
@@ -121,14 +135,13 @@ pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
     );
 
     READ_FILE.0 = Some(mem::transmute(((*api).read_file)()));
+    UNITS_DAT.init(((*api).dat)(0).map(|x| mem::transmute(x)), "units_dat");
     init_config();
     //((*api).hook_on_first_file_access)(init_config);
     let config = config::config();
-    if config.requires_frame_hook() {
-        let result = ((*api).hook_step_objects)(::frame_hook::frame_hook, 0);
-        if result == 0 {
-            fatal("Couldn't hook step_objects");
-        }
+    let result = ((*api).hook_step_objects)(::frame_hook::frame_hook, 0);
+    if result == 0 {
+        fatal("Couldn't hook step_objects");
     }
     if config.requires_order_hook() {
         ISSUE_ORDER.init(((*api).get_region)().map(|x| mem::transmute(x)), "issue_order");
@@ -139,6 +152,12 @@ pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
         let result = ((*api).hook_step_order_hidden)(::order_hook::hidden_order_hook);
         if result == 0 {
             fatal("Couldn't hook step_order_hidden");
+        }
+    }
+    if config.requires_secondary_order_hook() {
+        let result = ((*api).hook_step_secondary_order)(::order_hook::secondary_order_hook);
+        if result == 0 {
+            fatal("Couldn't hook step_secondary_order");
         }
     }
 }
