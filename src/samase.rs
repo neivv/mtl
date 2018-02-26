@@ -98,6 +98,15 @@ pub fn issue_order(
     unsafe { ISSUE_ORDER.get()(unit, order.0 as u32, x, y, target, fow_unit.0 as u32) }
 }
 
+static mut PRINT_TEXT: GlobalFunc<fn(*const u8)> = GlobalFunc(None);
+pub fn print_text(msg: *const u8) {
+    unsafe {
+        if let Some(print) = PRINT_TEXT.0 {
+            print(msg);
+        }
+    }
+}
+
 static mut READ_FILE: GlobalFunc<fn(*const u8, *mut usize) -> *mut u8> = GlobalFunc(None);
 pub fn read_file(name: &str) -> Option<&'static [u8]> {
     // Uh, should work fine
@@ -116,7 +125,7 @@ pub fn read_file(name: &str) -> Option<&'static [u8]> {
 pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
     ::init();
 
-    let required_version = 2;
+    let required_version = 3;
     if (*api).version < required_version {
         fatal(&format!(
             "Newer samase is required. (Plugin API version {}, this plugin requires version {})",
@@ -144,7 +153,7 @@ pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
         fatal("Couldn't hook step_objects");
     }
     if config.requires_order_hook() {
-        ISSUE_ORDER.init(((*api).get_region)().map(|x| mem::transmute(x)), "issue_order");
+        ISSUE_ORDER.init(((*api).issue_order)().map(|x| mem::transmute(x)), "issue_order");
         let result = ((*api).hook_step_order)(::order_hook::order_hook);
         if result == 0 {
             fatal("Couldn't hook step_order");
@@ -160,6 +169,11 @@ pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
             fatal("Couldn't hook step_secondary_order");
         }
     }
+    let result = ((*api).extend_save)("mtl\0".as_ptr(), Some(::save), Some(::load), ::init_game);
+    if result == 0 {
+        ((*api).warn_unsupported_feature)(b"Saving\0".as_ptr());
+    }
+    PRINT_TEXT.0 = Some(mem::transmute(((*api).print_text)()));
 }
 
 unsafe extern fn init_config() {

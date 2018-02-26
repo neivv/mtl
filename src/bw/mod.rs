@@ -40,3 +40,9 @@ pub fn collision_rect(unit: UnitId) -> Rect {
         *collision.offset(unit.0 as isize)
     }
 }
+
+pub fn print_text<M: AsRef<str>>(msg: M) {
+    let mut buf: Vec<u8> = msg.as_ref().as_bytes().into();
+    buf.push(0);
+    samase::print_text(buf.as_ptr());
+}

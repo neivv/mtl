@@ -1,4 +1,5 @@
 extern crate backtrace;
+extern crate bincode;
 extern crate byteorder;
 extern crate chrono;
 extern crate failure;
@@ -8,6 +9,8 @@ extern crate ini;
 extern crate libc;
 #[macro_use] extern crate log;
 #[macro_use] extern crate scopeguard;
+extern crate serde;
+#[macro_use] extern crate serde_derive;
 extern crate thread_local;
 extern crate winapi;
 
@@ -112,4 +115,47 @@ pub extern fn Initialize() {
         };
         samase_shim::on_win_main(f);
     }
+}
+
+#[derive(Serialize, Deserialize)]
+struct SaveData {
+    tracked_spells: frame_hook::TrackedSpells
+}
+
+unsafe extern fn save(set_data: unsafe extern fn(*const u8, usize)) {
+    unit::init_save_mapping();
+    defer!(unit::clear_save_mapping());
+    let save = SaveData {
+        tracked_spells: frame_hook::tracked_spells(),
+    };
+    match bincode::serialize(&save) {
+        Ok(o) => {
+            set_data(o.as_ptr(), o.len());
+        }
+        Err(e) => {
+            error!("Couldn't save game: {}", e);
+            bw::print_text(format!("(Mtl) Couldn't save game: {}", e));
+        }
+    }
+}
+
+unsafe extern fn load(ptr: *const u8, len: usize) -> u32 {
+    unit::init_load_mapping();
+    defer!(unit::clear_load_mapping());
+
+    let slice = std::slice::from_raw_parts(ptr, len);
+    let data: SaveData = match bincode::deserialize(slice) {
+        Ok(o) => o,
+        Err(e) => {
+            error!("Couldn't load game: {}", e);
+            return 0
+        }
+    };
+    frame_hook::set_tracked_spells(data.tracked_spells);
+    1
+}
+
+unsafe extern fn init_game() {
+    bw::init_game_start_vars();
+    frame_hook::init_tracked_spells();
 }

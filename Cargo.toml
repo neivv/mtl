@@ -1,6 +1,6 @@
 [package]
 name = "mtl"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["Markus Heikkinen <ittevien@gmail.com>"]
 
 [lib]
@@ -14,9 +14,11 @@ panic = "abort"
 debug = true
 panic = "abort"
 overflow-checks = true
+lto = true
 
 [dependencies]
 backtrace = "0.3"
+bincode = "1.0"
 byteorder = "1.1"
 chrono = "0.4"
 failure = "0.1.1"

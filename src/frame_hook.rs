@@ -5,12 +5,14 @@ use config::config;
 use unit::{self, Unit, UnitId};
 use order;
 
+#[derive(Serialize, Deserialize, Clone)]
 struct TrackedUnit {
     unit: Unit,
     end_frame: u32,
 }
 
-struct TrackedSpells {
+#[derive(Serialize, Deserialize, Clone)]
+pub struct TrackedSpells {
     lockdown: Vec<TrackedUnit>,
     maelstrom: Vec<TrackedUnit>,
     matrix: Vec<TrackedUnit>,
@@ -85,14 +87,25 @@ ome2_thread_local! {
     TRACKED: RefCell<TrackedSpells> = tracked(RefCell::new(TrackedSpells::new()));
 }
 
+pub fn init_tracked_spells() {
+    let mut tracked = tracked().borrow_mut();
+    *tracked = TrackedSpells::new();
+}
+
+pub fn tracked_spells() -> TrackedSpells {
+    (*tracked().borrow()).clone()
+}
+
+pub fn set_tracked_spells(spells: TrackedSpells) {
+    *tracked().borrow_mut() = spells;
+}
+
 pub unsafe extern fn frame_hook() {
     let config = config();
     let timers = &config.timers;
     let game = bw::game();
     let mut tracked = tracked().borrow_mut();
     if (*game).frame_count == 0 {
-        bw::init_game_start_vars();
-        *tracked = TrackedSpells::new();
         if let Some(max) = config.supplies.zerg_max {
             for x in &mut (*game).zerg_supply_max {
                 *x = max;
