@@ -53,12 +53,20 @@ pub struct Game {
     pub completed_units_count: [[u32; 0xc]; 0xe4],
     pub unit_kills: [[u32; 0xc]; 0xe4],
     pub deaths: [[u32; 0xc]; 0xe4],
-    pub dcdd34: [u8; 0x810],
+    pub dcdd34: [u8; 0x48c],
+    pub upgrade_level_sc: [[u8; 0x2e]; 0xc],
+    pub dce3e8: [u8; 0x15c],
     pub alliances: [[u8; 0xc]; 0xc],
     pub dce5d4: [u8; 0x34],
     pub elapsed_seconds: u32,
     pub dce60c: [u8; 0x564],
     pub locations: [Location; 0xff],
+    pub dcff5c: [u8; 0x4],
+    pub tech_availability_bw: [[u8; 0x14]; 0xc],
+    pub tech_level_bw: [[u8; 0x14]; 0xc],
+    pub dc10140: [u8; 0x48],
+    pub upgrade_limit_bw: [[u8; 0xf]; 0xc],
+    pub upgrade_level_bw: [[u8; 0xf]; 0xc],
 }
 
 #[repr(C, packed)]
@@ -225,13 +233,6 @@ pub struct Unit {
     pub _dc130: [u8; 0x20],
 }
 
-#[repr(C, packed)]
-pub struct DatTable {
-    pub data: *mut c_void,
-    pub entry_size: u32,
-    pub entries: u32,
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -241,7 +242,7 @@ mod test {
         assert_eq!(mem::size_of::<AiScript>(), 0x34);
         assert_eq!(mem::size_of::<AiRegion>(), 0x34);
         assert_eq!(mem::size_of::<PlayerAiData>(), 0x4e8);
-        assert_eq!(mem::size_of::<Game>(), 0xff5c);
+        assert_eq!(mem::size_of::<Game>(), 0x102f0);
         assert_eq!(mem::size_of::<Unit>(), 0x150);
     }
 }

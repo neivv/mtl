@@ -2,7 +2,7 @@ extern crate backtrace;
 extern crate bincode;
 extern crate byteorder;
 extern crate chrono;
-extern crate failure;
+#[macro_use] extern crate failure;
 extern crate fern;
 extern crate ini;
 #[macro_use] extern crate lazy_static;
@@ -12,8 +12,10 @@ extern crate libc;
 extern crate serde;
 #[macro_use] extern crate serde_derive;
 extern crate thread_local;
+extern crate vec_map;
 extern crate winapi;
 
+extern crate bw_dat;
 extern crate samase_shim;
 
 pub mod mpqdraft;
@@ -24,9 +26,11 @@ pub mod samase;
 mod bw;
 mod config;
 mod frame_hook;
+mod game;
 mod order;
 mod order_hook;
 mod unit;
+mod upgrades;
 mod windows;
 
 use std::path::Path;

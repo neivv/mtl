@@ -3,10 +3,11 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::ptr::null_mut;
 
+use bw_dat::{OrderId, UnitId, unit};
+
 use serde::{Serializer, Serialize, Deserializer, Deserialize};
 
 use bw;
-use order::OrderId;
 use samase;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -42,17 +43,6 @@ impl<'de> Deserialize<'de> for Unit {
             None => Err(S::Error::custom(format!("Couldn't get unit for id {:?}", id))),
         }
     }
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct UnitId(pub u16);
-
-pub mod id {
-    #![allow(dead_code)]
-    use super::UnitId;
-    pub const COMMAND_CENTER: UnitId = UnitId(0x6a);
-    pub const NONE: UnitId = UnitId(0xe4);
-    pub const ANY_UNIT: UnitId = UnitId(0xe5);
 }
 
 pub struct SaveIdMapping {
@@ -153,7 +143,7 @@ impl Unit {
 
     pub fn matches_id(&self, other: UnitId) -> bool {
         let id = self.id();
-        if other == id::ANY_UNIT {
+        if other == unit::ANY_UNIT {
             true
         } else {
             id == other
@@ -175,12 +165,41 @@ impl Unit {
         unsafe { OrderId((*self.0).order) }
     }
 
+    pub fn order_state(&self) -> u8 {
+        unsafe { (*self.0).order_state }
+    }
+
     pub fn secondary_order(&self) -> OrderId {
         unsafe { OrderId((*self.0).secondary_order) }
     }
 
+    pub fn is_completed(&self) -> bool {
+        unsafe { (*self.0).flags & 0x1 != 0 }
+    }
+
     pub fn is_hallucination(&self) -> bool {
         unsafe { (*self.0).flags & 0x40000000 != 0 }
+    }
+
+    pub fn is_invisible(&self) -> bool {
+        unsafe { (*self.0).flags & 0x300 != 0 }
+    }
+
+    pub fn has_free_cloak(&self) -> bool {
+        unsafe { (*self.0).flags & 0x800 != 0 }
+    }
+
+    pub fn is_burrowed(&self) -> bool {
+        unsafe { (*self.0).flags & 0x10 != 0 }
+    }
+
+    pub fn is_disabled(&self) -> bool {
+        unsafe {
+            (*self.0).flags & 0x400 != 0 ||
+                (*self.0).lockdown_timer != 0 ||
+                (*self.0).maelstrom_timer != 0 ||
+                (*self.0).stasis_timer != 0
+        }
     }
 }
 

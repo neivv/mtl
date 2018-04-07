@@ -1,9 +1,12 @@
 use std::cell::RefCell;
 
+use bw_dat::UnitId;
+
 use bw;
 use config::config;
-use unit::{self, Unit, UnitId};
-use order;
+use game::Game;
+use unit::{self, Unit};
+use upgrades;
 
 #[derive(Serialize, Deserialize, Clone)]
 struct TrackedUnit {
@@ -52,6 +55,7 @@ impl TrackedSpells {
     }
 
     fn remove_dead_units(&mut self) {
+        use bw_dat::order::DIE;
         let TrackedSpells {
             ref mut lockdown,
             ref mut maelstrom,
@@ -65,20 +69,20 @@ impl TrackedSpells {
             ref mut hallucination_death,
             ref mut unit_deaths,
         } = *self;
-        lockdown.retain(|x| x.unit.order() != order::id::DIE);
-        maelstrom.retain(|x| x.unit.order() != order::id::DIE);
-        matrix.retain(|x| x.unit.order() != order::id::DIE);
-        stim.retain(|x| x.unit.order() != order::id::DIE);
-        ensnare.retain(|x| x.unit.order() != order::id::DIE);
-        irradiate.retain(|x| x.unit.order() != order::id::DIE);
-        stasis.retain(|x| x.unit.order() != order::id::DIE);
-        plague.retain(|x| x.unit.order() != order::id::DIE);
+        lockdown.retain(|x| x.unit.order() != DIE);
+        maelstrom.retain(|x| x.unit.order() != DIE);
+        matrix.retain(|x| x.unit.order() != DIE);
+        stim.retain(|x| x.unit.order() != DIE);
+        ensnare.retain(|x| x.unit.order() != DIE);
+        irradiate.retain(|x| x.unit.order() != DIE);
+        stasis.retain(|x| x.unit.order() != DIE);
+        plague.retain(|x| x.unit.order() != DIE);
         for a in acid_spores {
-            a.retain(|x| x.unit.order() != order::id::DIE);
+            a.retain(|x| x.unit.order() != DIE);
         }
-        hallucination_death.retain(|x| x.unit.order() != order::id::DIE);
+        hallucination_death.retain(|x| x.unit.order() != DIE);
         for &mut (_, _, ref mut units) in unit_deaths {
-            units.retain(|x| x.unit.order() != order::id::DIE);
+            units.retain(|x| x.unit.order() != DIE);
         }
     }
 }
@@ -103,21 +107,21 @@ pub fn set_tracked_spells(spells: TrackedSpells) {
 pub unsafe extern fn frame_hook() {
     let config = config();
     let timers = &config.timers;
-    let game = bw::game();
+    let game = Game::get();
     let mut tracked = tracked().borrow_mut();
-    if (*game).frame_count == 0 {
+    if game.frame_count() == 0 {
         if let Some(max) = config.supplies.zerg_max {
-            for x in &mut (*game).zerg_supply_max {
+            for x in &mut (*game.0).zerg_supply_max {
                 *x = max;
             }
         }
         if let Some(max) = config.supplies.terran_max {
-            for x in &mut (*game).terran_supply_max {
+            for x in &mut (*game.0).terran_supply_max {
                 *x = max;
             }
         }
         if let Some(max) = config.supplies.protoss_max {
-            for x in &mut (*game).protoss_supply_max {
+            for x in &mut (*game.0).protoss_supply_max {
                 *x = max;
             }
         }
@@ -151,6 +155,36 @@ pub unsafe extern fn frame_hook() {
                     death_timer(timer, unit, tracked);
                 }
             }
+        }
+        if let Some(hp_regen) = upgrades::hp_regen(&config, game, unit) {
+            (*unit.0).hitpoints = (*unit.0).hitpoints.saturating_add(hp_regen);
+            if (*unit.0).hitpoints <= 0 {
+                // No code for killing units yet
+                (*unit.0).hitpoints = 1;
+            }
+            let max_hp = unit.id().hitpoints();
+            if (*unit.0).hitpoints > max_hp {
+                (*unit.0).hitpoints = max_hp;
+            }
+        }
+        if let Some(regen) = upgrades::shield_regen(&config, game, unit) {
+            (*unit.0).shields = (*unit.0).shields.saturating_add(regen);
+            if (*unit.0).shields < 0 {
+                (*unit.0).shields = 0;
+            }
+            let max_shields = unit.id().shields();
+            if (*unit.0).shields > max_shields {
+                (*unit.0).shields = max_shields;
+            }
+        }
+        if let Some(regen) = upgrades::energy_regen(&config, game, unit) {
+            if regen > 0 {
+                (*unit.0).energy = (*unit.0).energy.saturating_add(regen as u16);
+            } else {
+                let neg = regen.checked_abs().unwrap_or(0);
+                (*unit.0).energy = (*unit.0).energy.saturating_sub(neg as u16);
+            }
+            // Not handling past-the-max, bw hopefully handles that.
         }
     }
 }

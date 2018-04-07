@@ -7,9 +7,10 @@ use samase;
 
 pub mod structs;
 
-pub use self::structs::*;
+use bw_dat::UnitId;
+use bw_dat::DatTable;
 
-use unit::UnitId;
+pub use self::structs::*;
 
 pub fn game() -> *mut Game {
     samase::game()

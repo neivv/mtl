@@ -1,6 +1,6 @@
 [package]
 name = "mtl"
-version = "0.1.4"
+version = "0.2.0"
 authors = ["Markus Heikkinen <ittevien@gmail.com>"]
 
 [lib]
@@ -15,6 +15,7 @@ debug = true
 panic = "abort"
 overflow-checks = true
 lto = true
+opt-level = 's'
 
 [dependencies]
 backtrace = "0.3"
@@ -32,6 +33,7 @@ serde = "1.0.15"
 serde_derive = "1.0.15"
 thread_local = "0.3.5"
 toml = "0.4.5"
+vec_map = "0.8.0"
 
 [dependencies.winapi]
 version = "0.3"
@@ -39,3 +41,6 @@ features = ["heapapi", "libloaderapi", "processthreadsapi", "winuser"]
 
 [dependencies.samase_shim]
 path = "../samase/samase_shim"
+
+[dependencies.bw_dat]
+path = "../ais_attackto/bw_dat"

@@ -6,10 +6,11 @@ use libc::c_void;
 use winapi::um::heapapi::{GetProcessHeap, HeapFree};
 use winapi::um::processthreadsapi::{GetCurrentProcess, TerminateProcess};
 
+use bw_dat::{self, DatTable, UnitId};
+
 use bw;
 use config;
 use order::OrderId;
-use unit::UnitId;
 use windows;
 
 struct GlobalFunc<T: Copy>(Option<T>);
@@ -78,9 +79,9 @@ static mut ISSUE_ORDER: GlobalFunc<
     unsafe extern fn(*mut bw::Unit, u32, u32, u32, *mut bw::Unit, u32)
 > = GlobalFunc(None);
 
-static mut UNITS_DAT: GlobalFunc<unsafe extern fn() -> *mut bw::DatTable> = GlobalFunc(None);
+static mut UNITS_DAT: GlobalFunc<unsafe extern fn() -> *mut DatTable> = GlobalFunc(None);
 
-pub fn units_dat() -> *mut bw::DatTable {
+pub fn units_dat() -> *mut DatTable {
     unsafe { UNITS_DAT.get()() }
 }
 
@@ -145,6 +146,7 @@ pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
 
     READ_FILE.0 = Some(mem::transmute(((*api).read_file)()));
     UNITS_DAT.init(((*api).dat)(0).map(|x| mem::transmute(x)), "units_dat");
+    bw_dat::init_units(units_dat());
     init_config();
     //((*api).hook_on_first_file_access)(init_config);
     let config = config::config();
@@ -187,7 +189,7 @@ unsafe extern fn init_config() {
     defer!({ HeapFree(GetProcessHeap(), 0, config_slice.as_ptr() as *mut _); });
     let config = config::read_config(config_slice)
         .unwrap_or_else(|e| {
-            let msg = format!("Unable to read config: {}, exiting", e);
+            let msg = format!("Unable to read config: {}. Exiting.", e);
             windows::message_box("Mtl", &msg);
             TerminateProcess(GetCurrentProcess(), 0x42302aef);
             unreachable!();
