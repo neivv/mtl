@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use bw_dat::{UnitId, OrderId};
-use failure::{Context, Error, Fail};
-use ini::ini::Ini;
+use failure::{Context, Error};
+use ini::Ini;
 use upgrades::{Upgrades, Upgrade, UpgradeChanges, State, Stat};
 
 /// Various timers, in frames, unlike bw's 8-frame chunks.
@@ -163,21 +163,17 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
         format_err!("Invalid field {}", name)
     };
 
-    let ini = Ini::read_from(&mut data)
+    let ini = Ini::open(&mut data)
         .map_err(|e| e.context("Unable to read ini"))?;
     let mut timers: Timers = Default::default();
     let mut return_cargo_softcode = false;
     let mut zerg_building_training = false;
     let mut supplies: Supplies = Default::default();
     let mut upgrades: BTreeMap<u8, BTreeMap<Vec<State>, Vec<UpgradeChanges>>> = BTreeMap::new();
-    for name in ini.sections() {
-        let section = match ini.section(name.clone()) {
-            Some(s) => s,
-            None => continue,
-        };
-        let name = name.as_ref().map(|x| &**x).unwrap_or_else(|| "");
+    for section in &ini.sections {
+        let name = &section.name;
         if name == "timers" {
-            for (key, val) in section {
+            for &(ref key, ref val) in &section.values {
                 match &**key {
                     "hallucination_death" => {
                         u32_field(&mut timers.hallucination_death, &val, "hallucination_death")?
@@ -219,7 +215,7 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
                 }
             }
         } else if name == "supplies" {
-            for (key, val) in section {
+            for &(ref key, ref val) in &section.values {
                 match &**key {
                     "zerg_max" => u32_field(&mut supplies.zerg_max, &val, "zerg_max")?,
                     "terran_max" => u32_field(&mut supplies.terran_max, &val, "terran_max")?,
@@ -228,7 +224,7 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
                 }
             }
         } else if name == "orders" {
-            for (key, val) in section {
+            for &(ref key, ref val) in &section.values {
                 match &**key {
                     "return_cargo_softcode" => {
                         bool_field(&mut return_cargo_softcode, &val, "return_cargo_softcode")?
@@ -260,7 +256,7 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
             let mut units = Vec::new();
             let mut states = Vec::new();
             let mut stats = Vec::new();
-            for (key, val) in section {
+            for &(ref key, ref val) in &section.values {
                 match &**key {
                     "units" => {
                         for tok in val.split(",").map(|x| x.trim()) {
