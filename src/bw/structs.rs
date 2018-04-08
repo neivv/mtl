@@ -77,7 +77,58 @@ pub struct Location {
     pub flags: u16,
 }
 
-pub struct Sprite;
+#[repr(C, packed)]
+pub struct Sprite {
+    pub prev: *mut Sprite,
+    pub next: *mut Sprite,
+    pub sprite_id: u16,
+    pub player: u8,
+    pub selection_index: u8,
+    pub visibility_mask: u8,
+    pub elevation_level: u8,
+    pub flags: u8,
+    pub selection_flash_timer: u8,
+    pub index: u16,
+    pub width: u8,
+    pub height: u8,
+    pub position: Point,
+    pub main_image: *mut Image,
+    pub first_overlay: *mut Image,
+    pub last_overlay: *mut Image,
+}
+
+#[repr(C, packed)]
+pub struct Image {
+    pub prev: *mut Image,
+    pub next: *mut Image,
+    pub image_id: u16,
+    pub drawfunc: u8,
+    pub direction: u8,
+    pub flags: u16,
+    pub x_offset: i8,
+    pub y_offset: i8,
+    pub iscript: Iscript,
+    pub frameset: u16,
+    pub frame: u16,
+    pub map_position: Point,
+    pub screen_position: Point,
+    pub grp_bounds: Rect,
+    pub grp: *mut c_void,
+    pub drawfunc_param: *mut c_void,
+    pub draw: *mut c_void,
+    pub step_frame: *mut c_void,
+    pub parent: *mut Sprite,
+}
+
+#[repr(C, packed)]
+pub struct Iscript {
+    pub header: u16,
+    pub pos: u16,
+    pub return_pos: u16,
+    pub animation: u8,
+    pub wait: u8,
+}
+
 pub struct Order;
 
 #[repr(C, packed)]
@@ -244,5 +295,7 @@ mod test {
         assert_eq!(mem::size_of::<PlayerAiData>(), 0x4e8);
         assert_eq!(mem::size_of::<Game>(), 0x102f0);
         assert_eq!(mem::size_of::<Unit>(), 0x150);
+        assert_eq!(mem::size_of::<Sprite>(), 0x24);
+        assert_eq!(mem::size_of::<Image>(), 0x40);
     }
 }

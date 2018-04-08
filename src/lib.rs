@@ -10,6 +10,7 @@ extern crate libc;
 #[macro_use] extern crate scopeguard;
 extern crate serde;
 #[macro_use] extern crate serde_derive;
+extern crate smallvec;
 extern crate thread_local;
 extern crate vec_map;
 extern crate winapi;

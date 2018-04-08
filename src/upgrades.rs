@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
+use std::ptr::null_mut;
 
+use smallvec::SmallVec;
 use vec_map::VecMap;
 
 use bw_dat::{order, UnitId, OrderId};
@@ -32,7 +34,7 @@ impl Upgrades {
                 if !state_reqs.iter().all(|x| x.matches_unit(unit)) {
                     continue;
                 }
-                let had_incomplete = state_reqs.iter().any(|&x| x == State::Incomplete);
+                let had_incomplete = state_reqs.iter().any(|x| *x == State::Incomplete);
                 if !had_incomplete {
                     if !unit.is_completed() {
                         continue;
@@ -64,7 +66,7 @@ pub struct UpgradeChanges {
     pub changes: Vec<Stat>,
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum State {
     SelfCloaked,
     ArbiterCloaked,
@@ -73,13 +75,14 @@ pub enum State {
     Incomplete,
     Disabled,
     Damaged,
-    Order(OrderId),
+    Order(SmallVec<[OrderId; 12]>),
+    IscriptAnim(SmallVec<[u8; 12]>),
 }
 
 impl State {
     fn matches_unit(&self, unit: Unit) -> bool {
         use self::State::*;
-        match *self {
+        match self {
             SelfCloaked => {
                 let cloak_order = unit.secondary_order() == order::CLOAK;
                 cloak_order && unit.is_invisible() && !unit.has_free_cloak()
@@ -98,7 +101,18 @@ impl State {
                     }
                 }
             },
-            Order(o) => unit.order() == o,
+            Order(o) => o.iter().any(|&x| unit.order() == x),
+            IscriptAnim(a) => unsafe {
+                if (*unit.0).sprite == null_mut() {
+                    return false;
+                }
+                let sprite = (*unit.0).sprite;
+                if (*sprite).main_image == null_mut() {
+                    return false;
+                }
+                let image = (*sprite).main_image;
+                a.iter().any(|&x| (*image).iscript.animation == x)
+            },
         }
     }
 }

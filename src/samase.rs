@@ -189,7 +189,12 @@ unsafe extern fn init_config() {
     defer!({ HeapFree(GetProcessHeap(), 0, config_slice.as_ptr() as *mut _); });
     let config = config::read_config(config_slice)
         .unwrap_or_else(|e| {
-            let msg = format!("Unable to read config: {}. Exiting.", e);
+            use std::fmt::Write;
+            let mut msg = String::new();
+            for c in e.causes() {
+                writeln!(msg, "{}", c).unwrap();
+            }
+            let msg = format!("Unable to read config:\n{}\nExiting.", msg);
             windows::message_box("Mtl", &msg);
             TerminateProcess(GetCurrentProcess(), 0x42302aef);
             unreachable!();

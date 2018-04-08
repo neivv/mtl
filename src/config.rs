@@ -117,6 +117,10 @@ fn parse_u8(value: &str) -> Result<u8, Error> {
     })
 }
 
+fn parse_u8_list<'a>(values: &'a str) -> impl Iterator<Item=Result<u8, Error>> + 'a {
+    values.split(",").map(|x| parse_u8(x.trim()))
+}
+
 fn parse_state(value: &str) -> Result<State, Error> {
     Ok(match value {
         "self_cloaked" => State::SelfCloaked,
@@ -126,16 +130,27 @@ fn parse_state(value: &str) -> Result<State, Error> {
         "disabled" => State::Disabled,
         "damaged" => State::Damaged,
         _ => {
-            if value.starts_with("order") {
-                let start = value.find("(")
-                    .ok_or_else(|| format_err!("Invalid syntax"))?;
-                let end = value.rfind(")")
-                    .ok_or_else(|| format_err!("Invalid syntax"))?;
-                if start >= end {
-                    return Err(format_err!("Invalid syntax"));
+            fn in_braces<'a>(text: &'a str, prefix: &str) -> Result<Option<&'a str>, Error> {
+                if text.starts_with(prefix) {
+                    let text = &text[prefix.len()..].trim();
+                    let ok = text.get(..1) == Some("(") &&
+                        text.get(text.len() - 1..) == Some(")");
+                    if !ok {
+                        Err(format_err!("Invalid syntax"))
+                    } else {
+                        Ok(Some(&text[1..text.len() - 1]))
+                    }
+                } else {
+                    Ok(None)
                 }
-                let text = (&value[start + 1..end]).trim();
-                State::Order(OrderId(parse_u8(text)?))
+            }
+            if let Some(text) = in_braces(value, "order")? {
+                let orders = parse_u8_list(text).map(|x| x.map(|x| OrderId(x)))
+                    .collect::<Result<_, Error>>()?;
+                State::Order(orders)
+            } else if let Some(text) = in_braces(value, "animation")? {
+                let anims = parse_u8_list(text).collect::<Result<_, Error>>()?;
+                State::IscriptAnim(anims)
             } else {
                 return Err(format_err!("Unknown state {}", value));
             }
@@ -156,6 +171,41 @@ fn parse_stat(key: &str, value: &str) -> Result<Stat, Error> {
         "creep_spread_timer" => Stat::CreepSpreadTimer(parse_u8(value)?),
         _ => return Err(format_err!("Unknown stat {}", key)),
     })
+}
+
+fn brace_aware_split<'a>(text: &'a str, tok: &'a str) -> BraceSplit<'a> {
+    BraceSplit(text, tok)
+}
+
+struct BraceSplit<'a>(&'a str, &'a str);
+
+impl<'a> Iterator for BraceSplit<'a> {
+    type Item = &'a str;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.0.is_empty() {
+            return None;
+        }
+        let bytes = self.0.as_bytes();
+        let mut depth = 0;
+        for (i, &b) in bytes.iter().enumerate() {
+            if b == b'(' {
+                depth += 1;
+            } else if b == b')' {
+                depth -= 1;
+            } else if depth == 0 {
+                if let Some(x) = self.0.get(i..) {
+                    if x.starts_with(self.1) {
+                        let result = &self.0[..i];
+                        self.0 = &self.0[i + self.1.len()..];
+                        return Some(result);
+                    }
+                }
+            }
+        }
+        let result = &self.0[..];
+        self.0 = "";
+        Some(result)
+    }
 }
 
 pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
@@ -266,7 +316,7 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
                         }
                     }
                     "state" => {
-                        for tok in val.split(",").map(|x| x.trim()) {
+                        for tok in brace_aware_split(val, ",").map(|x| x.trim()) {
                             let state = parse_state(tok)
                                 .map_err(|e| e.context(format!("{} state", name)))?;
                             states.push(state);
@@ -330,4 +380,45 @@ pub fn set_config(config: Config) {
 
 pub fn config() -> Arc<Config> {
     CONFIG.lock().unwrap().as_ref().unwrap().clone()
+}
+
+#[test]
+fn test_parse_states() {
+    assert_eq!(parse_state("disabled").unwrap(), State::Disabled);
+    assert_eq!(
+        parse_state("order(4, 5, 0x40)").unwrap(),
+        State::Order(vec![OrderId(4), OrderId(5), OrderId(0x40)].into())
+    );
+    assert_eq!(parse_state("animation(4, 0x5)").unwrap(), State::IscriptAnim(vec![4, 5].into()));
+}
+
+#[test]
+fn test_brace_split() {
+    let mut split = brace_aware_split("a, b, c", ",");
+    assert_eq!(split.next().unwrap(), "a");
+    assert_eq!(split.next().unwrap(), " b");
+    assert_eq!(split.next().unwrap(), " c");
+    assert_eq!(split.next(), None);
+
+    let mut split = brace_aware_split(",a, b, c,", ",");
+    assert_eq!(split.next().unwrap(), "");
+    assert_eq!(split.next().unwrap(), "a");
+    assert_eq!(split.next().unwrap(), " b");
+    assert_eq!(split.next().unwrap(), " c");
+    assert_eq!(split.next(), None);
+
+    let mut split = brace_aware_split(" a s d ", ",");
+    assert_eq!(split.next().unwrap(), " a s d ");
+    assert_eq!(split.next(), None);
+
+    let mut split = brace_aware_split("asd, (1, 2, 3), 45", ",");
+    assert_eq!(split.next().unwrap(), "asd");
+    assert_eq!(split.next().unwrap(), " (1, 2, 3)");
+    assert_eq!(split.next().unwrap(), " 45");
+    assert_eq!(split.next(), None);
+
+    let mut split = brace_aware_split("asd, (1, 2, 3, 45", ",");
+    assert_eq!(split.next().unwrap(), "asd");
+    assert_eq!(split.next().unwrap(), " (1, 2, 3, 45");
+    assert_eq!(split.next(), None);
 }
