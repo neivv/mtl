@@ -40,7 +40,7 @@ static mut PLUGIN: MpqdraftPlugin = MpqdraftPlugin {
 };
 
 unsafe extern "stdcall" fn identify(_plugin: *mut MpqdraftPlugin, plugin_id: *mut u32) -> u32 {
-    *plugin_id = 0xffdd1135;
+    *plugin_id = 0xfedd1135;
     1
 }
 
