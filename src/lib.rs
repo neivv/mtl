@@ -7,6 +7,7 @@ extern crate fern;
 #[macro_use] extern crate lazy_static;
 extern crate libc;
 #[macro_use] extern crate log;
+extern crate pcx;
 #[macro_use] extern crate scopeguard;
 extern crate serde;
 #[macro_use] extern crate serde_derive;
@@ -31,6 +32,7 @@ mod ini;
 mod order;
 mod order_hook;
 mod unit;
+mod unit_pcolor_fix;
 mod upgrades;
 mod windows;
 

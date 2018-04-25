@@ -110,6 +110,8 @@ pub unsafe extern fn frame_hook() {
     let game = Game::get();
     let mut tracked = tracked().borrow_mut();
     if game.frame_count() == 0 {
+        // These can't be done at init_game
+        ::unit_pcolor_fix::game_start_hook();
         if let Some(max) = config.supplies.zerg_max {
             for x in &mut (*game.0).zerg_supply_max {
                 *x = max;

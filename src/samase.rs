@@ -1,5 +1,6 @@
 use std::mem;
-use std::ptr::null_mut;
+use std::ops;
+use std::ptr::{NonNull, null_mut};
 
 use libc::c_void;
 
@@ -108,17 +109,38 @@ pub fn print_text(msg: *const u8) {
     }
 }
 
+pub struct SamaseBox {
+    data: NonNull<u8>,
+    len: usize,
+}
+
+impl ops::Deref for SamaseBox {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        unsafe {
+            ::std::slice::from_raw_parts(self.data.as_ptr(), self.len)
+        }
+    }
+}
+
+impl ops::Drop for SamaseBox {
+    fn drop(&mut self) {
+        unsafe {
+            HeapFree(GetProcessHeap(), 0, self.data.as_ptr() as *mut _);
+        }
+    }
+}
+
 static mut READ_FILE: GlobalFunc<fn(*const u8, *mut usize) -> *mut u8> = GlobalFunc(None);
-pub fn read_file(name: &str) -> Option<&'static [u8]> {
+pub fn read_file(name: &str) -> Option<SamaseBox> {
     // Uh, should work fine
     let cstring = format!("{}\0", name);
     let mut size = 0usize;
     let result = unsafe { READ_FILE.get()(cstring.as_ptr(), &mut size) };
-    if result == null_mut() {
-        None
-    } else {
-        unsafe { Some(::std::slice::from_raw_parts_mut(result, size)) }
-    }
+    NonNull::new(result).map(|data| SamaseBox {
+        data,
+        len: size,
+    })
 }
 
 // Just using samase_shim's definition so that there isn't duplication/unnecessary mismatches
@@ -176,6 +198,16 @@ pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
         ((*api).warn_unsupported_feature)(b"Saving\0".as_ptr());
     }
     PRINT_TEXT.0 = Some(mem::transmute(((*api).print_text)()));
+    if let Some(tunit) = read_file("game\\tunit.pcx") {
+        if let Err(e) = ::unit_pcolor_fix::init_unit_colors(&tunit) {
+            fatal(&format!("Invalid game\\tunit.pcx: {}", e));
+        }
+    }
+    if let Some(tminimap) = read_file("game\\tminimap.pcx") {
+        if let Err(e) = ::unit_pcolor_fix::init_minimap_colors(&tminimap) {
+            fatal(&format!("Invalid game\\tminimap.pcx: {}", e));
+        }
+    }
 }
 
 unsafe extern fn init_config() {
@@ -186,8 +218,7 @@ unsafe extern fn init_config() {
             TerminateProcess(GetCurrentProcess(), 0x42302aef);
             unreachable!();
         });
-    defer!({ HeapFree(GetProcessHeap(), 0, config_slice.as_ptr() as *mut _); });
-    let config = config::read_config(config_slice)
+    let config = config::read_config(&config_slice)
         .unwrap_or_else(|e| {
             use std::fmt::Write;
             let mut msg = String::new();
