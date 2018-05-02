@@ -1,9 +1,12 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
+use combine::Parser;
+
 use bw_dat::{UnitId, OrderId};
-use failure::{Context, Error};
+use failure::{Context, Error, ResultExt};
 use ini::Ini;
+use parse_expr;
 use upgrades::{Upgrades, Upgrade, UpgradeChanges, State, Stat};
 
 /// Various timers, in frames, unlike bw's 8-frame chunks.
@@ -208,6 +211,46 @@ impl<'a> Iterator for BraceSplit<'a> {
     }
 }
 
+fn parse_upgrade_condition(condition: &str) -> Result<parse_expr::BoolExpr, Error> {
+    use std::fmt::Write;
+    use combine::easy;
+    use combine::stream::state::State;
+    fn format_info(i: &easy::Info<u8, &[u8]>) -> String {
+        match i {
+            easy::Info::Token(x) => format!("{}", x),
+            easy::Info::Range(x) => format!("{}", String::from_utf8_lossy(x)),
+            easy::Info::Owned(x) => format!("{}", x),
+            easy::Info::Borrowed(x) => format!("{}", x),
+        }
+    }
+    parse_expr::bool_expr().easy_parse(State::new(condition.as_bytes()))
+        .map_err(|e| {
+            let mut msg = format!("Starting from {}\n", &condition[e.position..]);
+            for err in e.errors {
+                match err {
+                    easy::Error::Expected(ref i) => {
+                        writeln!(msg, "Expected {}", format_info(i)).unwrap()
+                    }
+                    easy::Error::Unexpected(ref i) => {
+                        writeln!(msg, "Unexpected {}", format_info(i)).unwrap()
+                    }
+                    easy::Error::Message(ref i) => {
+                        writeln!(msg, "Note: {}", format_info(i)).unwrap()
+                    }
+                    _ => (),
+                }
+            }
+            format_err!("{}", msg)
+        })
+        .and_then(|(result, rest)| {
+            if !rest.input.is_empty() {
+                Err(format_err!("Trailing characters: {}", String::from_utf8_lossy(rest.input)))
+            } else {
+                Ok(result)
+            }
+        })
+}
+
 pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
     let error_invalid_field = |name: &'static str| {
         format_err!("Invalid field {}", name)
@@ -306,6 +349,7 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
             let mut units = Vec::new();
             let mut states = Vec::new();
             let mut stats = Vec::new();
+            let mut condition = None;
             for &(ref key, ref val) in &section.values {
                 match &**key {
                     "units" => {
@@ -322,6 +366,14 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
                             states.push(state);
                         }
                     }
+                    "condition" => {
+                        if condition.is_some() {
+                            return Err(format_err!("Cannot have multiple conditions"));
+                        }
+                        let cond = parse_upgrade_condition(val)
+                            .with_context(|_| format!("Condition of {}", name))?;
+                        condition = Some(cond);
+                    }
                     x => {
                         let stat = parse_stat(x, &val)
                             .map_err(|e| e.context(format!("In {}:{}", name, x)))?;
@@ -336,6 +388,7 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
                 units,
                 level,
                 changes: stats,
+                condition,
             };
             upgrades.entry(id).or_insert_with(|| Default::default())
                 .entry(states).or_insert_with(|| Default::default())

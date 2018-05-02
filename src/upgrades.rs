@@ -4,10 +4,11 @@ use std::ptr::null_mut;
 use smallvec::SmallVec;
 use vec_map::VecMap;
 
-use bw_dat::{order, UnitId, OrderId};
+use bw_dat::{order, UnitId, UpgradeId, OrderId};
 
 use config::Config;
 use game::Game;
+use parse_expr::{BoolExpr, IntExpr};
 use unit::Unit;
 
 pub struct Upgrades {
@@ -29,7 +30,7 @@ impl Upgrades {
             if !upgrade.all_matching_units.iter().any(|&x| unit.matches_id(x)) {
                 continue;
             }
-            let player_level = game.upgrade_level(unit.player(), id as u8);
+            let player_level = game.upgrade_level(unit.player(), UpgradeId(id as u16));
             for (state_reqs, changes) in upgrade.changes.iter() {
                 if !state_reqs.iter().all(|x| x.matches_unit(unit)) {
                     continue;
@@ -49,10 +50,99 @@ impl Upgrades {
                     }
                     if changes.units.iter().any(|&x| unit.matches_id(x)) {
                         matched_level = Some(changes.level);
-                        for stat in &changes.changes {
-                            fun(stat);
+                        let cond_ok =
+                            changes.condition.as_ref().map(|x| check_condition(x, unit, game))
+                            .unwrap_or(true);
+                        if cond_ok {
+                            for stat in &changes.changes {
+                                fun(stat);
+                            }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+fn eval_int(expr: &IntExpr, unit: Unit, game: Game) -> i32 {
+    use parse_expr::IntExpr::*;
+    use parse_expr::IntFunc::*;
+    match expr {
+        Add(x) => eval_int(&x.0, unit, game).saturating_add(eval_int(&x.1, unit, game)),
+        Sub(x) => eval_int(&x.0, unit, game).saturating_sub(eval_int(&x.1, unit, game)),
+        Mul(x) => eval_int(&x.0, unit, game).saturating_mul(eval_int(&x.1, unit, game)),
+        Integer(i) => *i,
+        Func(x) => {
+            unsafe {
+                match x {
+                    StimTimer => (*unit.0).stim_timer as i32,
+                    EnsnareTimer => (*unit.0).ensnare_timer as i32,
+                    MaelstromTimer => (*unit.0).maelstrom_timer as i32,
+                    DeathTimer => (*unit.0).death_timer as i32,
+                    LockdownTimer => (*unit.0).lockdown_timer as i32,
+                    StasisTimer => (*unit.0).stasis_timer as i32,
+                    IrradiateTimer => (*unit.0).irradiate_timer as i32,
+                    MatrixTimer => (*unit.0).matrix_timer as i32,
+                    MatrixHitpoints => (*unit.0).defensive_matrix_dmg as i32,
+                    AcidSporeCount => (*unit.0).acid_spore_count as i32,
+                    Fighters => unit.fighter_amount() as i32,
+                    Mines => unit.mine_amount(game) as i32,
+                    Hitpoints => unit.hitpoints(),
+                    HitpointsPercent => unit.hitpoints() * 100 / unit.id().hitpoints(),
+                    Shields => unit.shields(),
+                    ShieldsPercent => unit.shields() * 100 / unit.id().shields(),
+                    Energy => unit.energy() as i32,
+                    Kills => (*unit.0).kills as i32,
+                    FrameCount => game.frame_count() as i32,
+                    Tileset => (*game.0).tileset as i32,
+                    Minerals => (*game.0).minerals[unit.player() as usize] as i32,
+                    Gas => (*game.0).gas[unit.player() as usize] as i32,
+                    CarriedResourceAmount => {
+                        if unit.id().is_worker() {
+                            (*unit.0).unit_specific[0xf] as i32
+                        } else {
+                            0
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn check_condition(cond: &BoolExpr, unit: Unit, game: Game) -> bool {
+    use parse_expr::BoolExpr::*;
+    use parse_expr::BoolFunc::*;
+    match cond {
+        And(x) => check_condition(&x.0, unit, game) && check_condition(&x.1, unit, game),
+        Or(x) => check_condition(&x.0, unit, game) || check_condition(&x.1, unit, game),
+        LessThan(x) => eval_int(&x.0, unit, game) < eval_int(&x.1, unit, game),
+        LessOrEqual(x) => eval_int(&x.0, unit, game) <= eval_int(&x.1, unit, game),
+        GreaterThan(x) => eval_int(&x.0, unit, game) > eval_int(&x.1, unit, game),
+        GreaterOrEqual(x) => eval_int(&x.0, unit, game) >= eval_int(&x.1, unit, game),
+        EqualInt(x) => eval_int(&x.0, unit, game) == eval_int(&x.1, unit, game),
+        EqualBool(x) => check_condition(&x.0, unit, game) == check_condition(&x.1, unit, game),
+        Not(x) => !check_condition(&x, unit, game),
+        Func(x) => {
+            unsafe {
+                match x {
+                    True => true,
+                    False => true,
+                    Parasited => (*unit.0).parasited_by_players != 0,
+                    Blind => (*unit.0).is_blind != 0,
+                    UnderStorm => (*unit.0).is_under_storm != 0,
+                    LiftedOff => (*unit.0).flags & 0x2 == 0,
+                    BuildingUnit => (*unit.0).currently_building != null_mut(),
+                    InTransport => {
+                        (*unit.0).flags & 0x20 == 0 && (*unit.0).flags & 0x40 != 0
+                    }
+                    InBunker => {
+                        (*unit.0).flags & 0x20 != 0 && (*unit.0).flags & 0x40 != 0
+                    }
+                    CarryingPowerup => unit.powerup().is_some(),
+                    CarryingMinerals => (*unit.0).carried_powerup_flags & 0x2 != 0,
+                    CarryingGas => (*unit.0).carried_powerup_flags & 0x1 != 0,
                 }
             }
         }
@@ -64,6 +154,7 @@ pub struct UpgradeChanges {
     pub units: Vec<UnitId>,
     pub level: u8,
     pub changes: Vec<Stat>,
+    pub condition: Option<BoolExpr>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]

@@ -33,10 +33,14 @@ pub struct PlayerAiData {
 
 #[repr(C, packed)]
 pub struct Game {
-    pub dc0: [u8; 0xe4],
+    pub minerals: [u32; 0xc],
+    pub gas: [u32; 0xc],
+    pub dc60: [u8; 0x84],
     pub map_width_tiles: u16,
     pub map_height_tiles: u16,
-    pub dce8: [u8; 0x64],
+    pub dce8: [u8; 0x4],
+    pub tileset: u16,
+    pub dcee: [u8; 0x5e],
     pub frame_count: u32,
     pub dc150: [u8; 0x2b36],
     pub player_color_palette: [[u8; 0x8]; 0xc],
@@ -56,7 +60,10 @@ pub struct Game {
     pub completed_units_count: [[u32; 0xc]; 0xe4],
     pub unit_kills: [[u32; 0xc]; 0xe4],
     pub deaths: [[u32; 0xc]; 0xe4],
-    pub dcdd34: [u8; 0x48c],
+    pub tech_availability_sc: [[u8; 0x18]; 0xc],
+    pub tech_level_sc: [[u8; 0x18]; 0xc],
+    pub dcdf74: [u8; 0x24],
+    pub upgrade_limit_sc: [[u8; 0x2e]; 0xc],
     pub upgrade_level_sc: [[u8; 0x2e]; 0xc],
     pub dce3e8: [u8; 0x15c],
     pub alliances: [[u8; 0xc]; 0xc],

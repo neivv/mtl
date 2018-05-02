@@ -1,5 +1,7 @@
 use std::ptr::null_mut;
 
+use bw_dat::{TechId, UpgradeId};
+
 use bw;
 
 #[derive(Copy, Clone)]
@@ -18,14 +20,26 @@ impl Game {
         }
     }
 
-    pub fn upgrade_level(self, player: u8, upgrade: u8) -> u8 {
+    pub fn upgrade_level(self, player: u8, upgrade: UpgradeId) -> u8 {
         unsafe {
+            let upgrade = upgrade.0;
             assert!(player < 0xc);
-            assert!(upgrade < 0x3d);
             if upgrade >= 0x2e {
-                return (*self.0).upgrade_level_bw[player as usize][upgrade as usize - 0x2e]
+                (*self.0).upgrade_level_bw[player as usize][upgrade as usize - 0x2e]
             } else {
-                return (*self.0).upgrade_level_sc[player as usize][upgrade as usize]
+                (*self.0).upgrade_level_sc[player as usize][upgrade as usize]
+            }
+        }
+    }
+
+    pub fn tech_researched(self, player: u8, tech: TechId) -> bool {
+        unsafe {
+            let tech = tech.0;
+            assert!(player < 0xc);
+            if tech >= 0x18 {
+                (*self.0).tech_level_bw[player as usize][tech as usize - 0x18] != 0
+            } else {
+                (*self.0).tech_level_sc[player as usize][tech as usize] != 0
             }
         }
     }

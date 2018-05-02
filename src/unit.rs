@@ -3,11 +3,12 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::ptr::null_mut;
 
-use bw_dat::{OrderId, UnitId, unit};
-
+use byteorder::{ReadBytesExt, LE};
+use bw_dat::{self, OrderId, UnitId, unit};
 use serde::{Serializer, Serialize, Deserializer, Deserialize};
 
 use bw;
+use game::Game;
 use samase;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -200,6 +201,61 @@ impl Unit {
                 (*self.0).maelstrom_timer != 0 ||
                 (*self.0).stasis_timer != 0
         }
+    }
+
+    pub fn powerup(&self) -> Option<Unit> {
+        if self.id().is_worker() {
+            let powerup = unsafe {
+                (&(*self.0).unit_specific[..]).read_u32::<LE>().unwrap() as *mut bw::Unit
+            };
+            Unit::from_ptr(powerup)
+        } else {
+            None
+        }
+    }
+
+    pub fn mine_amount(&self, game: Game) -> u8 {
+        let id = self.id();
+        if id == unit::VULTURE || id == unit::JIM_RAYNOR_VULTURE {
+            if id.is_hero() || game.tech_researched(self.player(), bw_dat::tech::SPIDER_MINES) {
+                unsafe { (*self.0).unit_specific[0] }
+            } else {
+                0
+            }
+        } else {
+            0
+        }
+    }
+
+    pub fn uses_fighters(&self) -> bool {
+        match self.id() {
+            unit::CARRIER | unit::GANTRITHOR | unit::REAVER | unit::WARBRINGER => true,
+            _ => false,
+        }
+    }
+
+    pub fn fighter_amount(&self) -> u8 {
+        if self.uses_fighters() {
+            unsafe { (*self.0).unit_specific[8] + (*self.0).unit_specific[9] }
+        } else {
+            0
+        }
+    }
+
+    pub fn hitpoints(&self) -> i32 {
+        unsafe { (*self.0).hitpoints }
+    }
+
+    pub fn shields(&self) -> i32 {
+        if self.id().has_shields() {
+            unsafe { (*self.0).shields }
+        } else {
+            0
+        }
+    }
+
+    pub fn energy(&self) -> u16 {
+        unsafe { (*self.0).energy }
     }
 }
 
