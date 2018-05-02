@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use combine::Parser;
+use combine::easy;
 
 use bw_dat::{UnitId, OrderId};
 use failure::{Context, Error, ResultExt};
@@ -88,14 +89,6 @@ fn u32_field(out: &mut Option<u32>, value: &str, field_name: &'static str) -> Re
     Ok(())
 }
 
-fn parse_i32(value: &str) -> Result<i32, Error> {
-    Ok(if value.starts_with("0x") {
-        parse_u32(value)? as i32
-    } else {
-        i32::from_str_radix(value, 10)?
-    })
-}
-
 fn parse_u32(value: &str) -> Result<u32, Error> {
     Ok(if value.starts_with("0x") {
         u32::from_str_radix(&value[2..], 16)?
@@ -161,17 +154,17 @@ fn parse_state(value: &str) -> Result<State, Error> {
     })
 }
 
-fn parse_stat(key: &str, value: &str) -> Result<Stat, Error> {
+fn parse_stat(key: &str) -> Result<Stat, Error> {
     Ok(match key {
-        "hp_regen" => Stat::HpRegen(parse_i32(value)?),
-        "shield_regen" => Stat::ShieldRegen(parse_i32(value)?),
-        "energy_regen" => Stat::EnergyRegen(parse_i32(value)?),
-        "cooldown" => Stat::Cooldown(parse_u8(value)?),
-        "larva_timer" => Stat::LarvaTimer(parse_u8(value)?),
-        "mineral_harvest_time" => Stat::MineralHarvestTime(parse_u8(value)?),
-        "gas_harvest_time" => Stat::GasHarvestTime(parse_u8(value)?),
-        "unload_cooldown" => Stat::UnloadCooldown(parse_u8(value)?),
-        "creep_spread_timer" => Stat::CreepSpreadTimer(parse_u8(value)?),
+        "hp_regen" => Stat::HpRegen,
+        "shield_regen" => Stat::ShieldRegen,
+        "energy_regen" => Stat::EnergyRegen,
+        "cooldown" => Stat::Cooldown,
+        "larva_timer" => Stat::LarvaTimer,
+        "mineral_harvest_time" => Stat::MineralHarvestTime,
+        "gas_harvest_time" => Stat::GasHarvestTime,
+        "unload_cooldown" => Stat::UnloadCooldown,
+        "creep_spread_timer" => Stat::CreepSpreadTimer,
         _ => return Err(format_err!("Unknown stat {}", key)),
     })
 }
@@ -212,9 +205,34 @@ impl<'a> Iterator for BraceSplit<'a> {
 }
 
 fn parse_upgrade_condition(condition: &str) -> Result<parse_expr::BoolExpr, Error> {
-    use std::fmt::Write;
-    use combine::easy;
     use combine::stream::state::State;
+    parse_expr::bool_expr().easy_parse(State::new(condition.as_bytes()))
+        .map_err(|e| format_combine_err(&e, condition))
+        .and_then(|(result, rest)| {
+            if !rest.input.is_empty() {
+                Err(format_err!("Trailing characters: {}", String::from_utf8_lossy(rest.input)))
+            } else {
+                Ok(result)
+            }
+        })
+}
+
+fn parse_int_expr(expr: &str) -> Result<parse_expr::IntExpr, Error> {
+    use combine::stream::state::State;
+    parse_expr::int_expr().easy_parse(State::new(expr.as_bytes()))
+        .map_err(|e| format_combine_err(&e, expr))
+        .and_then(|(result, rest)| {
+            if !rest.input.is_empty() {
+                Err(format_err!("Trailing characters: {}", String::from_utf8_lossy(rest.input)))
+            } else {
+                Ok(result)
+            }
+        })
+}
+
+fn format_combine_err(e: &easy::Errors<u8, &[u8], usize>, condition: &str) -> Error {
+    use std::fmt::Write;
+
     fn format_info(i: &easy::Info<u8, &[u8]>) -> String {
         match i {
             easy::Info::Token(x) => format!("{}", x),
@@ -223,32 +241,22 @@ fn parse_upgrade_condition(condition: &str) -> Result<parse_expr::BoolExpr, Erro
             easy::Info::Borrowed(x) => format!("{}", x),
         }
     }
-    parse_expr::bool_expr().easy_parse(State::new(condition.as_bytes()))
-        .map_err(|e| {
-            let mut msg = format!("Starting from {}\n", &condition[e.position..]);
-            for err in e.errors {
-                match err {
-                    easy::Error::Expected(ref i) => {
-                        writeln!(msg, "Expected {}", format_info(i)).unwrap()
-                    }
-                    easy::Error::Unexpected(ref i) => {
-                        writeln!(msg, "Unexpected {}", format_info(i)).unwrap()
-                    }
-                    easy::Error::Message(ref i) => {
-                        writeln!(msg, "Note: {}", format_info(i)).unwrap()
-                    }
-                    _ => (),
-                }
+    let mut msg = format!("Starting from {}\n", &condition[e.position..]);
+    for err in &e.errors {
+        match err {
+            easy::Error::Expected(ref i) => {
+                writeln!(msg, "Expected {}", format_info(i)).unwrap()
             }
-            format_err!("{}", msg)
-        })
-        .and_then(|(result, rest)| {
-            if !rest.input.is_empty() {
-                Err(format_err!("Trailing characters: {}", String::from_utf8_lossy(rest.input)))
-            } else {
-                Ok(result)
+            easy::Error::Unexpected(ref i) => {
+                writeln!(msg, "Unexpected {}", format_info(i)).unwrap()
             }
-        })
+            easy::Error::Message(ref i) => {
+                writeln!(msg, "Note: {}", format_info(i)).unwrap()
+            }
+            _ => (),
+        }
+    }
+    format_err!("{}", msg)
 }
 
 pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
@@ -375,9 +383,11 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
                         condition = Some(cond);
                     }
                     x => {
-                        let stat = parse_stat(x, &val)
+                        let stat = parse_stat(x)
                             .map_err(|e| e.context(format!("In {}:{}", name, x)))?;
-                        stats.push(stat);
+                        let val = parse_int_expr(&val)
+                            .map_err(|e| e.context(format!("In {}:{}", name, x)))?;
+                        stats.push((stat, val));
                     }
                 }
             }

@@ -22,7 +22,7 @@ pub struct Upgrade {
 }
 
 impl Upgrades {
-    fn matches<F: FnMut(&Stat)>(&self, game: Game, unit: Unit, mut fun: F) {
+    fn matches<F: FnMut(&Stat, &IntExpr)>(&self, game: Game, unit: Unit, mut fun: F) {
         if unit.player() >= 0xc {
             return;
         }
@@ -54,8 +54,8 @@ impl Upgrades {
                             changes.condition.as_ref().map(|x| check_condition(x, unit, game))
                             .unwrap_or(true);
                         if cond_ok {
-                            for stat in &changes.changes {
-                                fun(stat);
+                            for &(ref stat, ref val) in &changes.changes {
+                                fun(stat, val);
                             }
                         }
                     }
@@ -155,7 +155,7 @@ fn check_condition(cond: &BoolExpr, unit: Unit, game: Game) -> bool {
 pub struct UpgradeChanges {
     pub units: Vec<UnitId>,
     pub level: u8,
-    pub changes: Vec<Stat>,
+    pub changes: Vec<(Stat, IntExpr)>,
     pub condition: Option<BoolExpr>,
 }
 
@@ -212,22 +212,26 @@ impl State {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Stat {
-    HpRegen(i32),
-    ShieldRegen(i32),
-    EnergyRegen(i32),
-    Cooldown(u8),
-    LarvaTimer(u8),
-    MineralHarvestTime(u8),
-    GasHarvestTime(u8),
-    UnloadCooldown(u8),
-    CreepSpreadTimer(u8),
+    HpRegen,
+    ShieldRegen,
+    EnergyRegen,
+    Cooldown,
+    LarvaTimer,
+    MineralHarvestTime,
+    GasHarvestTime,
+    UnloadCooldown,
+    CreepSpreadTimer,
+}
+
+fn clamp_u8(val: i32) -> u8 {
+    val.max(0).min(255) as u8
 }
 
 pub fn hp_regen(config: &Config, game: Game, unit: Unit) -> Option<i32> {
     let mut sum = 0i32;
-    config.upgrades.matches(game, unit, |stat| match *stat {
-        Stat::HpRegen(i) => {
-            sum = sum.saturating_add(i);
+    config.upgrades.matches(game, unit, |stat, val| match *stat {
+        Stat::HpRegen => {
+            sum = sum.saturating_add(eval_int(val, unit, game));
         }
         _ => (),
     });
@@ -240,9 +244,9 @@ pub fn hp_regen(config: &Config, game: Game, unit: Unit) -> Option<i32> {
 
 pub fn shield_regen(config: &Config, game: Game, unit: Unit) -> Option<i32> {
     let mut sum = 0i32;
-    config.upgrades.matches(game, unit, |stat| match *stat {
-        Stat::ShieldRegen(i) => {
-            sum = sum.saturating_add(i);
+    config.upgrades.matches(game, unit, |stat, val| match *stat {
+        Stat::ShieldRegen => {
+            sum = sum.saturating_add(eval_int(val, unit, game));
         }
         _ => (),
     });
@@ -255,9 +259,9 @@ pub fn shield_regen(config: &Config, game: Game, unit: Unit) -> Option<i32> {
 
 pub fn energy_regen(config: &Config, game: Game, unit: Unit) -> Option<i32> {
     let mut sum = 0i32;
-    config.upgrades.matches(game, unit, |stat| match *stat {
-        Stat::EnergyRegen(i) => {
-            sum = sum.saturating_add(i);
+    config.upgrades.matches(game, unit, |stat, val| match *stat {
+        Stat::EnergyRegen => {
+            sum = sum.saturating_add(eval_int(val, unit, game));
         }
         _ => (),
     });
@@ -269,97 +273,73 @@ pub fn energy_regen(config: &Config, game: Game, unit: Unit) -> Option<i32> {
 }
 
 pub fn cooldown(config: &Config, game: Game, unit: Unit) -> Option<u8> {
-    let mut value = !0;
-    config.upgrades.matches(game, unit, |stat| match *stat {
-        Stat::Cooldown(i) => {
-            if i < !0 {
-                value = value.min(i);
-            }
+    let mut value = None;
+    config.upgrades.matches(game, unit, |stat, val| match *stat {
+        Stat::Cooldown => {
+            let val = clamp_u8(eval_int(val, unit, game));
+            value = Some(value.unwrap_or(!0).min(val));
         }
         _ => (),
     });
-    match value != !0 {
-        true => Some(value),
-        false => None,
-    }
+    value
 }
 
 pub fn mineral_harvest_time(config: &Config, game: Game, unit: Unit) -> Option<u8> {
-    let mut value = !0;
-    config.upgrades.matches(game, unit, |stat| match *stat {
-        Stat::MineralHarvestTime(i) => {
-            if i < !0 {
-                value = value.min(i);
-            }
+    let mut value = None;
+    config.upgrades.matches(game, unit, |stat, val| match *stat {
+        Stat::MineralHarvestTime => {
+            let val = clamp_u8(eval_int(val, unit, game));
+            value = Some(value.unwrap_or(!0).min(val));
         }
         _ => (),
     });
-    match value != !0 {
-        true => Some(value),
-        false => None,
-    }
+    value
 }
 
 pub fn gas_harvest_time(config: &Config, game: Game, unit: Unit) -> Option<u8> {
-    let mut value = !0;
-    config.upgrades.matches(game, unit, |stat| match *stat {
-        Stat::GasHarvestTime(i) => {
-            if i < !0 {
-                value = value.min(i);
-            }
+    let mut value = None;
+    config.upgrades.matches(game, unit, |stat, val| match *stat {
+        Stat::GasHarvestTime => {
+            let val = clamp_u8(eval_int(val, unit, game));
+            value = Some(value.unwrap_or(!0).min(val));
         }
         _ => (),
     });
-    match value != !0 {
-        true => Some(value),
-        false => None,
-    }
+    value
 }
 
 pub fn creep_spread_time(config: &Config, game: Game, unit: Unit) -> Option<u8> {
-    let mut value = !0;
-    config.upgrades.matches(game, unit, |stat| match *stat {
-        Stat::CreepSpreadTimer(i) => {
-            if i < !0 {
-                value = value.min(i);
-            }
+    let mut value = None;
+    config.upgrades.matches(game, unit, |stat, val| match *stat {
+        Stat::CreepSpreadTimer => {
+            let val = clamp_u8(eval_int(val, unit, game));
+            value = Some(value.unwrap_or(!0).min(val));
         }
         _ => (),
     });
-    match value != !0 {
-        true => Some(value),
-        false => None,
-    }
+    value
 }
 
 pub fn larva_spawn_time(config: &Config, game: Game, unit: Unit) -> Option<u8> {
-    let mut value = !0;
-    config.upgrades.matches(game, unit, |stat| match *stat {
-        Stat::LarvaTimer(i) => {
-            if i < !0 {
-                value = value.min(i);
-            }
+    let mut value = None;
+    config.upgrades.matches(game, unit, |stat, val| match *stat {
+        Stat::LarvaTimer => {
+            let val = clamp_u8(eval_int(val, unit, game));
+            value = Some(value.unwrap_or(!0).min(val));
         }
         _ => (),
     });
-    match value != !0 {
-        true => Some(value),
-        false => None,
-    }
+    value
 }
 
 pub fn unload_cooldown(config: &Config, game: Game, unit: Unit) -> Option<u8> {
-    let mut value = !0;
-    config.upgrades.matches(game, unit, |stat| match *stat {
-        Stat::UnloadCooldown(i) => {
-            if i < !0 {
-                value = value.min(i);
-            }
+    let mut value = None;
+    config.upgrades.matches(game, unit, |stat, val| match *stat {
+        Stat::UnloadCooldown => {
+            let val = clamp_u8(eval_int(val, unit, game));
+            value = Some(value.unwrap_or(!0).min(val));
         }
         _ => (),
     });
-    match value != !0 {
-        true => Some(value),
-        false => None,
-    }
+    value
 }
