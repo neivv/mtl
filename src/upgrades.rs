@@ -72,6 +72,8 @@ fn eval_int(expr: &IntExpr, unit: Unit, game: Game) -> i32 {
         Add(x) => eval_int(&x.0, unit, game).saturating_add(eval_int(&x.1, unit, game)),
         Sub(x) => eval_int(&x.0, unit, game).saturating_sub(eval_int(&x.1, unit, game)),
         Mul(x) => eval_int(&x.0, unit, game).saturating_mul(eval_int(&x.1, unit, game)),
+        Div(x) => eval_int(&x.0, unit, game) / (eval_int(&x.1, unit, game)),
+        Modulo(x) => eval_int(&x.0, unit, game) % (eval_int(&x.1, unit, game)),
         Integer(i) => *i,
         Func(x) => {
             unsafe {

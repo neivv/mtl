@@ -194,13 +194,13 @@ pub enum IntExpr {
     Add(Box<(IntExpr, IntExpr)>),
     Sub(Box<(IntExpr, IntExpr)>),
     Mul(Box<(IntExpr, IntExpr)>),
-    //Div(Box<(IntExpr, IntExpr)>),
-    //Modulo(Box<(IntExpr, IntExpr)>),
+    Div(Box<(IntExpr, IntExpr)>),
+    Modulo(Box<(IntExpr, IntExpr)>),
     Integer(i32),
     Func(IntFunc),
 }
 
-fn int_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = IntExpr> {
+pub fn int_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = IntExpr> {
     p1_int_expr().and(
         many::<Vec<_>, _>(byte(b'+').or(byte(b'-')).skip(spaces()).and(p1_int_expr()))
     ).map(|(mut left, rest)| {
@@ -216,14 +216,34 @@ fn int_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = IntExpr> {
 
 fn p1_int_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = IntExpr> {
     p2_int_expr().and(
-        many::<Vec<_>, _>(byte(b'*').skip(spaces()).and(p2_int_expr()))
-    ).map(|(mut left, rest)| {
+        many::<Vec<_>, _>(
+            byte(b'*').or(byte(b'/')).or(byte(b'%')).skip(spaces()).and(p2_int_expr())
+        )
+    ).and_then(|(mut left, rest)| -> Result<_, easy::Error<_, _>> {
         for (op, right) in rest {
             match op {
-                b'*' | _ => left = IntExpr::Mul(Box::new((left, right))),
+                b'*' => left = IntExpr::Mul(Box::new((left, right))),
+                b'/' | b'%' | _ => {
+                    match right {
+                        IntExpr::Integer(0) => {
+                            let msg = "Cannot divide by zero";
+                            return Err(StreamError::message_static_message(msg));
+                        }
+                        IntExpr::Integer(_) => (),
+                        _ => {
+                            let msg = "Can only divide by a constant";
+                            return Err(StreamError::message_static_message(msg));
+                        }
+                    }
+                    left = if op == b'/' {
+                        IntExpr::Div(Box::new((left, right)))
+                    } else {
+                        IntExpr::Modulo(Box::new((left, right)))
+                    };
+                }
             }
         }
-        left
+        Ok(left)
     })
 }
 
@@ -438,6 +458,7 @@ mod test {
             )))
         );
         assert!(error_contains(parse(b"4294967295"), "out of range"));
+        assert!(error_contains(parse(b"5 / 0"), "divide by zero"));
     }
 
     #[test]
