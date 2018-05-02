@@ -34,7 +34,7 @@ use combine::stream::state::{IndexPositioner, State};
 //  p1_int_expr
 // }
 // p1_int_expr {
-//  p2_int_expr * p2_int_expr [* ..]
+//  p2_int_expr */% p2_int_expr [*/% ..]
 //  p2_int_expr
 // }
 // p2_int_expr {
@@ -69,6 +69,11 @@ use combine::stream::state::{IndexPositioner, State};
 //  minerals
 //  gas
 //  carried_resource_amount
+//  ground_cooldown
+//  air_cooldown
+//  spell_cooldown
+//  speed
+//  sigorder
 // }
 // bool_fun {
 //  parasited
@@ -81,6 +86,14 @@ use combine::stream::state::{IndexPositioner, State};
 //  carrying_powerup
 //  carrying_minerals
 //  carrying_gas
+//  burrowed
+//  disabled
+//  completed
+//  self_cloaked
+//  arbiter_cloaked
+//  cloaked
+//  under_dweb
+//  hallucination
 // }
 
 type Bytes<'a> = easy::Stream<State<&'a [u8], IndexPositioner>>;
@@ -170,6 +183,11 @@ decl_func!(
     b"minerals", Minerals,
     b"gas", Gas,
     b"carried_resource_amount", CarriedResourceAmount,
+    b"ground_cooldown", GroundCooldown,
+    b"air_cooldown", AirCooldown,
+    b"spell_cooldown", SpellCooldown,
+    b"speed", Speed,
+    b"sigorder", SigOrder,
 );
 
 decl_func!(
@@ -187,6 +205,14 @@ decl_func!(
     b"carrying_powerup", CarryingPowerup,
     b"carrying_minerals", CarryingMinerals,
     b"carrying_gas", CarryingGas,
+    b"burrowed", Burrowed,
+    b"disabled", Disabled,
+    b"completed", Completed,
+    b"self_cloaked", SelfCloaked,
+    b"arbiter_cloaked", ArbiterCloaked,
+    b"cloaked", Cloaked,
+    b"under_dweb", UnderDweb,
+    b"hallucination", Hallucination,
 );
 
 #[derive(Debug, Eq, PartialEq, Clone)]

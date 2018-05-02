@@ -178,6 +178,10 @@ impl Unit {
         unsafe { (*self.0).flags & 0x1 != 0 }
     }
 
+    pub fn is_under_dweb(&self) -> bool {
+        unsafe { (*self.0).flags & 0x8000 != 0 }
+    }
+
     pub fn is_hallucination(&self) -> bool {
         unsafe { (*self.0).flags & 0x40000000 != 0 }
     }

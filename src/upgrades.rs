@@ -107,6 +107,11 @@ fn eval_int(expr: &IntExpr, unit: Unit, game: Game) -> i32 {
                             0
                         }
                     }
+                    GroundCooldown => (*unit.0).ground_cooldown as i32,
+                    AirCooldown => (*unit.0).air_cooldown as i32,
+                    SpellCooldown => (*unit.0).spell_cooldown as i32,
+                    Speed => (*unit.0).speed,
+                    SigOrder => (*unit.0).order_signal as i32,
                 }
             }
         }
@@ -145,6 +150,17 @@ fn check_condition(cond: &BoolExpr, unit: Unit, game: Game) -> bool {
                     CarryingPowerup => unit.powerup().is_some(),
                     CarryingMinerals => (*unit.0).carried_powerup_flags & 0x2 != 0,
                     CarryingGas => (*unit.0).carried_powerup_flags & 0x1 != 0,
+                    Burrowed => unit.is_burrowed(),
+                    Disabled => unit.is_disabled(),
+                    Completed => unit.is_completed(),
+                    SelfCloaked => {
+                        let cloak_order = unit.secondary_order() == order::CLOAK;
+                        cloak_order && unit.is_invisible() && !unit.has_free_cloak()
+                    }
+                    ArbiterCloaked => unit.has_free_cloak() && !unit.is_burrowed(),
+                    Cloaked => unit.is_invisible() && !unit.is_burrowed(),
+                    UnderDweb => unit.is_under_dweb(),
+                    Hallucination => unit.is_hallucination(),
                 }
             }
         }
