@@ -42,7 +42,7 @@ version = "0.3"
 features = ["heapapi", "libloaderapi", "processthreadsapi", "winuser"]
 
 [dependencies.samase_shim]
-path = "../samase/samase_shim"
+git = "https://github.com/neivv/samase_plugin"
 
 [dependencies.bw_dat]
-path = "../ais_attackto/bw_dat"
+git = "https://github.com/neivv/aise"
