@@ -211,9 +211,11 @@ impl<'a> Iterator for BraceSplit<'a> {
 
 fn parse_upgrade_condition(condition: &str) -> Result<parse_expr::BoolExpr, Error> {
     use combine::stream::state::State;
-    parse_expr::bool_expr().easy_parse(State::new(condition.as_bytes()))
+    use parse_expr::SingleErrorStream;
+    parse_expr::bool_expr().parse(SingleErrorStream::new(State::new(condition.as_bytes())))
         .map_err(|e| format_combine_err(&e, condition))
         .and_then(|(result, rest)| {
+            let rest = rest.inner;
             if !rest.input.is_empty() {
                 Err(format_err!("Trailing characters: {}", String::from_utf8_lossy(rest.input)))
             } else {
@@ -224,9 +226,11 @@ fn parse_upgrade_condition(condition: &str) -> Result<parse_expr::BoolExpr, Erro
 
 fn parse_int_expr(expr: &str) -> Result<parse_expr::IntExpr, Error> {
     use combine::stream::state::State;
-    parse_expr::int_expr().easy_parse(State::new(expr.as_bytes()))
+    use parse_expr::SingleErrorStream;
+    parse_expr::int_expr().parse(SingleErrorStream::new(State::new(expr.as_bytes())))
         .map_err(|e| format_combine_err(&e, expr))
         .and_then(|(result, rest)| {
+            let rest = rest.inner;
             if !rest.input.is_empty() {
                 Err(format_err!("Trailing characters: {}", String::from_utf8_lossy(rest.input)))
             } else {
@@ -235,7 +239,7 @@ fn parse_int_expr(expr: &str) -> Result<parse_expr::IntExpr, Error> {
         })
 }
 
-fn format_combine_err(e: &easy::Errors<u8, &[u8], usize>, condition: &str) -> Error {
+fn format_combine_err(e: &::parse_expr::SingleError<u8, &[u8], usize>, condition: &str) -> Error {
     use std::fmt::Write;
 
     fn format_info(i: &easy::Info<u8, &[u8]>) -> String {
@@ -246,9 +250,9 @@ fn format_combine_err(e: &easy::Errors<u8, &[u8], usize>, condition: &str) -> Er
             easy::Info::Borrowed(x) => format!("{}", x),
         }
     }
-    let mut msg = format!("Starting from {}\n", &condition[e.position..]);
-    for err in &e.errors {
-        match err {
+    let mut msg = format!("Starting from {}\n", &condition[e.pos..]);
+    if let Some(ref err) = e.error {
+        match **err {
             easy::Error::Expected(ref i) => {
                 writeln!(msg, "Expected {}", format_info(i)).unwrap()
             }

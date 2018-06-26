@@ -1,9 +1,13 @@
+use std::cmp::PartialEq;
+
 use combine::{Parser, Positioned, RangeStreamOnce, many, many1, optional, skip_many, try};
+use combine::{ParseError, StreamOnce, RangeStream};
 use combine::byte::{alpha_num, byte, digit, hex_digit, letter, spaces};
 use combine::easy;
-use combine::error::{Consumed, StreamError};
+use combine::error::{Consumed, Tracked, StreamError};
 use combine::parser::function;
 use combine::range::{range, recognize};
+use combine::stream::{Resetable, StreamErrorFor};
 use combine::stream::state::{IndexPositioner, State};
 
 // bool_expr -> {
@@ -96,7 +100,124 @@ use combine::stream::state::{IndexPositioner, State};
 //  hallucination
 // }
 
-type Bytes<'a> = easy::Stream<State<&'a [u8], IndexPositioner>>;
+type Bytes<'a> = SingleErrorStream<State<&'a [u8], IndexPositioner>>;
+
+#[derive(Debug)]
+pub struct SingleErrorStream<I: StreamOnce> {
+    pub inner: I,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct SingleError<I: PartialEq, R: PartialEq, P> {
+    pub error: Option<Box<easy::Error<I, R>>>,
+    pub pos: P,
+}
+
+impl<Item, Range, Position> ParseError<Item, Range, Position> for
+    SingleError<Item, Range, Position>
+where Item: PartialEq,
+      Range: PartialEq,
+      Position: PartialEq,
+{
+    type StreamError = easy::Error<Item, Range>;
+    fn empty(position: Position) -> Self {
+        SingleError {
+            error: None,
+            pos: position,
+        }
+    }
+
+    fn from_error(position: Position, e: Self::StreamError) -> Self {
+        SingleError {
+            error: Some(Box::new(e)),
+            pos: position,
+        }
+    }
+
+    fn set_position(&mut self, position: Position) {
+        self.pos = position;
+    }
+
+    fn add(&mut self, e: Self::StreamError) {
+        self.error = Some(Box::new(e));
+    }
+
+    fn set_expected<F: FnOnce(&mut Tracked<Self>)>(
+        self_: &mut Tracked<Self>,
+        _info: Self::StreamError,
+        f: F,
+    ) {
+        // wtf
+        f(self_);
+    }
+
+    fn is_unexpected_end_of_input(&self) -> bool {
+        // I really don't know how I'd do this sensibly
+        false
+    }
+
+    fn into_other<T>(self) -> T
+    where T: ParseError<Item, Range, Position>,
+    {
+        match self.error {
+            Some(s) => T::from_error(self.pos, StreamError::into_other(*s)),
+            None => T::empty(self.pos),
+        }
+    }
+}
+
+impl<I: StreamOnce> SingleErrorStream<I> {
+    pub fn new(inner: I) -> SingleErrorStream<I> {
+        SingleErrorStream {
+            inner,
+        }
+    }
+}
+
+impl<I: StreamOnce + Positioned> Positioned for SingleErrorStream<I> {
+    fn position(&self) -> I::Position {
+        self.inner.position()
+    }
+}
+
+impl<I: Resetable + StreamOnce> Resetable for SingleErrorStream<I> {
+    type Checkpoint = I::Checkpoint;
+
+    fn checkpoint(&self) -> Self::Checkpoint {
+        self.inner.checkpoint()
+    }
+
+    fn reset(&mut self, checkpoint: Self::Checkpoint) {
+        self.inner.reset(checkpoint)
+    }
+}
+
+impl<I: RangeStream> RangeStreamOnce for SingleErrorStream<I> {
+    fn uncons_range(&mut self, size: usize) -> Result<Self::Range, StreamErrorFor<Self>> {
+        self.inner.uncons_range(size).map_err(StreamError::into_other)
+    }
+
+    fn uncons_while<F>(&mut self, f: F) -> Result<Self::Range, StreamErrorFor<Self>>
+    where F: FnMut(Self::Item) -> bool,
+    {
+        self.inner.uncons_while(f).map_err(StreamError::into_other)
+    }
+
+    fn distance(&self, end: &Self::Checkpoint) -> usize {
+        self.inner.distance(end)
+    }
+}
+
+impl<I: StreamOnce> StreamOnce for SingleErrorStream<I> {
+    type Item = I::Item;
+    type Range = I::Range;
+    type Position = I::Position;
+    type Error = SingleError<Self::Item, Self::Range, Self::Position>;
+
+    fn uncons(&mut self) -> Result<Self::Item, StreamErrorFor<Self>> {
+        self.inner.uncons().map_err(StreamError::into_other)
+    }
+}
 
 /// Function arguments
 /// Given "a, b, c()) + 2", returns "a, b, c()" and ") + 2"
@@ -117,7 +238,7 @@ fn func_arg_list<'a>() -> impl Parser<Input = Bytes<'a>, Output = &'a [u8]> {
         }).map(|x| {
             (x, Consumed::Consumed(()))
         }).map_err(|e| {
-            Consumed::Consumed(easy::Errors::new(pos, e).into())
+            Consumed::Consumed(SingleError::from_error(pos, e).into())
         })
     })).skip(byte(b')'))
 }
@@ -227,7 +348,7 @@ pub enum IntExpr {
 }
 
 pub fn int_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = IntExpr> {
-    p1_int_expr().and(
+    Box::new(p1_int_expr().and(
         many::<Vec<_>, _>(byte(b'+').or(byte(b'-')).skip(spaces()).and(p1_int_expr()))
     ).map(|(mut left, rest)| {
         for (op, right) in rest {
@@ -237,7 +358,7 @@ pub fn int_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = IntExpr> {
             }
         }
         left
-    })
+    }))
 }
 
 fn p1_int_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = IntExpr> {
@@ -381,12 +502,12 @@ mod test {
     use super::*;
     use std::fmt::Debug;
 
-    fn error_contains<T: Debug, A, B, C>(
-        result: Result<T, easy::Errors<A, B, C>>,
+    fn error_contains<T: Debug, A: PartialEq, B: PartialEq, C>(
+        result: Result<T, SingleError<A, B, C>>,
         expected: &str,
     ) -> bool {
-        result.unwrap_err().errors.iter().any(|x| {
-            match x {
+        result.unwrap_err().error.into_iter().any(|x| {
+            match *x {
                 easy::Error::Unexpected(i) |
                     easy::Error::Expected(i) |
                     easy::Error::Message(i) =>
@@ -402,23 +523,23 @@ mod test {
         })
     }
 
-    fn empty_unwrap<'a, T, A: Debug, B: Debug, C: Debug>(
-        result: Result<(T, State<&'a [u8], IndexPositioner>), easy::Errors<A, B, C>>,
+    fn empty_unwrap<'a, T, A: Debug + PartialEq, B: Debug + PartialEq, C: Debug>(
+        result: Result<(T, Bytes), SingleError<A, B, C>>,
     ) -> T {
         let result = result.unwrap();
-        assert_eq!(result.1.input.len(), 0);
+        assert_eq!(result.1.inner.input.len(), 0);
         result.0
     }
 
-    fn s<'a>(text: &'a [u8]) -> State<&'a [u8], IndexPositioner> {
-        State::new(text)
+    fn s<'a>(text: &'a [u8]) -> Bytes {
+        SingleErrorStream::new(State::new(text))
     }
 
     #[test]
     fn test_int_func() {
         let mut parser = int_func();
         let mut parse = |text| {
-            parser.easy_parse(s(text))
+            parser.parse(s(text))
         };
         assert_eq!(empty_unwrap(parse(b"hitpoints")), IntFunc::Hitpoints);
         assert_eq!(empty_unwrap(parse(b"hitpoints()")), IntFunc::Hitpoints);
@@ -434,7 +555,7 @@ mod test {
     fn test_int_expr() {
         let mut parser = int_expr();
         let mut parse = |text| {
-            parser.easy_parse(s(text))
+            parser.parse(s(text))
         };
         assert_eq!(empty_unwrap(parse(b"20")), IntExpr::Integer(20));
         assert_eq!(empty_unwrap(parse(b"0x20")), IntExpr::Integer(0x20));
@@ -491,7 +612,7 @@ mod test {
     fn test_bool_expr() {
         let mut parser = bool_expr();
         let mut parse = |text| {
-            parser.easy_parse(s(text))
+            parser.parse(s(text))
         };
         let fun_true = || BoolExpr::Func(BoolFunc::True);
         let fun_false = || BoolExpr::Func(BoolFunc::False);
@@ -550,7 +671,7 @@ mod test {
             )))
         );
 
-        assert_eq!(parse(b"true || false && true").unwrap().1.input.len(), "&& true".len());
+        assert_eq!(parse(b"true || false && true").unwrap().1.inner.input.len(), "&& true".len());
         parse(b"! true").unwrap_err();
     }
 }
