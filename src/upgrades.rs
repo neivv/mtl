@@ -237,6 +237,11 @@ pub enum Stat {
     GasHarvestTime,
     UnloadCooldown,
     CreepSpreadTimer,
+    MineralHarvestReduce,
+    GasHarvestReduce,
+    MineralHarvestCarry,
+    GasHarvestCarry,
+    GasHarvestCarryDepleted,
 }
 
 fn clamp_u8(val: i32) -> u8 {
@@ -312,12 +317,72 @@ pub fn mineral_harvest_time(config: &Config, game: Game, unit: Unit) -> Option<u
     value
 }
 
+pub fn mineral_harvest_reduce(config: &Config, game: Game, unit: Unit) -> Option<u8> {
+    let mut value = None;
+    config.upgrades.matches(game, unit, |stat, val| match *stat {
+        Stat::MineralHarvestReduce => {
+            let val = clamp_u8(eval_int(val, unit, game));
+            value = Some(value.unwrap_or(0).max(val));
+        }
+        _ => (),
+    });
+    value
+}
+
+pub fn mineral_harvest_carry(config: &Config, game: Game, unit: Unit) -> Option<u8> {
+    let mut value = None;
+    config.upgrades.matches(game, unit, |stat, val| match *stat {
+        Stat::MineralHarvestCarry => {
+            let val = clamp_u8(eval_int(val, unit, game));
+            value = Some(value.unwrap_or(0).max(val));
+        }
+        _ => (),
+    });
+    value
+}
+
 pub fn gas_harvest_time(config: &Config, game: Game, unit: Unit) -> Option<u8> {
     let mut value = None;
     config.upgrades.matches(game, unit, |stat, val| match *stat {
         Stat::GasHarvestTime => {
             let val = clamp_u8(eval_int(val, unit, game));
             value = Some(value.unwrap_or(!0).min(val));
+        }
+        _ => (),
+    });
+    value
+}
+
+pub fn gas_harvest_reduce(config: &Config, game: Game, unit: Unit) -> Option<u8> {
+    let mut value = None;
+    config.upgrades.matches(game, unit, |stat, val| match *stat {
+        Stat::GasHarvestReduce => {
+            let val = clamp_u8(eval_int(val, unit, game));
+            value = Some(value.unwrap_or(0).max(val));
+        }
+        _ => (),
+    });
+    value
+}
+
+pub fn gas_harvest_carry(config: &Config, game: Game, unit: Unit) -> Option<u8> {
+    let mut value = None;
+    config.upgrades.matches(game, unit, |stat, val| match *stat {
+        Stat::GasHarvestCarry => {
+            let val = clamp_u8(eval_int(val, unit, game));
+            value = Some(value.unwrap_or(0).max(val));
+        }
+        _ => (),
+    });
+    value
+}
+
+pub fn gas_harvest_carry_depleted(config: &Config, game: Game, unit: Unit) -> Option<u8> {
+    let mut value = None;
+    config.upgrades.matches(game, unit, |stat, val| match *stat {
+        Stat::GasHarvestCarryDepleted => {
+            let val = clamp_u8(eval_int(val, unit, game));
+            value = Some(value.unwrap_or(0).max(val));
         }
         _ => (),
     });

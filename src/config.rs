@@ -165,6 +165,11 @@ fn parse_stat(key: &str) -> Result<Stat, Error> {
         "gas_harvest_time" => Stat::GasHarvestTime,
         "unload_cooldown" => Stat::UnloadCooldown,
         "creep_spread_timer" => Stat::CreepSpreadTimer,
+        "mineral_harvest_reduce" => Stat::MineralHarvestReduce,
+        "mineral_harvest_carry" => Stat::MineralHarvestCarry,
+        "gas_harvest_reduce" => Stat::GasHarvestReduce,
+        "gas_harvest_carry" => Stat::GasHarvestCarry,
+        "gas_harvest_carry_depleted" => Stat::GasHarvestCarryDepleted,
         _ => return Err(format_err!("Unknown stat {}", key)),
     })
 }

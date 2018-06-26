@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::ptr::null_mut;
 
-use byteorder::{ReadBytesExt, LE};
+use byteorder::{ReadBytesExt, WriteBytesExt, LE};
 use bw_dat::{self, OrderId, UnitId, unit};
 use serde::{Serializer, Serialize, Deserializer, Deserialize};
 
@@ -246,6 +246,14 @@ impl Unit {
         }
     }
 
+    pub fn resource_amount(&self) -> u16 {
+        unsafe { (&(*self.0).unit_specific2[0..]).read_u16::<LE>().unwrap() }
+    }
+
+    pub fn set_resource_amount(&self, value: u16) {
+        unsafe { (&mut (*self.0).unit_specific2[0..]).write_u16::<LE>(value).unwrap() }
+    }
+
     pub fn hitpoints(&self) -> i32 {
         unsafe { (*self.0).hitpoints }
     }
@@ -260,6 +268,10 @@ impl Unit {
 
     pub fn energy(&self) -> u16 {
         unsafe { (*self.0).energy }
+    }
+
+    pub fn target(&self) -> Option<Unit> {
+        unsafe { Unit::from_ptr((*self.0).target) }
     }
 }
 

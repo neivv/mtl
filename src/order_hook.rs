@@ -7,6 +7,12 @@ use game::Game;
 use unit::Unit;
 use upgrades;
 
+struct MiningOverride {
+    old_amount: u16,
+    carry: u8,
+    resource: Unit,
+}
+
 pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_void)) {
     use bw_dat::order::*;
 
@@ -19,15 +25,67 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
     let mut harvest_gas_check = false;
     let mut harvest_minerals_check = false;
     let mut unload_check = false;
+    let mut mining_override = None;
     let ground_cooldown_check = (*unit.0).ground_cooldown == 0;
     let air_cooldown_check = (*unit.0).air_cooldown == 0;
     match order {
         HARVEST_GAS => {
             return_cargo_order = true;
             harvest_gas_check = unit.order_state() == 0;
+            if unit.order_state() == 5 && (*unit.0).order_timer == 0 {
+                if let Some(target) = unit.target() {
+                    let reduce = upgrades::gas_harvest_reduce(&config, game, unit);
+                    let carry = upgrades::gas_harvest_carry(&config, game, unit);
+                    let depleted = upgrades::gas_harvest_carry_depleted(&config, game, unit);
+                    if reduce.is_some() || carry.is_some() || depleted.is_some() {
+                        let reduce = u16::from(reduce.unwrap_or(8));
+                        let carry = carry.unwrap_or(8);
+                        let depleted = depleted.unwrap_or(2);
+                        let current_resources = target.resource_amount();
+                        // Can't mine less than 8 gas at once without it being depleted mining.
+                        let (amount, carry) = if current_resources < 8 {
+                            (0, depleted)
+                        } else if current_resources <= reduce {
+                            // Depletion message is only shown once remaining amount is
+                            // between 0 and 7.
+                            (8, depleted)
+                        } else {
+                            (current_resources - reduce + 8, carry)
+                        };
+                        target.set_resource_amount(amount);
+                        mining_override = Some(MiningOverride {
+                            old_amount: current_resources,
+                            carry,
+                            resource: target,
+                        });
+                    }
+                }
+            }
         }
         HARVEST_MINERALS => {
             harvest_minerals_check = unit.order_state() == 0 || unit.order_state() == 4;
+            if unit.order_state() == 5 && (*unit.0).order_timer == 0 {
+                if let Some(target) = unit.target() {
+                    let reduce = upgrades::mineral_harvest_reduce(&config, game, unit);
+                    let carry = upgrades::mineral_harvest_carry(&config, game, unit);
+                    if reduce.is_some() || carry.is_some() {
+                        let reduce = u16::from(reduce.unwrap_or(8));
+                        let carry = carry.unwrap_or(8);
+                        let current_resources = target.resource_amount();
+                        let (amount, carry) = if current_resources <= reduce {
+                            (1, current_resources as u8)
+                        } else {
+                            (current_resources - reduce + 8, carry)
+                        };
+                        target.set_resource_amount(amount);
+                        mining_override = Some(MiningOverride {
+                            old_amount: current_resources,
+                            carry,
+                            resource: target,
+                        });
+                    }
+                }
+            }
         }
         RETURN_MINERALS | RETURN_GAS | RESET_COLLISION_HARVESTER => {
             return_cargo_order = true;
@@ -88,6 +146,13 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
             if let Some(new_time) = upgrades::cooldown(&config, game, unit) {
                 (*unit.0).air_cooldown = new_time;
             }
+        }
+    }
+    if let Some(vars) = mining_override {
+        if unit.target() == Some(vars.resource) {
+            vars.resource.set_resource_amount(vars.old_amount);
+        } else {
+            (*unit.0).unit_specific[0xf] = vars.carry;
         }
     }
 }
