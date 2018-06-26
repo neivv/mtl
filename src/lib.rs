@@ -1,4 +1,4 @@
-extern crate backtrace;
+#[cfg(debug_assertions)] extern crate backtrace;
 extern crate bincode;
 extern crate byteorder;
 extern crate chrono;
@@ -38,8 +38,6 @@ mod unit_pcolor_fix;
 mod upgrades;
 mod windows;
 
-use std::path::Path;
-
 use winapi::um::processthreadsapi::{GetCurrentProcess, TerminateProcess};
 
 fn init() {
@@ -60,6 +58,51 @@ fn init() {
     }
     std::panic::set_hook(Box::new(|info| {
         use std::fmt::Write;
+
+        #[cfg(debug_assertions)]
+        fn backtrace() -> String {
+            use std::path::Path;
+
+            let mut backtrace = String::new();
+            backtrace::trace(|frame| {
+                let ip = frame.ip();
+                let symbol_address = frame.symbol_address();
+
+                backtrace::resolve(ip, |symbol| {
+                    let mut line = format!("    {:p}", symbol_address);
+                    if symbol_address != ip {
+                        write!(line, " ({:p})", symbol_address).unwrap();
+                    }
+                    let module = windows::module_from_address(symbol_address as *mut _);
+                    if let Some((name, base)) = module {
+                        if let Some(fname) = Path::new(&name).file_name() {
+                            write!(line, " {:?} {:p}", fname, base).unwrap();
+                        } else {
+                            write!(line, " {:?} {:p}", name, base).unwrap();
+                        }
+                    }
+                    if let Some(name) = symbol.name() {
+                        write!(line, " -- {}", name).unwrap();
+                    }
+                    if let Some(filename) = symbol.filename() {
+                        if let Some(lineno) = symbol.lineno() {
+                            write!(line, " -- {:?}:{}", filename, lineno).unwrap();
+                        } else {
+                            write!(line, " -- {:?}:???", filename).unwrap();
+                        }
+                    }
+                    writeln!(backtrace, "{}", line).unwrap();
+                });
+                true // keep going to the next frame
+            });
+            backtrace
+        }
+
+        #[cfg(not(debug_assertions))]
+        fn backtrace() -> String {
+            "".into()
+        }
+
         let mut msg = String::new();
         match info.location() {
             Some(s) => writeln!(msg, "Panic at {}:{}", s.file(), s.line()).unwrap(),
@@ -74,39 +117,9 @@ fn init() {
             },
         };
         writeln!(msg, "{}", panic_msg).unwrap();
-        let mut backtrace = String::new();
-        backtrace::trace(|frame| {
-            let ip = frame.ip();
-            let symbol_address = frame.symbol_address();
-
-            backtrace::resolve(ip, |symbol| {
-                let mut line = format!("    {:p}", symbol_address);
-                if symbol_address != ip {
-                    write!(line, " ({:p})", symbol_address).unwrap();
-                }
-                let module = windows::module_from_address(symbol_address as *mut _);
-                if let Some((name, base)) = module {
-                    if let Some(fname) = Path::new(&name).file_name() {
-                        write!(line, " {:?} {:p}", fname, base).unwrap();
-                    } else {
-                        write!(line, " {:?} {:p}", name, base).unwrap();
-                    }
-                }
-                if let Some(name) = symbol.name() {
-                    write!(line, " -- {}", name).unwrap();
-                }
-                if let Some(filename) = symbol.filename() {
-                    if let Some(lineno) = symbol.lineno() {
-                        write!(line, " -- {:?}:{}", filename, lineno).unwrap();
-                    } else {
-                        write!(line, " -- {:?}:???", filename).unwrap();
-                    }
-                }
-                writeln!(backtrace, "{}", line).unwrap();
-            });
-            true // keep going to the next frame
-        });
-        write!(msg, "Backtrace:\n{}", backtrace).unwrap();
+        if cfg!(debug_assertions) {
+            write!(msg, "Backtrace:\n{}", backtrace()).unwrap();
+        }
         error!("{}", msg);
         windows::message_box("Mtl panic", &msg);
         unsafe { TerminateProcess(GetCurrentProcess(), 0x4230daef); }
