@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::io::Error;
 use std::sync::Mutex;
 
@@ -52,7 +53,22 @@ pub fn game_start_hook() {
     if colors.is_none() && minimap_colors.is_none() {
         return;
     }
-    let scenario_chk = match samase::read_file("staredit\\scenario.chk") {
+    let game = Game::get();
+    let chk_filename = unsafe {
+        if (*game.0).campaign_mission == 0 {
+            Cow::Borrowed("staredit\\scenario.chk")
+        } else {
+            let bytes = &((*game.0).map_path)[..];
+            // Get the null-terminated subslice
+            let bytes = bytes.split(|&x| x == 0).next().unwrap();
+            let map_path = match ::std::str::from_utf8(bytes) {
+                Ok(s) => s,
+                Err(_) => return,
+            };
+            format!("{}\\staredit\\scenario.chk", map_path).into()
+        }
+    };
+    let scenario_chk = match samase::read_file(&chk_filename) {
         Some(s) => s,
         None => {
             error!("No scenario.chk ???");
@@ -64,7 +80,6 @@ pub fn game_start_hook() {
         Some(s) => s,
         None => &default[..],
     };
-    let game = Game::get();
     for (player, &color) in colr.iter().enumerate().take(12) {
         unsafe {
             if let Some(colors) = colors.as_ref().and_then(|x| x.get(color as usize)) {
