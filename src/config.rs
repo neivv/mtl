@@ -174,6 +174,7 @@ fn parse_stat(key: &str) -> Result<Stat, Error> {
     })
 }
 
+/// NOTE: Passing an empty string will not yield anything
 fn brace_aware_split<'a>(text: &'a str, tok: &'a str) -> BraceSplit<'a> {
     BraceSplit(text, tok)
 }
