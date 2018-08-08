@@ -36,7 +36,7 @@ dependencies = [
 [[package]]
 name = "bw_dat"
 version = "0.1.0"
-source = "git+https://github.com/neivv/aise#14695c5a92308270d0195c5a688c8471b4bd4dc1"
+source = "git+https://github.com/neivv/aise#2010b85d9841748bc54bdf6a9a1a3561b59fecf5"
 dependencies = [
  "libc 0.2.42 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.66 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -169,7 +169,7 @@ dependencies = [
 
 [[package]]
 name = "mtl"
-version = "0.3.3"
+version = "0.3.4"
 dependencies = [
  "backtrace 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "bincode 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",

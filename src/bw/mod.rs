@@ -7,7 +7,6 @@ use samase;
 
 pub mod structs;
 
-use bw_dat::UnitId;
 use bw_dat::DatTable;
 
 pub use self::structs::*;
@@ -32,14 +31,6 @@ static mut UNITS_DAT: usize = !0;
 
 pub unsafe fn init_game_start_vars() {
     UNITS_DAT = samase::units_dat() as usize;
-}
-
-pub fn collision_rect(unit: UnitId) -> Rect {
-    unsafe {
-        assert!(unit.0 < 0xe4);
-        let collision = units_dat()[0x26].data as *const Rect;
-        *collision.offset(unit.0 as isize)
-    }
 }
 
 pub fn print_text<M: AsRef<str>>(msg: M) {

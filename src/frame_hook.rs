@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use bw_dat::UnitId;
+use bw_dat::{self, UnitId};
 
 use bw;
 use config::config;
@@ -108,6 +108,7 @@ pub unsafe extern fn frame_hook() {
     let config = config();
     let timers = &config.timers;
     let game = Game::get();
+    let upgrades = upgrades::global_state_changes();
     let mut tracked = tracked().borrow_mut();
     if game.frame_count() == 0 {
         // These can't be done at init_game
@@ -187,6 +188,9 @@ pub unsafe extern fn frame_hook() {
                 (*unit.0).energy = (*unit.0).energy.saturating_sub(neg as u16);
             }
             // Not handling past-the-max, bw hopefully handles that.
+        }
+        if (*unit.0).build_queue[(*unit.0).current_build_slot as usize] != bw_dat::unit::NONE.0 {
+            upgrades.update_build_queue(unit);
         }
     }
 }

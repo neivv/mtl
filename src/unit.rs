@@ -152,7 +152,7 @@ impl Unit {
     }
 
     pub fn collision_rect(&self) -> bw::Rect {
-        let collision_rect = bw::collision_rect(self.id());
+        let collision_rect = self.id().dimensions();
         let position = self.position();
         bw::Rect {
             left: position.x - collision_rect.left,
@@ -273,6 +273,39 @@ impl Unit {
     pub fn target(&self) -> Option<Unit> {
         unsafe { Unit::from_ptr((*self.0).target) }
     }
+
+    pub fn set_unit_id(&self, new: UnitId) {
+        // Otherwise would have to fix possearch and clip unit in map bounds
+        assert!(
+            self.id().dimensions() == new.dimensions(),
+            "Cannot switch unit from id {:02x} to {:02x} due to different dimensions",
+            self.id().0,
+            new.0,
+        );
+        // Should also check building tile flag, but at least it isn't as unstable.
+        // Also air repulse.
+        // Bw sets buildings secondary order to nothing.
+        // Checks multi selection changes.
+        unsafe {
+            let old = self.id();
+            (*self.0).previous_unit_id = (*self.0).unit_id;
+            (*self.0).previous_hp = (((*self.0).hitpoints >> 8) as u16).max(1);
+            (*self.0).unit_id = new.0;
+            let new_hp = (new.hitpoints() >> 8)
+                .saturating_mul(i32::from((*self.0).previous_hp))
+                .checked_div(old.hitpoints() >> 8)
+                .unwrap_or(1);
+            (*self.0).hitpoints = new_hp << 8;
+            let buttons = if !self.is_completed() || self.is_disabled() {
+                0xe4
+            } else {
+                new.0
+            };
+            if new.is_building() || buttons == 0xe4 {
+                (*self.0).buttons = buttons;
+            }
+        }
+    }
 }
 
 pub fn find_units<F: FnMut(&Unit) -> bool>(area: &bw::Rect, mut filter: F) -> Vec<Unit> {
@@ -328,4 +361,8 @@ impl Iterator for AliveUnits {
             Some(Unit(unit))
         }
     }
+}
+
+pub fn player_units(player: u8) -> impl Iterator<Item = Unit> {
+    alive_units().filter(move |x| x.player() == player)
 }

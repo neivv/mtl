@@ -1,3 +1,4 @@
+use std::cell::{RefCell, RefMut};
 use std::collections::BTreeMap;
 use std::ptr::null_mut;
 
@@ -9,7 +10,107 @@ use bw_dat::{order, UnitId, UpgradeId, OrderId};
 use config::Config;
 use game::Game;
 use parse_expr::{BoolExpr, IntExpr};
-use unit::Unit;
+use unit::{self, Unit};
+
+ome2_thread_local! {
+    STATE_CHANGES: RefCell<UpgradeStateChanges> =
+        state_changes(RefCell::new(UpgradeStateChanges::new()));
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct UpgradeStateChanges {
+    // player, from, to
+    unit_id_changes: Vec<(u8, UnitId, UnitId)>,
+}
+
+impl UpgradeStateChanges {
+    pub fn new() -> UpgradeStateChanges {
+        UpgradeStateChanges {
+            unit_id_changes: Vec::new(),
+        }
+    }
+
+    pub fn update_build_queue(&self, unit: Unit) {
+        for &(player, from, to) in &self.unit_id_changes {
+            if unit.player() == player {
+                for i in 0..5 {
+                    unsafe {
+                        if (*unit.0).build_queue[i] == from.0 {
+                            (*unit.0).build_queue[i] = to.0;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn upgrade_gained(
+        &mut self,
+        config: &Config,
+        game: Game,
+        player: u8,
+        upgrade: UpgradeId,
+        level: u8,
+    ) {
+        let upgrades = config.upgrades.upgrades.iter().filter(|x| x.0 == upgrade.0 as usize);
+        for (_id, upgrade) in upgrades {
+            for (state_reqs, changes) in &upgrade.changes {
+                for changes in changes.iter().filter(|x| x.level == level) {
+                    if changes.changes.iter().any(|x| x.0.is_state_change()) {
+                        for unit in unit::player_units(player) {
+                            let cond_ok =
+                                changes.condition.as_ref().map(|x| check_condition(x, unit, game))
+                                .unwrap_or(true);
+                            let ok = changes.units.iter().any(|&x| unit.matches_id(x)) &&
+                                state_reqs.iter().all(|x| x.matches_unit(unit)) &&
+                                cond_ok;
+                            if ok {
+                                for &(stat, ref value) in &changes.changes {
+                                    let value = eval_int(value, unit, game);
+                                    match stat {
+                                        Stat::SetUnitId => unit.set_unit_id(UnitId(value as u16)),
+                                        _ => (),
+                                    }
+                                }
+                            }
+                        }
+                        // Add permament changes only if they don't use unit-specific data
+                        if changes.condition.is_none() && state_reqs.is_empty() {
+                            for &(stat, ref value) in &changes.changes {
+                                if let Some(value) = eval_constant_int(value) {
+                                    match stat {
+                                        Stat::SetUnitId => {
+                                            for &from in &changes.units {
+                                                let to = UnitId(value as u16);
+                                                self.unit_id_changes.push((player, from, to));
+                                            }
+                                        }
+                                        _ => (),
+                                    }
+                                }
+                            }
+                        }
+                        for unit in unit::player_units(player) {
+                            self.update_build_queue(unit);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub fn init_state_changes() {
+    set_state_changes(UpgradeStateChanges::new());
+}
+
+pub fn set_state_changes(changes: UpgradeStateChanges) {
+    *state_changes().borrow_mut() = changes;
+}
+
+pub fn global_state_changes() -> RefMut<'static, UpgradeStateChanges> {
+    state_changes().borrow_mut()
+}
 
 pub struct Upgrades {
     pub upgrades: VecMap<Upgrade>,
@@ -63,6 +164,19 @@ impl Upgrades {
             }
         }
     }
+}
+
+fn eval_constant_int(expr: &IntExpr) -> Option<i32> {
+    use parse_expr::IntExpr::*;
+    Some(match expr {
+        Add(x) => eval_constant_int(&x.0)?.saturating_add(eval_constant_int(&x.1)?),
+        Sub(x) => eval_constant_int(&x.0)?.saturating_sub(eval_constant_int(&x.1)?),
+        Mul(x) => eval_constant_int(&x.0)?.saturating_mul(eval_constant_int(&x.1)?),
+        Div(x) => eval_constant_int(&x.0)? / (eval_constant_int(&x.1)?),
+        Modulo(x) => eval_constant_int(&x.0)? % (eval_constant_int(&x.1)?),
+        Integer(i) => *i,
+        Func(_) => return None,
+    })
 }
 
 fn eval_int(expr: &IntExpr, unit: Unit, game: Game) -> i32 {
@@ -242,6 +356,16 @@ pub enum Stat {
     MineralHarvestCarry,
     GasHarvestCarry,
     GasHarvestCarryDepleted,
+    SetUnitId,
+}
+
+impl Stat {
+    fn is_state_change(&self) -> bool {
+        match self {
+            Stat::SetUnitId => true,
+            _ => false,
+        }
+    }
 }
 
 fn clamp_u8(val: i32) -> u8 {

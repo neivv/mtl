@@ -1,6 +1,7 @@
 use libc::c_void;
 
 use bw_dat::unit as unit_id;
+use bw_dat::{UpgradeId, upgrade};
 use bw;
 use config::config;
 use game::Game;
@@ -26,6 +27,7 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
     let mut harvest_minerals_check = false;
     let mut unload_check = false;
     let mut mining_override = None;
+    let mut upgrade_check = None;
     let ground_cooldown_check = (*unit.0).ground_cooldown == 0;
     let air_cooldown_check = (*unit.0).air_cooldown == 0;
     match order {
@@ -93,6 +95,15 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
         UNLOAD | MOVE_UNLOAD => {
             unload_check = (*unit.0).order_timer == 0;
         }
+        UPGRADE => {
+            let upgrade = UpgradeId(u16::from((*unit.0).unit_specific[9]));
+            let level = (*unit.0).unit_specific[0xd];
+            if upgrade != upgrade::NONE {
+                if game.upgrade_level(unit.player(), upgrade) < level {
+                    upgrade_check = Some((upgrade, level));
+                }
+            }
+        }
         _ => (),
     }
     if return_cargo_order {
@@ -155,6 +166,12 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
             (*unit.0).unit_specific[0xf] = vars.carry;
         }
     }
+    if let Some((upgrade, level)) = upgrade_check {
+        if game.upgrade_level(unit.player(), upgrade) == level {
+            let mut upgrades = upgrades::global_state_changes();
+            upgrades.upgrade_gained(&config, game, unit.player(), upgrade, level);
+        }
+    }
 }
 
 pub unsafe extern fn hidden_order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_void)) {
@@ -168,6 +185,7 @@ pub unsafe extern fn secondary_order_hook(u: *mut c_void, orig: unsafe extern fn
     let config = config();
     let mut spread_creep_check = false;
     let mut larva_spawn_check = false;
+    let mut zerg_group_flags = None;
     match unit.secondary_order() {
         TRAIN => {
             if config.zerg_building_training {
@@ -175,9 +193,7 @@ pub unsafe extern fn secondary_order_hook(u: *mut c_void, orig: unsafe extern fn
                     (bw::units_dat()[0x2c].data as *mut u8).offset(unit.id().0 as isize);
                 let orig_flags = *group_flags;
                 *group_flags &= !0x1;
-                orig(u);
-                *group_flags = orig_flags;
-                return;
+                zerg_group_flags = Some((group_flags, orig_flags));
             }
         }
         SPREAD_CREEP => {
@@ -205,5 +221,8 @@ pub unsafe extern fn secondary_order_hook(u: *mut c_void, orig: unsafe extern fn
                 (*unit.0).unit_specific[0xa] = new_timer;
             }
         }
+    }
+    if let Some((out, orig)) = zerg_group_flags {
+        *out = orig;
     }
 }

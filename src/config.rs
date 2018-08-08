@@ -170,6 +170,7 @@ fn parse_stat(key: &str) -> Result<Stat, Error> {
         "gas_harvest_reduce" => Stat::GasHarvestReduce,
         "gas_harvest_carry" => Stat::GasHarvestCarry,
         "gas_harvest_carry_depleted" => Stat::GasHarvestCarryDepleted,
+        "set_unit_id" => Stat::SetUnitId,
         _ => return Err(format_err!("Unknown stat {}", key)),
     })
 }

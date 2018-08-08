@@ -141,7 +141,8 @@ pub extern fn Initialize() {
 
 #[derive(Serialize, Deserialize)]
 struct SaveData {
-    tracked_spells: frame_hook::TrackedSpells
+    tracked_spells: frame_hook::TrackedSpells,
+    upgrade_state_changes: upgrades::UpgradeStateChanges,
 }
 
 unsafe extern fn save(set_data: unsafe extern fn(*const u8, usize)) {
@@ -149,6 +150,7 @@ unsafe extern fn save(set_data: unsafe extern fn(*const u8, usize)) {
     defer!(unit::clear_save_mapping());
     let save = SaveData {
         tracked_spells: frame_hook::tracked_spells(),
+        upgrade_state_changes: upgrades::global_state_changes().clone(),
     };
     match bincode::serialize(&save) {
         Ok(o) => {
@@ -174,10 +176,12 @@ unsafe extern fn load(ptr: *const u8, len: usize) -> u32 {
         }
     };
     frame_hook::set_tracked_spells(data.tracked_spells);
+    upgrades::set_state_changes(data.upgrade_state_changes);
     1
 }
 
 unsafe extern fn init_game() {
     bw::init_game_start_vars();
     frame_hook::init_tracked_spells();
+    upgrades::init_state_changes();
 }
