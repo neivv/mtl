@@ -1,7 +1,7 @@
 use std::cmp::PartialEq;
 
 use combine::{Parser, Positioned, RangeStreamOnce, many, many1, optional, skip_many, try};
-use combine::{ParseError, StreamOnce, RangeStream};
+use combine::{ConsumedResult, ParseError, StreamOnce, RangeStream};
 use combine::byte::{alpha_num, byte, digit, hex_digit, letter, spaces};
 use combine::easy;
 use combine::error::{Consumed, Tracked, StreamError};
@@ -219,10 +219,25 @@ impl<I: StreamOnce> StreamOnce for SingleErrorStream<I> {
     }
 }
 
+struct Stateless<P: Parser>(P);
+
+impl<P: Parser> Parser for Stateless<P> {
+    type Input = P::Input;
+    type Output = P::Output;
+    type PartialState = ();
+
+    fn parse_lazy(
+        &mut self,
+        input: &mut Self::Input,
+    ) -> ConsumedResult<Self::Output, Self::Input> {
+        self.0.parse_lazy(input)
+    }
+}
+
 /// Function arguments
 /// Given "a, b, c()) + 2", returns "a, b, c()" and ") + 2"
 fn func_arg_list<'a>() -> impl Parser<Input = Bytes<'a>, Output = &'a [u8]> {
-    byte(b'(').with(function::parser(|input: &mut Bytes<'a>| {
+    Stateless(byte(b'(').with(function::parser(|input: &mut Bytes<'a>| {
         let mut parens = 1;
         let pos = input.position();
         input.uncons_while(|byte| {
@@ -240,24 +255,24 @@ fn func_arg_list<'a>() -> impl Parser<Input = Bytes<'a>, Output = &'a [u8]> {
         }).map_err(|e| {
             Consumed::Consumed(SingleError::from_error(pos, e).into())
         })
-    })).skip(byte(b')'))
+    })).skip(byte(b')')))
 }
 
 fn identifier<'a>() -> impl Parser<Input = Bytes<'a>, Output = &'a [u8]> {
-    recognize(letter().or(byte(b'_')).with(skip_many(alpha_num().or(byte(b'_')))))
+    Stateless(recognize(letter().or(byte(b'_')).with(skip_many(alpha_num().or(byte(b'_'))))))
 }
 
 fn func<'a>() -> impl Parser<Input = Bytes<'a>, Output = (&'a [u8], &'a [u8])> {
-    identifier()
+    Stateless(identifier()
         .and(optional(func_arg_list()))
         .skip(spaces())
-        .map(|(x, y)| (x, y.unwrap_or(b"")))
+        .map(|(x, y)| (x, y.unwrap_or(b""))))
 }
 
 macro_rules! decl_func {
     ($name:ident, $ename:ident, $($conf_name:expr, $variant_name:ident,)*) => {
         fn $name<'a>() -> impl Parser<Input = Bytes<'a>, Output = $ename> {
-            func().and_then(|(name, params)| -> Result<_, easy::Error<_, _>> {
+            Stateless(func().and_then(|(name, params)| -> Result<_, easy::Error<_, _>> {
                 if params != b"" {
                     return Err(StreamError::unexpected_message("Can't have parameters"));
                 }
@@ -269,7 +284,7 @@ macro_rules! decl_func {
                     }
                 };
                 Ok(result)
-            })
+            }))
         }
 
         #[derive(Debug, Eq, PartialEq, Clone)]
@@ -348,7 +363,7 @@ pub enum IntExpr {
 }
 
 pub fn int_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = IntExpr> {
-    Box::new(p1_int_expr().and(
+    Stateless(Box::new(p1_int_expr().and(
         many::<Vec<_>, _>(byte(b'+').or(byte(b'-')).skip(spaces()).and(p1_int_expr()))
     ).map(|(mut left, rest)| {
         for (op, right) in rest {
@@ -358,11 +373,11 @@ pub fn int_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = IntExpr> {
             }
         }
         left
-    }))
+    })))
 }
 
 fn p1_int_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = IntExpr> {
-    p2_int_expr().and(
+    Stateless(p2_int_expr().and(
         many::<Vec<_>, _>(
             byte(b'*').or(byte(b'/')).or(byte(b'%')).skip(spaces()).and(p2_int_expr())
         )
@@ -391,19 +406,19 @@ fn p1_int_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = IntExpr> {
             }
         }
         Ok(left)
-    })
+    }))
 }
 
 fn p2_int_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = IntExpr> {
     let lazy = function::parser(|input| int_expr().parse_stream(input));
-    integer().map(|x| IntExpr::Integer(x))
+    Stateless(integer().map(|x| IntExpr::Integer(x))
         .or(int_func().map(|x| IntExpr::Func(x)))
-        .or(byte(b'(').skip(spaces()).with(lazy).skip(byte(b')')))
+        .or(byte(b'(').skip(spaces()).with(lazy).skip(byte(b')'))))
 }
 
 fn integer<'a>() -> impl Parser<Input = Bytes<'a>, Output = i32> {
     use std::str;
-    optional(byte(b'-')).and(
+    Stateless(optional(byte(b'-')).and(
         range(&b"0x"[..]).with({
             recognize(skip_many(hex_digit())).map(|x| {
                 str::from_utf8(x).ok().and_then(|x| i32::from_str_radix(x, 16).ok())
@@ -419,7 +434,7 @@ fn integer<'a>() -> impl Parser<Input = Bytes<'a>, Output = i32> {
             }),
             None => Err(StreamError::unexpected_message("Integer literal out of range")),
         }
-    })
+    }))
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -437,7 +452,7 @@ pub enum BoolExpr {
 }
 
 pub fn bool_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = BoolExpr> {
-    p1_bool_expr().and(
+    Stateless(p1_bool_expr().and(
         many1::<Vec<_>, _>(range(&b"||"[..]).skip(spaces()).and(p1_bool_expr()))
             .or(many::<Vec<_>, _>(range(&b"&&"[..]).skip(spaces()).and(p1_bool_expr())))
     ).map(|(mut left, rest)| {
@@ -448,11 +463,11 @@ pub fn bool_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = BoolExpr> {
             }
         }
         left
-    })
+    }))
 }
 
 fn p1_bool_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = BoolExpr> {
-    try(int_expr()).and(
+    Stateless(try(int_expr()).and(
         choice!(
             range(&b"<"[..]),
             range(&b"<="[..]),
@@ -486,15 +501,15 @@ fn p1_bool_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = BoolExpr> {
             }
             left
         })
-    )
+    ))
 }
 
 fn p2_bool_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = BoolExpr> {
     let lazy = function::parser(|input| bool_expr().parse_stream(input));
     let lazy_p2 = function::parser(|input| p2_bool_expr().parse_stream(input));
-    byte(b'!').with(lazy_p2).map(|x| BoolExpr::Not(Box::new(x)))
+    Stateless(byte(b'!').with(lazy_p2).map(|x| BoolExpr::Not(Box::new(x)))
         .or(bool_func().map(|x| BoolExpr::Func(x)))
-        .or(byte(b'(').skip(spaces()).with(lazy).skip(byte(b')')))
+        .or(byte(b'(').skip(spaces()).with(lazy).skip(byte(b')'))))
 }
 
 #[cfg(test)]
