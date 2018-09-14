@@ -34,7 +34,6 @@ serde = "1.0.15"
 serde_derive = "1.0.15"
 smallvec = "0.6"
 thread_local = "0.3.5"
-toml = "0.4.5"
 vec_map = "0.8.0"
 
 [dependencies.winapi]

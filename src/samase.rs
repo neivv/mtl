@@ -222,7 +222,7 @@ unsafe extern fn init_config() {
         .unwrap_or_else(|e| {
             use std::fmt::Write;
             let mut msg = String::new();
-            for c in e.causes() {
+            for c in e.iter_chain() {
                 writeln!(msg, "{}", c).unwrap();
             }
             let msg = format!("Unable to read config:\n{}\nExiting.", msg);
