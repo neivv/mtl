@@ -2,7 +2,7 @@ use std::cmp::PartialEq;
 
 use combine::{Parser, Positioned, RangeStreamOnce, many, many1, optional, skip_many, try};
 use combine::{ConsumedResult, ParseError, StreamOnce, RangeStream};
-use combine::byte::{alpha_num, byte, digit, hex_digit, letter, spaces};
+use combine::byte::{alpha_num, byte, hex_digit, letter, spaces};
 use combine::easy;
 use combine::error::{Consumed, Tracked, StreamError};
 use combine::parser::function;
@@ -379,7 +379,11 @@ pub fn int_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = IntExpr> {
 fn p1_int_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = IntExpr> {
     Stateless(p2_int_expr().and(
         many::<Vec<_>, _>(
-            byte(b'*').or(byte(b'/')).or(byte(b'%')).skip(spaces()).and(p2_int_expr())
+            choice!(
+                byte(b'*'),
+                byte(b'/'),
+                byte(b'%')
+            ).skip(spaces()).and(p2_int_expr())
         )
     ).and_then(|(mut left, rest)| -> Result<_, easy::Error<_, _>> {
         for (op, right) in rest {
@@ -411,28 +415,32 @@ fn p1_int_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = IntExpr> {
 
 fn p2_int_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = IntExpr> {
     let lazy = function::parser(|input| int_expr().parse_stream(input));
-    Stateless(integer().map(|x| IntExpr::Integer(x))
-        .or(int_func().map(|x| IntExpr::Func(x)))
-        .or(byte(b'(').skip(spaces()).with(lazy).skip(byte(b')'))))
+    Stateless(choice!(
+        Stateless(integer().map(|x| IntExpr::Integer(x))),
+        Stateless(int_func().map(|x| IntExpr::Func(x))),
+        Stateless(byte(b'(').skip(spaces()).with(lazy).skip(byte(b')')))
+    ))
 }
 
 fn integer<'a>() -> impl Parser<Input = Bytes<'a>, Output = i32> {
     use std::str;
     Stateless(optional(byte(b'-')).and(
-        range(&b"0x"[..]).with({
-            recognize(skip_many(hex_digit())).map(|x| {
-                str::from_utf8(x).ok().and_then(|x| i32::from_str_radix(x, 16).ok())
-            })
-        }).or(recognize(skip_many(digit())).map(|x| {
-            str::from_utf8(x).ok().and_then(|x| i32::from_str_radix(x, 10).ok())
-        }))
-    ).skip(spaces()).and_then(|(neg, int_parse_result)| -> Result<_, easy::Error<_, _>> {
+        optional(range(&b"0x"[..])).and(
+            recognize(skip_many(hex_digit()))
+        )
+    ).skip(spaces()).and_then(|(neg, (hex, int))| -> Result<_, easy::Error<_, _>> {
+        let base = match hex.is_some() {
+            true => 16,
+            false => 10,
+        };
+        let int_parse_result = str::from_utf8(int).ok()
+            .and_then(|x| i32::from_str_radix(x, base).ok());
         match int_parse_result {
             Some(o) => Ok(match neg.is_some() {
                 true => 0 - o,
                 false => o,
             }),
-            None => Err(StreamError::unexpected_message("Integer literal out of range")),
+            None => Err(StreamError::unexpected_message("Invalid integer literal")),
         }
     }))
 }
@@ -486,10 +494,9 @@ fn p1_bool_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = BoolExpr> {
             b"!=" | _ => BoolExpr::Not(Box::new(BoolExpr::EqualInt(Box::new((left, right))))),
         }
     }).or(
-        p2_bool_expr().and(
-            optional(range(&b"=="[..]).skip(spaces()).and(p2_bool_expr()))
-                .or(optional(range(&b"!="[..]).skip(spaces()).and(p2_bool_expr())))
-        ).map(|(mut left, rest)| {
+        p2_bool_expr().and(Stateless(
+            optional(range(&b"=="[..]).or(range(&b"!="[..])).skip(spaces()).and(p2_bool_expr()))
+        )).map(|(mut left, rest)| {
             if let Some((op, right)) = rest {
                 match op {
                     b"==" => left = BoolExpr::EqualBool(Box::new((left, right))),
@@ -507,9 +514,11 @@ fn p1_bool_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = BoolExpr> {
 fn p2_bool_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = BoolExpr> {
     let lazy = function::parser(|input| bool_expr().parse_stream(input));
     let lazy_p2 = function::parser(|input| p2_bool_expr().parse_stream(input));
-    Stateless(byte(b'!').with(lazy_p2).map(|x| BoolExpr::Not(Box::new(x)))
-        .or(bool_func().map(|x| BoolExpr::Func(x)))
-        .or(byte(b'(').skip(spaces()).with(lazy).skip(byte(b')'))))
+    Stateless(choice!(
+        Stateless(byte(b'!').with(lazy_p2).map(|x| BoolExpr::Not(Box::new(x)))),
+        Stateless(bool_func().map(|x| BoolExpr::Func(x))),
+        Stateless(byte(b'(').skip(spaces()).with(lazy).skip(byte(b')')))
+    ))
 }
 
 #[cfg(test)]
