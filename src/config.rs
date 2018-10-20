@@ -436,9 +436,7 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
         };
         (id as usize, upgrade)
     }).collect();
-    let upgrades = Upgrades {
-        upgrades,
-    };
+    let upgrades = Upgrades::new(upgrades);
     Ok(Config {
         timers,
         supplies,

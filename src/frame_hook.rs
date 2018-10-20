@@ -159,7 +159,8 @@ pub unsafe extern fn frame_hook() {
                 }
             }
         }
-        if let Some(hp_regen) = upgrades::hp_regen(&config, game, unit) {
+        let regen = upgrades::regens(&config, game, unit);
+        if let Some(hp_regen) = regen.hp {
             (*unit.0).hitpoints = (*unit.0).hitpoints.saturating_add(hp_regen);
             if (*unit.0).hitpoints <= 0 {
                 // No code for killing units yet
@@ -170,7 +171,7 @@ pub unsafe extern fn frame_hook() {
                 (*unit.0).hitpoints = max_hp;
             }
         }
-        if let Some(regen) = upgrades::shield_regen(&config, game, unit) {
+        if let Some(regen) = regen.shield {
             (*unit.0).shields = (*unit.0).shields.saturating_add(regen);
             if (*unit.0).shields < 0 {
                 (*unit.0).shields = 0;
@@ -180,7 +181,7 @@ pub unsafe extern fn frame_hook() {
                 (*unit.0).shields = max_shields;
             }
         }
-        if let Some(regen) = upgrades::energy_regen(&config, game, unit) {
+        if let Some(regen) = regen.energy {
             if regen > 0 {
                 (*unit.0).energy = (*unit.0).energy.saturating_add(regen as u16);
             } else {

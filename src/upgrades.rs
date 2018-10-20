@@ -114,6 +114,7 @@ pub fn global_state_changes() -> RefMut<'static, UpgradeStateChanges> {
 
 pub struct Upgrades {
     pub upgrades: VecMap<Upgrade>,
+    units_with_upgrades: Vec<bool>,
 }
 
 #[derive(Debug)]
@@ -123,8 +124,32 @@ pub struct Upgrade {
 }
 
 impl Upgrades {
+    pub fn new(upgrades: VecMap<Upgrade>) -> Upgrades {
+        let largest_unit_id = upgrades.iter()
+            .flat_map(|x| x.1.all_matching_units.iter())
+            .map(|x| x.0)
+            .max()
+            .unwrap_or(0);
+        let mut units_with_upgrades = vec![false; largest_unit_id as usize + 1];
+        {
+            let units = upgrades.iter()
+                .flat_map(|x| x.1.all_matching_units.iter());
+            for unit in units {
+                units_with_upgrades[unit.0 as usize] = true;
+            }
+        }
+        Upgrades {
+            upgrades,
+            units_with_upgrades,
+        }
+    }
+
     fn matches<F: FnMut(&Stat, &IntExpr)>(&self, game: Game, unit: Unit, mut fun: F) {
         if unit.player() >= 0xc {
+            return;
+        }
+        let id = unit.id();
+        if self.units_with_upgrades.get(id.0 as usize).cloned().unwrap_or(false) == false {
             return;
         }
         for (id, upgrade) in self.upgrades.iter() {
@@ -372,48 +397,32 @@ fn clamp_u8(val: i32) -> u8 {
     val.max(0).min(255) as u8
 }
 
-pub fn hp_regen(config: &Config, game: Game, unit: Unit) -> Option<i32> {
-    let mut sum = 0i32;
+pub struct Regens {
+    pub hp: Option<i32>,
+    pub shield: Option<i32>,
+    pub energy: Option<i32>,
+}
+
+pub fn regens(config: &Config, game: Game, unit: Unit) -> Regens {
+    let mut hp = 0i32;
+    let mut shield = 0i32;
+    let mut energy = 0i32;
     config.upgrades.matches(game, unit, |stat, val| match *stat {
         Stat::HpRegen => {
-            sum = sum.saturating_add(eval_int(val, unit, game));
+            hp = hp.saturating_add(eval_int(val, unit, game));
         }
-        _ => (),
-    });
-    if sum != 0 {
-        Some(sum)
-    } else {
-        None
-    }
-}
-
-pub fn shield_regen(config: &Config, game: Game, unit: Unit) -> Option<i32> {
-    let mut sum = 0i32;
-    config.upgrades.matches(game, unit, |stat, val| match *stat {
         Stat::ShieldRegen => {
-            sum = sum.saturating_add(eval_int(val, unit, game));
+            shield = shield.saturating_add(eval_int(val, unit, game));
         }
-        _ => (),
-    });
-    if sum != 0 {
-        Some(sum)
-    } else {
-        None
-    }
-}
-
-pub fn energy_regen(config: &Config, game: Game, unit: Unit) -> Option<i32> {
-    let mut sum = 0i32;
-    config.upgrades.matches(game, unit, |stat, val| match *stat {
         Stat::EnergyRegen => {
-            sum = sum.saturating_add(eval_int(val, unit, game));
+            energy = energy.saturating_add(eval_int(val, unit, game));
         }
         _ => (),
     });
-    if sum != 0 {
-        Some(sum)
-    } else {
-        None
+    Regens {
+        hp: if hp != 0 { Some(hp) } else { None },
+        shield: if shield != 0 { Some(shield) } else { None },
+        energy: if energy != 0 { Some(energy) } else { None },
     }
 }
 
