@@ -522,11 +522,11 @@ pub fn gas_harvest_carry_depleted(config: &Config, game: Game, unit: Unit) -> Op
     value
 }
 
-pub fn creep_spread_time(config: &Config, game: Game, unit: Unit) -> Option<u8> {
+pub fn creep_spread_time(config: &Config, game: Game, unit: Unit) -> Option<i32> {
     let mut value = None;
     config.upgrades.matches(game, unit, |stat, val| match *stat {
         Stat::CreepSpreadTimer => {
-            let val = clamp_u8(eval_int(val, unit, game));
+            let val = eval_int(val, unit, game).max(-1).min(255);
             value = Some(value.unwrap_or(!0).min(val));
         }
         _ => (),
@@ -534,11 +534,11 @@ pub fn creep_spread_time(config: &Config, game: Game, unit: Unit) -> Option<u8> 
     value
 }
 
-pub fn larva_spawn_time(config: &Config, game: Game, unit: Unit) -> Option<u8> {
+pub fn larva_spawn_time(config: &Config, game: Game, unit: Unit) -> Option<i32> {
     let mut value = None;
     config.upgrades.matches(game, unit, |stat, val| match *stat {
         Stat::LarvaTimer => {
-            let val = clamp_u8(eval_int(val, unit, game));
+            let val = eval_int(val, unit, game).max(-1).min(255);
             value = Some(value.unwrap_or(!0).min(val));
         }
         _ => (),

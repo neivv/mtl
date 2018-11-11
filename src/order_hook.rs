@@ -185,6 +185,8 @@ pub unsafe extern fn secondary_order_hook(u: *mut c_void, orig: unsafe extern fn
     let config = config();
     let mut spread_creep_check = false;
     let mut larva_spawn_check = false;
+    let mut creep_spread_time = None;
+    let mut larva_spawn_time = None;
     let mut zerg_group_flags = None;
     match unit.secondary_order() {
         TRAIN => {
@@ -197,27 +199,48 @@ pub unsafe extern fn secondary_order_hook(u: *mut c_void, orig: unsafe extern fn
             }
         }
         SPREAD_CREEP => {
+            let game = Game::get();
+            if let Some(new_timer) = upgrades::creep_spread_time(&config, game, unit) {
+                if new_timer == -1 {
+                    (*unit.0).unit_specific[0xc] = 10;
+                } else {
+                    creep_spread_time = Some(new_timer as u8);
+                }
+            }
+            if let Some(new_timer) = upgrades::larva_spawn_time(&config, game, unit) {
+                if new_timer == -1 {
+                    (*unit.0).unit_specific[0xa] = 10;
+                } else {
+                    larva_spawn_time = Some(new_timer as u8);
+                }
+            }
             spread_creep_check = (*unit.0).unit_specific[0xc] == 0;
             larva_spawn_check = (*unit.0).unit_specific[0xa] == 0;
         }
         SPAWNING_LARVA => {
+            let game = Game::get();
+            if let Some(new_timer) = upgrades::larva_spawn_time(&config, game, unit) {
+                if new_timer == -1 {
+                    (*unit.0).unit_specific[0xa] = 10;
+                } else {
+                    larva_spawn_time = Some(new_timer as u8);
+                }
+            }
             larva_spawn_check = (*unit.0).unit_specific[0xa] == 0;
         }
         _ => ()
     }
     orig(u);
     if spread_creep_check {
-        let game = Game::get();
         if (*unit.0).unit_specific[0xc] != 0 {
-            if let Some(new_timer) = upgrades::creep_spread_time(&config, game, unit) {
+            if let Some(new_timer) = creep_spread_time {
                 (*unit.0).unit_specific[0xc] = new_timer;
             }
         }
     }
     if larva_spawn_check {
-        let game = Game::get();
         if (*unit.0).unit_specific[0xa] != 0 {
-            if let Some(new_timer) = upgrades::larva_spawn_time(&config, game, unit) {
+            if let Some(new_timer) = larva_spawn_time {
                 (*unit.0).unit_specific[0xa] = new_timer;
             }
         }
