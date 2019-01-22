@@ -143,8 +143,25 @@ pub extern fn Initialize() {
 
             let mut active_patcher = ::PATCHER.lock().unwrap();
 
-            let mut exe = active_patcher.patch_exe(0x00400000);
-            exe.hook_opt(bw::create_fow_sprite, frame_hook::check_fow_sprite_creation_desync);
+            {
+                let mut exe = active_patcher.patch_exe(0x00400000);
+                exe.hook_opt(bw::create_fow_sprite, frame_hook::check_fow_sprite_creation_desync);
+            }
+
+            let mut storm = active_patcher.patch_library("storm", 0x1500_0000);
+            bw::storm::init_vars(&mut storm);
+            // Check for a storm bug where the codegen does an OOB string read and ends
+            // up generating broken code.
+            let surface_copy_code_ptr = *bw::storm::surface_copy_code;
+            if !surface_copy_code_ptr.is_null() {
+                let surface_copy_code = (*surface_copy_code_ptr).code_offsets[0xa0];
+                if *surface_copy_code.offset(2) != 6 {
+                    for i in 0..0xa0 {
+                        *surface_copy_code.offset(i * 0x10 + 0x2) = 0x6;
+                        *surface_copy_code.offset(i * 0x10 + 0xa) = 0x7;
+                    }
+                }
+            }
         };
         samase_shim::on_win_main(f);
     }

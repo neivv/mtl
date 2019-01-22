@@ -33,6 +33,18 @@ whack_hooks!(stdcall, 0x00400000,
     0x00488410 => create_fow_sprite(u32, *mut c_void) -> *mut c_void;
 );
 
+pub mod storm {
+    #[repr(C)]
+    pub struct SCode {
+        pub dc: [u8; 0x4c],
+        pub code_offsets: [*mut u8; 0xa1],
+    }
+
+    whack_vars!(init_vars, 0x1500_0000,
+        0x1505EC04 => surface_copy_code: *mut SCode;
+    );
+}
+
 static mut UNITS_DAT: usize = !0;
 
 pub unsafe fn init_game_start_vars() {
