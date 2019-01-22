@@ -32,6 +32,17 @@ impl<T: Copy> GlobalFunc<T> {
     }
 }
 
+static mut RNG_SEED: GlobalFunc<fn() -> u32> = GlobalFunc(None);
+pub fn rng_seed() -> Option<u32> {
+    unsafe {
+        if let Some(rng) = RNG_SEED.0 {
+            Some(rng())
+        } else {
+            None
+        }
+    }
+}
+
 fn fatal(text: &str) -> ! {
     let msg = format!("This StarCraft version is not supported :(\n({})", text);
     windows::message_box("Mtl", &msg);
@@ -198,6 +209,7 @@ pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
         ((*api).warn_unsupported_feature)(b"Saving\0".as_ptr());
     }
     PRINT_TEXT.0 = Some(mem::transmute(((*api).print_text)()));
+    RNG_SEED.0 = Some(mem::transmute(((*api).rng_seed)()));
     if let Some(tunit) = read_file("game\\tunit.pcx") {
         if let Err(e) = ::unit_pcolor_fix::init_unit_colors(&tunit) {
             fatal(&format!("Invalid game\\tunit.pcx: {}", e));

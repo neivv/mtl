@@ -16,6 +16,7 @@ extern crate smallvec;
 extern crate thread_local;
 extern crate vec_map;
 extern crate winapi;
+#[macro_use] extern crate whack;
 
 extern crate bw_dat;
 extern crate samase_shim;
@@ -127,6 +128,10 @@ fn init() {
 }
 
 
+lazy_static! {
+    static ref PATCHER: whack::Patcher = whack::Patcher::new();
+}
+
 #[no_mangle]
 #[allow(non_snake_case)]
 pub extern fn Initialize() {
@@ -135,6 +140,11 @@ pub extern fn Initialize() {
         let f: fn() = || {
             let ctx = samase_shim::init_1161();
             samase::samase_plugin_init(ctx.api());
+
+            let mut active_patcher = ::PATCHER.lock().unwrap();
+
+            let mut exe = active_patcher.patch_exe(0x00400000);
+            exe.hook_opt(bw::create_fow_sprite, frame_hook::check_fow_sprite_creation_desync);
         };
         samase_shim::on_win_main(f);
     }

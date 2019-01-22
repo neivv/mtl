@@ -1,5 +1,7 @@
 use std::cell::RefCell;
 
+use libc::c_void;
+
 use bw_dat::{self, UnitId};
 
 use bw;
@@ -264,4 +266,19 @@ unsafe fn timer_override(
             }
         }
     }
+}
+
+pub unsafe fn check_fow_sprite_creation_desync(
+    unit_id: u32,
+    base: *mut c_void,
+    orig: &Fn(u32, *mut c_void) -> *mut c_void,
+) -> *mut c_void {
+    let old_seed = crate::samase::rng_seed();
+    let result = orig(unit_id, base);
+    if old_seed != crate::samase::rng_seed() {
+        bw::print_text(
+            format!("BUG: Fow sprite iscript of unit 0x{:x} has touched RNG", unit_id & 0xffff)
+        );
+    }
+    result
 }

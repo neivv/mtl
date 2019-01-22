@@ -1,6 +1,6 @@
 [package]
 name = "mtl"
-version = "0.3.5"
+version = "0.3.6"
 authors = ["Markus Heikkinen <ittevien@gmail.com>"]
 
 [lib]
@@ -45,3 +45,6 @@ git = "https://github.com/neivv/samase_plugin"
 
 [dependencies.bw_dat]
 git = "https://github.com/neivv/aise"
+
+[dependencies.whack]
+git = "https://github.com/neivv/whack/"

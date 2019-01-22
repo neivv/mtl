@@ -3,6 +3,8 @@
 
 use std::slice;
 
+use libc::c_void;
+
 use samase;
 
 pub mod structs;
@@ -26,6 +28,10 @@ pub fn units_dat() -> &'static [DatTable] {
         slice::from_raw_parts_mut(dat, 0x35)
     }
 }
+
+whack_hooks!(stdcall, 0x00400000,
+    0x00488410 => create_fow_sprite(u32, *mut c_void) -> *mut c_void;
+);
 
 static mut UNITS_DAT: usize = !0;
 
