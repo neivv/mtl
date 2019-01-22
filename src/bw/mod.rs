@@ -40,7 +40,7 @@ pub mod storm {
         pub code_offsets: [*mut u8; 0xa1],
     }
 
-    whack_vars!(init_vars, 0x1500_0000,
+    whack_vars!(init_vars, 0x15000000,
         0x1505EC04 => surface_copy_code: *mut SCode;
     );
 }
