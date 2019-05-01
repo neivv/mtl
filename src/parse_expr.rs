@@ -1,6 +1,6 @@
 use std::cmp::PartialEq;
 
-use combine::{Parser, Positioned, RangeStreamOnce, many, many1, optional, skip_many, try};
+use combine::{Parser, Positioned, RangeStreamOnce, many, many1, optional, skip_many, attempt};
 use combine::{ConsumedResult, ParseError, StreamOnce, RangeStream};
 use combine::byte::{alpha_num, byte, hex_digit, letter, spaces};
 use combine::easy;
@@ -475,7 +475,7 @@ pub fn bool_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = BoolExpr> {
 }
 
 fn p1_bool_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = BoolExpr> {
-    Stateless(try(int_expr()).and(
+    Stateless(attempt(int_expr()).and(
         choice!(
             range(&b"<"[..]),
             range(&b"<="[..]),
