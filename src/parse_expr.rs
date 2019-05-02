@@ -1,8 +1,11 @@
 use std::cmp::PartialEq;
 
-use combine::{Parser, Positioned, RangeStreamOnce, many, many1, optional, skip_many, attempt};
+use combine::{
+    Parser, Positioned, RangeStreamOnce,
+    attempt, look_ahead, not_followed_by, many, many1, optional, skip_many,
+};
 use combine::{ConsumedResult, ParseError, StreamOnce, RangeStream};
-use combine::byte::{alpha_num, byte, hex_digit, letter, spaces};
+use combine::byte::{alpha_num, byte, digit, hex_digit, letter, spaces};
 use combine::easy;
 use combine::error::{Consumed, Tracked, StreamError};
 use combine::parser::function;
@@ -424,25 +427,30 @@ fn p2_int_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = IntExpr> {
 
 fn integer<'a>() -> impl Parser<Input = Bytes<'a>, Output = i32> {
     use std::str;
-    Stateless(optional(byte(b'-')).and(
-        optional(range(&b"0x"[..])).and(
-            recognize(skip_many(hex_digit()))
+    Stateless(optional(byte(b'-'))
+        .skip(look_ahead(digit()))
+        .and(
+            optional(range(&b"0x"[..])).and(
+                recognize(skip_many(hex_digit()))
+            )
         )
-    ).skip(spaces()).and_then(|(neg, (hex, int))| -> Result<_, easy::Error<_, _>> {
-        let base = match hex.is_some() {
-            true => 16,
-            false => 10,
-        };
-        let int_parse_result = str::from_utf8(int).ok()
-            .and_then(|x| i32::from_str_radix(x, base).ok());
-        match int_parse_result {
-            Some(o) => Ok(match neg.is_some() {
-                true => 0 - o,
-                false => o,
-            }),
-            None => Err(StreamError::unexpected_message("Invalid integer literal")),
-        }
-    }))
+        .skip(not_followed_by(alpha_num()))
+        .skip(spaces())
+        .and_then(|(neg, (hex, int))| -> Result<_, easy::Error<_, _>> {
+            let base = match hex.is_some() {
+                true => 16,
+                false => 10,
+            };
+            let int_parse_result = str::from_utf8(int).ok()
+                .and_then(|x| i32::from_str_radix(x, base).ok());
+            match int_parse_result {
+                Some(o) => Ok(match neg.is_some() {
+                    true => 0 - o,
+                    false => o,
+                }),
+                None => Err(StreamError::unexpected_message("Invalid integer literal")),
+            }
+        }))
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -628,8 +636,9 @@ mod test {
                 IntExpr::Sub(Box::new((IntExpr::Integer(2), IntExpr::Integer(6))))
             )))
         );
-        assert!(error_contains(parse(b"4294967295"), "out of range"));
+        assert!(error_contains(parse(b"4294967295"), "Invalid integer literal"));
         assert!(error_contains(parse(b"5 / 0"), "divide by zero"));
+        assert!(parse(b"54k").is_err());
     }
 
     #[test]
