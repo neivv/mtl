@@ -527,7 +527,7 @@ pub fn creep_spread_time(config: &Config, game: Game, unit: Unit) -> Option<i32>
     config.upgrades.matches(game, unit, |stat, val| match *stat {
         Stat::CreepSpreadTimer => {
             let val = eval_int(val, unit, game).max(-1).min(255);
-            value = Some(value.unwrap_or(!0).min(val));
+            value = Some(value.unwrap_or(i32::max_value()).min(val));
         }
         _ => (),
     });
@@ -539,7 +539,7 @@ pub fn larva_spawn_time(config: &Config, game: Game, unit: Unit) -> Option<i32> 
     config.upgrades.matches(game, unit, |stat, val| match *stat {
         Stat::LarvaTimer => {
             let val = eval_int(val, unit, game).max(-1).min(255);
-            value = Some(value.unwrap_or(!0).min(val));
+            value = Some(value.unwrap_or(i32::max_value()).min(val));
         }
         _ => (),
     });

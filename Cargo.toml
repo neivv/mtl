@@ -1,6 +1,6 @@
 [package]
 name = "mtl"
-version = "0.3.7"
+version = "0.3.8"
 authors = ["Markus Heikkinen <ittevien@gmail.com>"]
 
 [lib]
