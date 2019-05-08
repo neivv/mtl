@@ -83,21 +83,52 @@ fn sprite_to_unit(sprite: *mut bw::Sprite) -> Option<Unit> {
 pub unsafe extern fn draw_image_hook(image: *mut c_void, orig: unsafe extern fn(*mut c_void)) {
     let image = image as *mut bw::Image;
     let orig: unsafe extern fn(*mut bw::Image) = mem::transmute(orig);
+
+    let game = Game::get();
+    let config = crate::config::config();
+    let unit = sprite_to_unit((*image).parent);
     let track = if crate::is_scr() {
         Some(render_scr::track_image_render())
     } else {
         None
     };
+    let mut restore_units_dat_flags = None;
+    let mut restore_units_dat_has_shields = None;
+    // Hp bar
+    if (*image).drawfunc == 0xb {
+        if let Some(unit) = unit {
+            let stats = upgrades::show_stats(&config, game, unit);
+            if let Some(show) = stats.energy {
+                let flags = (bw::units_dat()[0x16].data as *mut u32).offset(unit.id().0 as isize);
+                let orig_flags = *flags;
+                match show {
+                    true => *flags |= 0x0020_0000,
+                    false => *flags &= !0x0020_0000,
+                }
+                restore_units_dat_flags = Some((flags, orig_flags));
+            }
+            if let Some(show) = stats.shields {
+                let has = (bw::units_dat()[0x6].data as *mut u8).offset(unit.id().0 as isize);
+                let orig = *has;
+                *has =  show as u8;
+                restore_units_dat_has_shields = Some((has, orig));
+            }
+        }
+    }
     orig(image);
     if let Some(track) = track {
         if track.changed() {
-            if let Some(unit) = sprite_to_unit((*image).parent) {
-                let config = crate::config::config();
-                let game = Game::get();
+            if let Some(unit) = unit {
                 if let Some(color) = upgrades::player_color(&config, game, unit) {
                     track.set_player_color(color);
                 }
             }
         }
+    }
+    if let Some((ptr, val)) = restore_units_dat_flags {
+        *ptr = val;
+    }
+    if let Some((ptr, val)) = restore_units_dat_has_shields {
+        *ptr = val;
     }
 }

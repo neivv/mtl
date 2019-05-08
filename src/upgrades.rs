@@ -399,6 +399,8 @@ pub enum Stat {
     GasHarvestCarryDepleted,
     SetUnitId,
     PlayerColor,
+    ShowEnergy,
+    ShowShields,
 }
 
 impl Stat {
@@ -595,4 +597,28 @@ pub fn player_color(config: &Config, game: Game, unit: Unit) -> Option<(f32, f32
         _ => (),
     });
     color
+}
+
+pub struct ShowStats {
+    pub energy: Option<bool>,
+    pub shields: Option<bool>,
+}
+
+pub fn show_stats(config: &Config, game: Game, unit: Unit) -> ShowStats {
+    let mut result = ShowStats {
+        energy: None,
+        shields: None,
+    };
+    config.upgrades.matches(game, unit, |stat, vals| match *stat {
+        Stat::ShowEnergy => {
+            let val = eval_int(&vals[0], unit, game) != 0;
+            result.energy = Some(result.energy.unwrap_or(false).max(val));
+        }
+        Stat::ShowShields => {
+            let val = eval_int(&vals[0], unit, game) != 0;
+            result.shields = Some(result.shields.unwrap_or(false).max(val));
+        }
+        _ => (),
+    });
+    result
 }
