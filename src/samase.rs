@@ -181,7 +181,7 @@ pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
     READ_FILE.0 = Some(mem::transmute(((*api).read_file)()));
     UNITS_DAT.init(((*api).dat)(0).map(|x| mem::transmute(x)), "units_dat");
     bw_dat::init_units(units_dat());
-    init_config();
+    init_config(true);
     //((*api).hook_on_first_file_access)(init_config);
     let config = config::config();
     let result = ((*api).hook_step_objects)(::frame_hook::frame_hook, 0);
@@ -228,25 +228,35 @@ pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
     }
 }
 
-unsafe extern fn init_config() {
-    let config_slice = read_file("samase/mtl.ini")
-        .unwrap_or_else(|| {
-            let msg = "Configuration file samase/mtl.ini not found, exiting";
-            windows::message_box("Mtl", msg);
-            TerminateProcess(GetCurrentProcess(), 0x42302aef);
-            unreachable!();
-        });
-    let config = config::read_config(&config_slice)
-        .unwrap_or_else(|e| {
-            use std::fmt::Write;
-            let mut msg = String::new();
-            for c in e.iter_chain() {
-                writeln!(msg, "{}", c).unwrap();
+pub unsafe extern fn init_config(exit_on_error: bool) {
+    let config = loop {
+        let config_slice = match read_file("samase/mtl.ini") {
+            Some(s) => s,
+            None => {
+                let msg = "Configuration file samase/mtl.ini not found.";
+                windows::message_box("Mtl", msg);
+                if exit_on_error {
+                    TerminateProcess(GetCurrentProcess(), 0x42302aef);
+                }
+                continue;
             }
-            let msg = format!("Unable to read config:\n{}\nExiting.", msg);
-            windows::message_box("Mtl", &msg);
-            TerminateProcess(GetCurrentProcess(), 0x42302aef);
-            unreachable!();
-        });
+        };
+        match config::read_config(&config_slice) {
+            Ok(o) => break o,
+            Err(e) => {
+                use std::fmt::Write;
+                let mut msg = String::new();
+                for c in e.iter_chain() {
+                    writeln!(msg, "{}", c).unwrap();
+                }
+                let msg = format!("Unable to read config:\n{}", msg);
+                windows::message_box("Mtl", &msg);
+                if exit_on_error {
+                    windows::message_box("Mtl", &msg);
+                    TerminateProcess(GetCurrentProcess(), 0x42302aef);
+                }
+            }
+        }
+    };
     config::set_config(config);
 }

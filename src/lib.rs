@@ -221,6 +221,8 @@ unsafe extern fn load(ptr: *const u8, len: usize) -> u32 {
 }
 
 unsafe extern fn init_game() {
+    samase::init_config(false);
+
     let game = Game::get();
     bw::init_game_start_vars();
     fix_campaign_music(game);
