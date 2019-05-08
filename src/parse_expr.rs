@@ -436,7 +436,7 @@ pub enum IntExpr {
 }
 
 pub fn int_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = IntExpr> {
-    Stateless(Box::new(p1_int_expr().and(
+    Stateless(Box::new(p1_int_expr().skip(spaces()).and(
         many::<Vec<_>, _>(byte(b'+').or(byte(b'-')).skip(spaces()).and(p1_int_expr()))
     ).map(|(mut left, rest)| {
         for (op, right) in rest {
@@ -450,7 +450,7 @@ pub fn int_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = IntExpr> {
 }
 
 fn p1_int_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = IntExpr> {
-    Stateless(p2_int_expr().and(
+    Stateless(p2_int_expr().skip(spaces()).and(
         many::<Vec<_>, _>(
             choice!(
                 byte(b'*'),
@@ -538,7 +538,7 @@ pub enum BoolExpr {
 }
 
 pub fn bool_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = BoolExpr> {
-    Stateless(p1_bool_expr().and(
+    Stateless(p1_bool_expr().skip(spaces()).and(
         many1::<Vec<_>, _>(range(&b"||"[..]).skip(spaces()).and(p1_bool_expr()))
             .or(many::<Vec<_>, _>(range(&b"&&"[..]).skip(spaces()).and(p1_bool_expr())))
     ).map(|(mut left, rest)| {
@@ -572,7 +572,7 @@ fn p1_bool_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = BoolExpr> {
             b"!=" | _ => BoolExpr::Not(Box::new(BoolExpr::EqualInt(Box::new((left, right))))),
         }
     }).or(
-        p2_bool_expr().and(Stateless(
+        p2_bool_expr().skip(spaces()).and(Stateless(
             optional(range(&b"=="[..]).or(range(&b"!="[..])).skip(spaces()).and(p2_bool_expr()))
         )).map(|(mut left, rest)| {
             if let Some((op, right)) = rest {
@@ -792,5 +792,20 @@ mod test {
         parse(b"sin()").unwrap_err();
         parse(b"sin(5, 6)").unwrap_err();
         parse(b"sin(5").unwrap_err();
+    }
+
+    #[test]
+    fn test_complex_int_expr() {
+        let mut parser = int_expr();
+        let mut parse = |text| {
+            parser.parse(s(text))
+        };
+        assert_eq!(
+            empty_unwrap(parse(b"(sin(hitpoints)) / 2")),
+            IntExpr::Div(Box::new((
+                IntExpr::Func(IntFunc::Sin(Box::new(IntExpr::Func(IntFunc::Hitpoints)))),
+                IntExpr::Integer(2),
+            )))
+        );
     }
 }
