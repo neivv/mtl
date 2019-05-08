@@ -1,3 +1,4 @@
+use std::fmt::{self, Display, Debug};
 use std::cmp::PartialEq;
 
 use combine::{
@@ -110,7 +111,7 @@ pub struct SingleErrorStream<I: StreamOnce> {
     pub inner: I,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub struct SingleError<I: PartialEq, R: PartialEq, P> {
     pub error: Option<Box<easy::Error<I, R>>>,
     pub pos: P,
@@ -165,6 +166,36 @@ where Item: PartialEq,
         match self.error {
             Some(s) => T::from_error(self.pos, StreamError::into_other(*s)),
             None => T::empty(self.pos),
+        }
+    }
+}
+
+impl<I, R, P> std::error::Error for SingleError<I, R, P>
+where I: PartialEq + Display + Debug,
+      R: PartialEq + Display + Debug,
+{
+}
+
+impl<I, R, P> Debug for SingleError<I, R, P>
+where I: PartialEq + Debug,
+      R: PartialEq + Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.error {
+            Some(ref s) => write!(f, "{:?}", s),
+            None => write!(f, "(No error)"),
+        }
+    }
+}
+
+impl<I, R, P> Display for SingleError<I, R, P>
+where I: PartialEq + Display,
+      R: PartialEq + Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.error {
+            Some(ref s) => write!(f, "{}", s),
+            None => write!(f, "(No error)"),
         }
     }
 }
@@ -273,14 +304,33 @@ fn func<'a>() -> impl Parser<Input = Bytes<'a>, Output = (&'a [u8], &'a [u8])> {
 }
 
 macro_rules! decl_func {
-    ($name:ident, $ename:ident, $($conf_name:expr, $variant_name:ident,)*) => {
+    (construct, [], $ename:ident::$variant_name:ident, $params:expr,) => {{
+        if $params != b"" {
+            let err: easy::Error<_, _>
+                = StreamError::unexpected_message("Can't have parameters");
+            Err(err)
+        } else {
+            Ok($ename::$variant_name)
+        }
+    }};
+    (construct, [$construct:expr], $ename:ident::$variant_name:ident, $params:expr,) => {{
+        $construct($params)
+    }};
+    ($name:ident, $ename:ident,
+        $(
+            $conf_name:expr,
+            $variant_name:ident $( ( $($variant_ty:ty),* ) )? $( -> $construct:expr )? ,
+        )*
+    ) => {
         fn $name<'a>() -> impl Parser<Input = Bytes<'a>, Output = $ename> {
             Stateless(func().and_then(|(name, params)| -> Result<_, easy::Error<_, _>> {
-                if params != b"" {
-                    return Err(StreamError::unexpected_message("Can't have parameters"));
-                }
                 let result = match name {
-                    $($conf_name => $ename::$variant_name,)*
+                    $($conf_name => decl_func!(
+                        construct,
+                        [$($construct)?],
+                        $ename::$variant_name,
+                        params,
+                    )?,)*
                     other => {
                         let message = format!("Invalid name {}", String::from_utf8_lossy(other));
                         return Err(StreamError::unexpected_message(message));
@@ -292,9 +342,9 @@ macro_rules! decl_func {
 
         #[derive(Debug, Eq, PartialEq, Clone)]
         pub enum $ename {
-            $($variant_name,)*
+            $($variant_name $( ($($variant_ty),*) )? ,)*
         }
-    }
+    };
 }
 
 decl_func!(
@@ -327,7 +377,27 @@ decl_func!(
     b"spell_cooldown", SpellCooldown,
     b"speed", Speed,
     b"sigorder", SigOrder,
+    b"sin", Sin(Box<IntExpr>) -> |x| -> Result<IntFunc, easy::Error<_, _>> {
+        parse_single_expr(x).map(|x| IntFunc::Sin(Box::new(x)))
+    },
+    b"cos", Cos(Box<IntExpr>) -> |x| -> Result<IntFunc, easy::Error<_, _>> {
+        parse_single_expr(x).map(|x| IntFunc::Cos(Box::new(x)))
+    },
 );
+
+fn parse_single_expr<'a>(x: &'a [u8]) -> Result<IntExpr, easy::Error<u8, &'a [u8]>> {
+    let mut parser = int_expr();
+    let (result, rest) = parser.parse(SingleErrorStream::new(State::new(x)))
+        .map_err(|e| match e.error {
+            Some(s) => *s,
+            None => unreachable!(),
+        })?;
+    if !rest.inner.input.is_empty() {
+        let msg = "Extra characters in arguments";
+        return Err(StreamError::message_static_message(msg));
+    }
+    Ok(result)
+}
 
 decl_func!(
     bool_func, BoolFunc,
@@ -706,5 +776,21 @@ mod test {
 
         assert_eq!(parse(b"true || false && true").unwrap().1.inner.input.len(), "&& true".len());
         parse(b"! true").unwrap_err();
+    }
+
+    #[test]
+    fn test_trig() {
+        let mut parser = int_func();
+        let mut parse = |text| {
+            parser.parse(s(text))
+        };
+        assert_eq!(empty_unwrap(parse(b"sin(5)")), IntFunc::Sin(Box::new(IntExpr::Integer(5))));
+        assert_eq!(
+            empty_unwrap(parse(b"cos(frame_count)")),
+            IntFunc::Cos(Box::new(IntExpr::Func(IntFunc::FrameCount))),
+        );
+        parse(b"sin()").unwrap_err();
+        parse(b"sin(5, 6)").unwrap_err();
+        parse(b"sin(5").unwrap_err();
     }
 }

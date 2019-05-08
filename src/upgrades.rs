@@ -259,6 +259,14 @@ fn eval_int(expr: &IntExpr, unit: Unit, game: Game) -> i32 {
                     SpellCooldown => (*unit.0).spell_cooldown as i32,
                     Speed => (*unit.0).speed,
                     SigOrder => (*unit.0).order_signal as i32,
+                    Sin(degrees) => {
+                        let val = eval_int(&degrees, unit, game);
+                        ((val as f32).to_radians().sin() * 256.0) as i32
+                    }
+                    Cos(degrees) => {
+                        let val = eval_int(&degrees, unit, game);
+                        ((val as f32).to_radians().cos() * 256.0) as i32
+                    }
                 }
             }
         }
