@@ -7,9 +7,9 @@ use smallvec::SmallVec;
 
 use bw_dat::{UnitId, OrderId};
 use failure::{Context, Error, ResultExt};
-use ini::Ini;
-use parse_expr;
-use upgrades::{Upgrades, Upgrade, UpgradeChanges, State, Stat};
+use crate::ini::Ini;
+use crate::parse_expr;
+use crate::upgrades::{Upgrades, Upgrade, UpgradeChanges, State, Stat};
 
 /// Various timers, in frames, unlike bw's 8-frame chunks.
 /// Though the 8-frameness for updates causes inaccuracy anyways.
@@ -215,7 +215,7 @@ impl<'a> Iterator for BraceSplit<'a> {
 
 fn parse_upgrade_condition(condition: &str) -> Result<parse_expr::BoolExpr, Error> {
     use combine::stream::state::State;
-    use parse_expr::SingleErrorStream;
+    use crate::parse_expr::SingleErrorStream;
     parse_expr::bool_expr().parse(SingleErrorStream::new(State::new(condition.as_bytes())))
         .map_err(|e| format_combine_err(&e, condition))
         .and_then(|(result, rest)| {
@@ -230,7 +230,7 @@ fn parse_upgrade_condition(condition: &str) -> Result<parse_expr::BoolExpr, Erro
 
 fn parse_int_expr(expr: &str) -> Result<parse_expr::IntExpr, Error> {
     use combine::stream::state::State;
-    use parse_expr::SingleErrorStream;
+    use crate::parse_expr::SingleErrorStream;
     parse_expr::int_expr().parse(SingleErrorStream::new(State::new(expr.as_bytes())))
         .map_err(|e| format_combine_err(&e, expr))
         .and_then(|(result, rest)| {
@@ -259,7 +259,7 @@ fn parse_int_expr_tuple(expr: &str, count: u8) -> Result<Vec<parse_expr::IntExpr
     Ok(result)
 }
 
-fn format_combine_err(e: &::parse_expr::SingleError<u8, &[u8], usize>, condition: &str) -> Error {
+fn format_combine_err(e: &crate::parse_expr::SingleError<u8, &[u8], usize>, condition: &str) -> Error {
     use std::fmt::Write;
 
     fn format_info(i: &easy::Info<u8, &[u8]>) -> String {

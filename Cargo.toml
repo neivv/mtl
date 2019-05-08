@@ -2,6 +2,7 @@
 name = "mtl"
 version = "0.3.9"
 authors = ["Markus Heikkinen <ittevien@gmail.com>"]
+edition = "2018"
 
 [lib]
 name = "mtl"

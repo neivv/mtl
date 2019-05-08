@@ -7,10 +7,10 @@ use vec_map::VecMap;
 
 use bw_dat::{order, UnitId, UpgradeId, OrderId};
 
-use config::Config;
-use game::Game;
-use parse_expr::{BoolExpr, IntExpr};
-use unit::{self, Unit};
+use crate::config::Config;
+use crate::game::Game;
+use crate::parse_expr::{BoolExpr, IntExpr};
+use crate::unit::{self, Unit};
 
 ome2_thread_local! {
     STATE_CHANGES: RefCell<UpgradeStateChanges> =
@@ -200,7 +200,7 @@ impl Upgrades {
 }
 
 fn eval_constant_int(expr: &IntExpr) -> Option<i32> {
-    use parse_expr::IntExpr::*;
+    use crate::parse_expr::IntExpr::*;
     Some(match expr {
         Add(x) => eval_constant_int(&x.0)?.saturating_add(eval_constant_int(&x.1)?),
         Sub(x) => eval_constant_int(&x.0)?.saturating_sub(eval_constant_int(&x.1)?),
@@ -213,8 +213,8 @@ fn eval_constant_int(expr: &IntExpr) -> Option<i32> {
 }
 
 fn eval_int(expr: &IntExpr, unit: Unit, game: Game) -> i32 {
-    use parse_expr::IntExpr::*;
-    use parse_expr::IntFunc::*;
+    use crate::parse_expr::IntExpr::*;
+    use crate::parse_expr::IntFunc::*;
     match expr {
         Add(x) => eval_int(&x.0, unit, game).saturating_add(eval_int(&x.1, unit, game)),
         Sub(x) => eval_int(&x.0, unit, game).saturating_sub(eval_int(&x.1, unit, game)),
@@ -266,8 +266,8 @@ fn eval_int(expr: &IntExpr, unit: Unit, game: Game) -> i32 {
 }
 
 fn check_condition(cond: &BoolExpr, unit: Unit, game: Game) -> bool {
-    use parse_expr::BoolExpr::*;
-    use parse_expr::BoolFunc::*;
+    use crate::parse_expr::BoolExpr::*;
+    use crate::parse_expr::BoolFunc::*;
     match cond {
         And(x) => check_condition(&x.0, unit, game) && check_condition(&x.1, unit, game),
         Or(x) => check_condition(&x.0, unit, game) || check_condition(&x.1, unit, game),

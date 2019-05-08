@@ -2,11 +2,11 @@ use libc::c_void;
 
 use bw_dat::unit as unit_id;
 use bw_dat::{UpgradeId, upgrade};
-use bw;
-use config::config;
-use game::Game;
-use unit::Unit;
-use upgrades;
+use crate::bw;
+use crate::config::config;
+use crate::game::Game;
+use crate::unit::Unit;
+use crate::upgrades;
 
 struct MiningOverride {
     old_amount: u16,

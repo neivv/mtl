@@ -158,7 +158,7 @@ pub fn read_file(name: &str) -> Option<SamaseBox> {
 // Just using samase_shim's definition so that there isn't duplication/unnecessary mismatches
 #[no_mangle]
 pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
-    ::init();
+    crate::init();
 
     let required_version = 13;
     if (*api).version < required_version {
@@ -184,40 +184,40 @@ pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
     init_config(true);
     //((*api).hook_on_first_file_access)(init_config);
     let config = config::config();
-    let result = ((*api).hook_step_objects)(::frame_hook::frame_hook, 0);
+    let result = ((*api).hook_step_objects)(crate::frame_hook::frame_hook, 0);
     if result == 0 {
         fatal("Couldn't hook step_objects");
     }
     if config.requires_order_hook() {
         ISSUE_ORDER.init(((*api).issue_order)().map(|x| mem::transmute(x)), "issue_order");
-        let result = ((*api).hook_step_order)(::order_hook::order_hook);
+        let result = ((*api).hook_step_order)(crate::order_hook::order_hook);
         if result == 0 {
             fatal("Couldn't hook step_order");
         }
-        let result = ((*api).hook_step_order_hidden)(::order_hook::hidden_order_hook);
+        let result = ((*api).hook_step_order_hidden)(crate::order_hook::hidden_order_hook);
         if result == 0 {
             fatal("Couldn't hook step_order_hidden");
         }
     }
     if config.requires_secondary_order_hook() {
-        let result = ((*api).hook_step_secondary_order)(::order_hook::secondary_order_hook);
+        let result = ((*api).hook_step_secondary_order)(crate::order_hook::secondary_order_hook);
         if result == 0 {
             fatal("Couldn't hook step_secondary_order");
         }
     }
-    let result = ((*api).extend_save)("mtl\0".as_ptr(), Some(::save), Some(::load), ::init_game);
+    let result = ((*api).extend_save)("mtl\0".as_ptr(), Some(crate::save), Some(crate::load), crate::init_game);
     if result == 0 {
         ((*api).warn_unsupported_feature)(b"Saving\0".as_ptr());
     }
     PRINT_TEXT.0 = Some(mem::transmute(((*api).print_text)()));
     RNG_SEED.0 = Some(mem::transmute(((*api).rng_seed)()));
     if let Some(tunit) = read_file("game\\tunit.pcx") {
-        if let Err(e) = ::unit_pcolor_fix::init_unit_colors(&tunit) {
+        if let Err(e) = crate::unit_pcolor_fix::init_unit_colors(&tunit) {
             fatal(&format!("Invalid game\\tunit.pcx: {}", e));
         }
     }
     if let Some(tminimap) = read_file("game\\tminimap.pcx") {
-        if let Err(e) = ::unit_pcolor_fix::init_minimap_colors(&tminimap) {
+        if let Err(e) = crate::unit_pcolor_fix::init_minimap_colors(&tminimap) {
             fatal(&format!("Invalid game\\tminimap.pcx: {}", e));
         }
     }

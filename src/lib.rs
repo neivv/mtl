@@ -42,7 +42,7 @@ mod upgrades;
 mod windows;
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use game::Game;
+use crate::game::Game;
 use winapi::um::processthreadsapi::{GetCurrentProcess, TerminateProcess};
 
 fn init() {
@@ -151,7 +151,7 @@ pub extern fn Initialize() {
             let ctx = samase_shim::init_1161();
             samase::samase_plugin_init(ctx.api());
 
-            let mut active_patcher = ::PATCHER.lock().unwrap();
+            let mut active_patcher = crate::PATCHER.lock().unwrap();
 
             {
                 let mut exe = active_patcher.patch_exe(0x00400000);

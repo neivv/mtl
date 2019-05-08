@@ -5,7 +5,7 @@ use std::slice;
 
 use libc::c_void;
 
-use samase;
+use crate::samase;
 
 pub mod structs;
 

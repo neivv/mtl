@@ -4,11 +4,11 @@ use libc::c_void;
 
 use bw_dat::{self, UnitId};
 
-use bw;
-use config::config;
-use game::Game;
-use unit::{self, Unit};
-use upgrades;
+use crate::bw;
+use crate::config::config;
+use crate::game::Game;
+use crate::unit::{self, Unit};
+use crate::upgrades;
 
 #[derive(Serialize, Deserialize, Clone)]
 struct TrackedUnit {
@@ -115,7 +115,7 @@ pub unsafe extern fn frame_hook() {
     let mut tracked = tracked().borrow_mut();
     if game.frame_count() == 0 {
         // These can't be done at init_game
-        ::unit_pcolor_fix::game_start_hook();
+        crate::unit_pcolor_fix::game_start_hook();
         if let Some(max) = config.supplies.zerg_max {
             for x in &mut (*game.0).zerg_supply_max {
                 *x = max;

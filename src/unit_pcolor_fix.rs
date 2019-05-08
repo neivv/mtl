@@ -5,8 +5,8 @@ use std::sync::Mutex;
 use byteorder::{ReadBytesExt, LE};
 use pcx;
 
-use game::Game;
-use samase;
+use crate::game::Game;
+use crate::samase;
 
 lazy_static! {
     static ref COLORS: Mutex<Option<Vec<Color>>> = Mutex::new(None);

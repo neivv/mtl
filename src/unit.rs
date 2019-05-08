@@ -7,9 +7,9 @@ use byteorder::{ReadBytesExt, WriteBytesExt, LE};
 use bw_dat::{self, OrderId, UnitId, unit};
 use serde::{Serializer, Serialize, Deserializer, Deserialize};
 
-use bw;
-use game::Game;
-use samase;
+use crate::bw;
+use crate::game::Game;
+use crate::samase;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct Unit(pub *mut bw::Unit);

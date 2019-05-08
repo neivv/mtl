@@ -2,7 +2,7 @@ use std::ptr::null_mut;
 
 use bw_dat::{TechId, UpgradeId};
 
-use bw;
+use crate::bw;
 
 #[derive(Copy, Clone)]
 pub struct Game(pub *mut bw::Game);
