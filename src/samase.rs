@@ -9,10 +9,11 @@ use winapi::um::processthreadsapi::{GetCurrentProcess, TerminateProcess};
 
 use bw_dat::{self, DatTable, UnitId};
 
-use bw;
-use config;
-use order::OrderId;
-use windows;
+use crate::bw;
+use crate::config;
+use crate::order::OrderId;
+use crate::{render, render_scr};
+use crate::windows;
 
 struct GlobalFunc<T: Copy>(Option<T>);
 
@@ -159,7 +160,7 @@ pub fn read_file(name: &str) -> Option<SamaseBox> {
 pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
     ::init();
 
-    let required_version = 3;
+    let required_version = 13;
     if (*api).version < required_version {
         fatal(&format!(
             "Newer samase is required. (Plugin API version {}, this plugin requires version {})",
@@ -219,6 +220,11 @@ pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
         if let Err(e) = ::unit_pcolor_fix::init_minimap_colors(&tminimap) {
             fatal(&format!("Invalid game\\tminimap.pcx: {}", e));
         }
+    }
+
+    ((*api).hook_draw_image)(render::draw_image_hook);
+    if crate::is_scr() {
+        ((*api).hook_renderer)(0, mem::transmute(render_scr::draw_hook as usize));
     }
 }
 

@@ -130,6 +130,15 @@ impl Unit {
         }
     }
 
+    pub fn sprite(&self) -> Option<*mut bw::Sprite> {
+        unsafe {
+            match (*self.0).sprite == null_mut() {
+                true => None,
+                false => Some((*self.0).sprite),
+            }
+        }
+    }
+
     pub fn player(&self) -> u8 {
         unsafe { (*self.0).player }
     }
@@ -326,4 +335,25 @@ impl Iterator for AliveUnits {
 
 pub fn player_units(player: u8) -> impl Iterator<Item = Unit> {
     alive_units().filter(move |x| x.player() == player)
+}
+
+pub fn active_units() -> UnitListIter {
+    UnitListIter(samase::first_active_unit())
+}
+
+pub struct UnitListIter(*mut bw::Unit);
+
+impl Iterator for UnitListIter {
+    type Item = Unit;
+    fn next(&mut self) -> Option<Unit> {
+        unsafe {
+            if self.0 == null_mut() {
+                None
+            } else {
+                let result = Some(Unit(self.0));
+                self.0 = (*self.0).next;
+                result
+            }
+        }
+    }
 }

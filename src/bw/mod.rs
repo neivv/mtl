@@ -13,6 +13,10 @@ use bw_dat::DatTable;
 
 pub use self::structs::*;
 
+pub mod scr {
+    pub use super::structs::scr::*;
+}
+
 pub fn game() -> *mut Game {
     samase::game()
 }

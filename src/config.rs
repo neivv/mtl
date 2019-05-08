@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use combine::Parser;
 use combine::easy;
+use smallvec::SmallVec;
 
 use bw_dat::{UnitId, OrderId};
 use failure::{Context, Error, ResultExt};
@@ -171,6 +172,7 @@ fn parse_stat(key: &str) -> Result<Stat, Error> {
         "gas_harvest_carry" => Stat::GasHarvestCarry,
         "gas_harvest_carry_depleted" => Stat::GasHarvestCarryDepleted,
         "set_unit_id" => Stat::SetUnitId,
+        "player_color" => Stat::PlayerColor,
         _ => return Err(format_err!("Unknown stat {}", key)),
     })
 }
@@ -239,6 +241,22 @@ fn parse_int_expr(expr: &str) -> Result<parse_expr::IntExpr, Error> {
                 Ok(result)
             }
         })
+}
+
+fn parse_int_expr_tuple(expr: &str, count: u8) -> Result<Vec<parse_expr::IntExpr>, Error> {
+    let expr = expr.trim();
+    if !expr.starts_with("(") || !expr.ends_with(")") {
+        return Err(format_err!("Expected braced list"));
+    }
+    let expr = &expr[1..expr.len() - 1];
+    let result = brace_aware_split(expr, ",")
+        .map(|x| x.trim())
+        .map(|x| parse_int_expr(x))
+        .collect::<Result<Vec<_>, Error>>()?;
+    if result.len() != count as usize {
+        return Err(format_err!("Expected {} items, got {}", count, result.len()));
+    }
+    Ok(result)
 }
 
 fn format_combine_err(e: &::parse_expr::SingleError<u8, &[u8], usize>, condition: &str) -> Error {
@@ -396,9 +414,19 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
                     x => {
                         let stat = parse_stat(x)
                             .map_err(|e| e.context(format!("In {}:{}", name, x)))?;
-                        let val = parse_int_expr(&val)
-                            .map_err(|e| e.context(format!("In {}:{}", name, x)))?;
-                        stats.push((stat, val));
+                        let value_count = stat.value_count();
+                        let values = if value_count == 1 {
+                            let mut vec = SmallVec::new();
+                            let val = parse_int_expr(&val)
+                                .map_err(|e| e.context(format!("In {}:{}", name, x)))?;
+                            vec.push(val);
+                            vec
+                        } else {
+                            parse_int_expr_tuple(&val, value_count)
+                                .map_err(|e| e.context(format!("In {}:{}", name, x)))?
+                                .into()
+                        };
+                        stats.push((stat, values));
                     }
                 }
             }

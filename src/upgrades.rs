@@ -65,10 +65,12 @@ impl UpgradeStateChanges {
                                 state_reqs.iter().all(|x| x.matches_unit(unit)) &&
                                 cond_ok;
                             if ok {
-                                for &(stat, ref value) in &changes.changes {
-                                    let value = eval_int(value, unit, game);
+                                for &(stat, ref values) in &changes.changes {
+                                    let eval = |i| eval_int(&values[i], unit, game);
                                     match stat {
-                                        Stat::SetUnitId => unit.set_unit_id(UnitId(value as u16)),
+                                        Stat::SetUnitId => {
+                                            unit.set_unit_id(UnitId(eval(0) as u16));
+                                        }
                                         _ => (),
                                     }
                                 }
@@ -76,17 +78,18 @@ impl UpgradeStateChanges {
                         }
                         // Add permament changes only if they don't use unit-specific data
                         if changes.condition.is_none() && state_reqs.is_empty() {
-                            for &(stat, ref value) in &changes.changes {
-                                if let Some(value) = eval_constant_int(value) {
-                                    match stat {
-                                        Stat::SetUnitId => {
+                            for &(stat, ref values) in &changes.changes {
+                                let eval = |i| eval_constant_int(&values[i]);
+                                match stat {
+                                    Stat::SetUnitId => {
+                                        if let Some(value) = eval(0) {
                                             for &from in &changes.units {
                                                 let to = UnitId(value as u16);
                                                 self.unit_id_changes.push((player, from, to));
                                             }
                                         }
-                                        _ => (),
                                     }
+                                    _ => (),
                                 }
                             }
                         }
@@ -130,21 +133,26 @@ impl Upgrades {
             .map(|x| x.0)
             .max()
             .unwrap_or(0);
-        let mut units_with_upgrades = vec![false; largest_unit_id as usize + 1];
-        {
-            let units = upgrades.iter()
-                .flat_map(|x| x.1.all_matching_units.iter());
-            for unit in units {
-                units_with_upgrades[unit.0 as usize] = true;
+        let units_with_upgrades = if largest_unit_id != bw_dat::unit::ANY_UNIT.0 {
+            let mut units_with_upgrades = vec![false; largest_unit_id as usize + 1];
+            {
+                let units = upgrades.iter()
+                    .flat_map(|x| x.1.all_matching_units.iter());
+                for unit in units {
+                    units_with_upgrades[unit.0 as usize] = true;
+                }
             }
-        }
+            units_with_upgrades
+        } else {
+            vec![true; bw_dat::unit::NONE.0 as usize]
+        };
         Upgrades {
             upgrades,
             units_with_upgrades,
         }
     }
 
-    fn matches<F: FnMut(&Stat, &IntExpr)>(&self, game: Game, unit: Unit, mut fun: F) {
+    fn matches<F: FnMut(&Stat, &[IntExpr])>(&self, game: Game, unit: Unit, mut fun: F) {
         if unit.player() >= 0xc {
             return;
         }
@@ -180,8 +188,8 @@ impl Upgrades {
                             changes.condition.as_ref().map(|x| check_condition(x, unit, game))
                             .unwrap_or(true);
                         if cond_ok {
-                            for &(ref stat, ref val) in &changes.changes {
-                                fun(stat, val);
+                            for &(ref stat, ref vals) in &changes.changes {
+                                fun(stat, &vals);
                             }
                         }
                     }
@@ -310,7 +318,7 @@ fn check_condition(cond: &BoolExpr, unit: Unit, game: Game) -> bool {
 pub struct UpgradeChanges {
     pub units: Vec<UnitId>,
     pub level: u8,
-    pub changes: Vec<(Stat, IntExpr)>,
+    pub changes: Vec<(Stat, SmallVec<[IntExpr; 1]>)>,
     pub condition: Option<BoolExpr>,
 }
 
@@ -382,6 +390,7 @@ pub enum Stat {
     GasHarvestCarry,
     GasHarvestCarryDepleted,
     SetUnitId,
+    PlayerColor,
 }
 
 impl Stat {
@@ -389,6 +398,13 @@ impl Stat {
         match self {
             Stat::SetUnitId => true,
             _ => false,
+        }
+    }
+
+    pub fn value_count(&self) -> u8 {
+        match self {
+            Stat::PlayerColor => 3,
+            _ => 1,
         }
     }
 }
@@ -407,15 +423,15 @@ pub fn regens(config: &Config, game: Game, unit: Unit) -> Regens {
     let mut hp = 0i32;
     let mut shield = 0i32;
     let mut energy = 0i32;
-    config.upgrades.matches(game, unit, |stat, val| match *stat {
+    config.upgrades.matches(game, unit, |stat, vals| match *stat {
         Stat::HpRegen => {
-            hp = hp.saturating_add(eval_int(val, unit, game));
+            hp = hp.saturating_add(eval_int(&vals[0], unit, game));
         }
         Stat::ShieldRegen => {
-            shield = shield.saturating_add(eval_int(val, unit, game));
+            shield = shield.saturating_add(eval_int(&vals[0], unit, game));
         }
         Stat::EnergyRegen => {
-            energy = energy.saturating_add(eval_int(val, unit, game));
+            energy = energy.saturating_add(eval_int(&vals[0], unit, game));
         }
         _ => (),
     });
@@ -428,9 +444,9 @@ pub fn regens(config: &Config, game: Game, unit: Unit) -> Regens {
 
 pub fn cooldown(config: &Config, game: Game, unit: Unit) -> Option<u8> {
     let mut value = None;
-    config.upgrades.matches(game, unit, |stat, val| match *stat {
+    config.upgrades.matches(game, unit, |stat, vals| match *stat {
         Stat::Cooldown => {
-            let val = clamp_u8(eval_int(val, unit, game));
+            let val = clamp_u8(eval_int(&vals[0], unit, game));
             value = Some(value.unwrap_or(!0).min(val));
         }
         _ => (),
@@ -440,9 +456,9 @@ pub fn cooldown(config: &Config, game: Game, unit: Unit) -> Option<u8> {
 
 pub fn mineral_harvest_time(config: &Config, game: Game, unit: Unit) -> Option<u8> {
     let mut value = None;
-    config.upgrades.matches(game, unit, |stat, val| match *stat {
+    config.upgrades.matches(game, unit, |stat, vals| match *stat {
         Stat::MineralHarvestTime => {
-            let val = clamp_u8(eval_int(val, unit, game));
+            let val = clamp_u8(eval_int(&vals[0], unit, game));
             value = Some(value.unwrap_or(!0).min(val));
         }
         _ => (),
@@ -452,9 +468,9 @@ pub fn mineral_harvest_time(config: &Config, game: Game, unit: Unit) -> Option<u
 
 pub fn mineral_harvest_reduce(config: &Config, game: Game, unit: Unit) -> Option<u8> {
     let mut value = None;
-    config.upgrades.matches(game, unit, |stat, val| match *stat {
+    config.upgrades.matches(game, unit, |stat, vals| match *stat {
         Stat::MineralHarvestReduce => {
-            let val = clamp_u8(eval_int(val, unit, game));
+            let val = clamp_u8(eval_int(&vals[0], unit, game));
             value = Some(value.unwrap_or(0).max(val));
         }
         _ => (),
@@ -464,9 +480,9 @@ pub fn mineral_harvest_reduce(config: &Config, game: Game, unit: Unit) -> Option
 
 pub fn mineral_harvest_carry(config: &Config, game: Game, unit: Unit) -> Option<u8> {
     let mut value = None;
-    config.upgrades.matches(game, unit, |stat, val| match *stat {
+    config.upgrades.matches(game, unit, |stat, vals| match *stat {
         Stat::MineralHarvestCarry => {
-            let val = clamp_u8(eval_int(val, unit, game));
+            let val = clamp_u8(eval_int(&vals[0], unit, game));
             value = Some(value.unwrap_or(0).max(val));
         }
         _ => (),
@@ -476,9 +492,9 @@ pub fn mineral_harvest_carry(config: &Config, game: Game, unit: Unit) -> Option<
 
 pub fn gas_harvest_time(config: &Config, game: Game, unit: Unit) -> Option<u8> {
     let mut value = None;
-    config.upgrades.matches(game, unit, |stat, val| match *stat {
+    config.upgrades.matches(game, unit, |stat, vals| match *stat {
         Stat::GasHarvestTime => {
-            let val = clamp_u8(eval_int(val, unit, game));
+            let val = clamp_u8(eval_int(&vals[0], unit, game));
             value = Some(value.unwrap_or(!0).min(val));
         }
         _ => (),
@@ -488,9 +504,9 @@ pub fn gas_harvest_time(config: &Config, game: Game, unit: Unit) -> Option<u8> {
 
 pub fn gas_harvest_reduce(config: &Config, game: Game, unit: Unit) -> Option<u8> {
     let mut value = None;
-    config.upgrades.matches(game, unit, |stat, val| match *stat {
+    config.upgrades.matches(game, unit, |stat, vals| match *stat {
         Stat::GasHarvestReduce => {
-            let val = clamp_u8(eval_int(val, unit, game));
+            let val = clamp_u8(eval_int(&vals[0], unit, game));
             value = Some(value.unwrap_or(0).max(val));
         }
         _ => (),
@@ -500,9 +516,9 @@ pub fn gas_harvest_reduce(config: &Config, game: Game, unit: Unit) -> Option<u8>
 
 pub fn gas_harvest_carry(config: &Config, game: Game, unit: Unit) -> Option<u8> {
     let mut value = None;
-    config.upgrades.matches(game, unit, |stat, val| match *stat {
+    config.upgrades.matches(game, unit, |stat, vals| match *stat {
         Stat::GasHarvestCarry => {
-            let val = clamp_u8(eval_int(val, unit, game));
+            let val = clamp_u8(eval_int(&vals[0], unit, game));
             value = Some(value.unwrap_or(0).max(val));
         }
         _ => (),
@@ -512,9 +528,9 @@ pub fn gas_harvest_carry(config: &Config, game: Game, unit: Unit) -> Option<u8> 
 
 pub fn gas_harvest_carry_depleted(config: &Config, game: Game, unit: Unit) -> Option<u8> {
     let mut value = None;
-    config.upgrades.matches(game, unit, |stat, val| match *stat {
+    config.upgrades.matches(game, unit, |stat, vals| match *stat {
         Stat::GasHarvestCarryDepleted => {
-            let val = clamp_u8(eval_int(val, unit, game));
+            let val = clamp_u8(eval_int(&vals[0], unit, game));
             value = Some(value.unwrap_or(0).max(val));
         }
         _ => (),
@@ -524,9 +540,9 @@ pub fn gas_harvest_carry_depleted(config: &Config, game: Game, unit: Unit) -> Op
 
 pub fn creep_spread_time(config: &Config, game: Game, unit: Unit) -> Option<i32> {
     let mut value = None;
-    config.upgrades.matches(game, unit, |stat, val| match *stat {
+    config.upgrades.matches(game, unit, |stat, vals| match *stat {
         Stat::CreepSpreadTimer => {
-            let val = eval_int(val, unit, game).max(-1).min(255);
+            let val = eval_int(&vals[0], unit, game).max(-1).min(255);
             value = Some(value.unwrap_or(i32::max_value()).min(val));
         }
         _ => (),
@@ -536,9 +552,9 @@ pub fn creep_spread_time(config: &Config, game: Game, unit: Unit) -> Option<i32>
 
 pub fn larva_spawn_time(config: &Config, game: Game, unit: Unit) -> Option<i32> {
     let mut value = None;
-    config.upgrades.matches(game, unit, |stat, val| match *stat {
+    config.upgrades.matches(game, unit, |stat, vals| match *stat {
         Stat::LarvaTimer => {
-            let val = eval_int(val, unit, game).max(-1).min(255);
+            let val = eval_int(&vals[0], unit, game).max(-1).min(255);
             value = Some(value.unwrap_or(i32::max_value()).min(val));
         }
         _ => (),
@@ -548,12 +564,27 @@ pub fn larva_spawn_time(config: &Config, game: Game, unit: Unit) -> Option<i32> 
 
 pub fn unload_cooldown(config: &Config, game: Game, unit: Unit) -> Option<u8> {
     let mut value = None;
-    config.upgrades.matches(game, unit, |stat, val| match *stat {
+    config.upgrades.matches(game, unit, |stat, vals| match *stat {
         Stat::UnloadCooldown => {
-            let val = clamp_u8(eval_int(val, unit, game));
+            let val = clamp_u8(eval_int(&vals[0], unit, game));
             value = Some(value.unwrap_or(!0).min(val));
         }
         _ => (),
     });
     value
+}
+
+pub fn player_color(config: &Config, game: Game, unit: Unit) -> Option<(f32, f32, f32)> {
+    let mut color = None;
+    config.upgrades.matches(game, unit, |stat, vals| match *stat {
+        Stat::PlayerColor => {
+            color = Some((
+                clamp_u8(eval_int(&vals[0], unit, game)) as f32 / 255.0,
+                clamp_u8(eval_int(&vals[1], unit, game)) as f32 / 255.0,
+                clamp_u8(eval_int(&vals[2], unit, game)) as f32 / 255.0,
+            ));
+        }
+        _ => (),
+    });
+    color
 }

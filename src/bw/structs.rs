@@ -290,6 +290,32 @@ pub struct Unit {
     pub _dc130: [u8; 0x20],
 }
 
+pub mod scr {
+    #[repr(C, packed)]
+    pub struct DrawCommands {
+        pub commands: [DrawCommand; 0x2000],
+        pub _dc140000: [u8; 0x20028],
+        pub draw_command_count: u16,
+    }
+
+    #[repr(C)]
+    pub struct DrawCommand {
+        pub draw_target_index: u32,
+        pub is_hd: u32,
+        pub texture_ids: [u32; 7],
+        pub draw_mode: u32,
+        pub shader_id: u32,
+        pub vertex_buffer_index: u32,
+        pub _unk30: u32,
+        pub allocated_vertex_count: u32,
+        pub used_vertex_count: u32,
+        pub _unk3c: u16,
+        pub blend_mode: u16,
+        pub _unk40: [u8; 0x10],
+        pub uniforms: [f32; 0x14],
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -302,5 +328,6 @@ mod test {
         assert_eq!(mem::size_of::<Unit>(), 0x150);
         assert_eq!(mem::size_of::<Sprite>(), 0x24);
         assert_eq!(mem::size_of::<Image>(), 0x40);
+        assert_eq!(mem::size_of::<scr::DrawCommand>(), 0xa0);
     }
 }

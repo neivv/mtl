@@ -107,6 +107,7 @@ pub fn set_tracked_spells(spells: TrackedSpells) {
 }
 
 pub unsafe extern fn frame_hook() {
+    crate::render::reset_sprite_to_unit();
     let config = config();
     let timers = &config.timers;
     let game = Game::get();

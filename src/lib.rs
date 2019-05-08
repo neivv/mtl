@@ -34,11 +34,14 @@ mod ini;
 mod order;
 mod order_hook;
 mod parse_expr;
+mod render;
+mod render_scr;
 mod unit;
 mod unit_pcolor_fix;
 mod upgrades;
 mod windows;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use game::Game;
 use winapi::um::processthreadsapi::{GetCurrentProcess, TerminateProcess};
 
@@ -132,6 +135,11 @@ fn init() {
 lazy_static! {
     static ref PATCHER: whack::Patcher = whack::Patcher::new();
 }
+static IS_1161: AtomicBool = AtomicBool::new(false);
+
+fn is_scr() -> bool {
+    IS_1161.load(Ordering::Relaxed) == false
+}
 
 #[no_mangle]
 #[allow(non_snake_case)]
@@ -139,6 +147,7 @@ pub extern fn Initialize() {
     // 1.16.1 init
     unsafe {
         let f: fn() = || {
+            IS_1161.store(true, Ordering::Relaxed);
             let ctx = samase_shim::init_1161();
             samase::samase_plugin_init(ctx.api());
 
