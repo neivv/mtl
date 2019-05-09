@@ -259,6 +259,7 @@ fn eval_int(expr: &IntExpr, unit: Unit, game: Game) -> i32 {
                     SpellCooldown => (*unit.0).spell_cooldown as i32,
                     Speed => (*unit.0).speed,
                     SigOrder => (*unit.0).order_signal as i32,
+                    Player => (*unit.0).player as i32,
                     Sin(degrees) => {
                         let val = eval_int(&degrees, unit, game);
                         ((val as f32).to_radians().sin() * 256.0) as i32
@@ -266,6 +267,17 @@ fn eval_int(expr: &IntExpr, unit: Unit, game: Game) -> i32 {
                     Cos(degrees) => {
                         let val = eval_int(&degrees, unit, game);
                         ((val as f32).to_radians().cos() * 256.0) as i32
+                    }
+                    Deaths(values) => {
+                        let player = match eval_int(&values.0, unit, game) {
+                            x if x >= 0 && x < 12 => x,
+                            _ => return i32::min_value(),
+                        };
+                        let unit = match eval_int(&values.1, unit, game) {
+                            x if x >= 0 && x < bw_dat::unit::NONE.0 as i32 => x,
+                            _ => return i32::min_value(),
+                        };
+                        (*game.0).deaths[unit as usize][player as usize] as i32
                     }
                 }
             }

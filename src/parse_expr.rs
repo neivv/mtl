@@ -377,13 +377,38 @@ decl_func!(
     b"spell_cooldown", SpellCooldown,
     b"speed", Speed,
     b"sigorder", SigOrder,
+    b"player", Player,
     b"sin", Sin(Box<IntExpr>) -> |x| -> Result<IntFunc, easy::Error<_, _>> {
         parse_single_expr(x).map(|x| IntFunc::Sin(Box::new(x)))
     },
     b"cos", Cos(Box<IntExpr>) -> |x| -> Result<IntFunc, easy::Error<_, _>> {
         parse_single_expr(x).map(|x| IntFunc::Cos(Box::new(x)))
     },
+    b"deaths", Deaths(Box<(IntExpr, IntExpr)>) -> |x| -> Result<IntFunc, easy::Error<_, _>> {
+        let args = parse_many_args(x)
+            .and_then(|x| match x.len() {
+                2 => Ok((x[0], x[1])),
+                _ => Err(()),
+            });
+        let args = match args {
+            Ok(o) => o,
+            Err(()) => return Err(StreamError::message_static_message("Invalid argument list")),
+        };
+        let player = parse_single_expr(&args.0)?;
+        let unit_id = parse_single_expr(&args.1)?;
+        Ok(IntFunc::Deaths(Box::new((player, unit_id))))
+    },
 );
+
+fn parse_many_args<'a>(x: &'a [u8]) -> Result<Vec<&'a [u8]>, ()> {
+    x.split(|&x| x == b',')
+        .map(|x| {
+            let start = x.iter().position(|&x| x != b' ').ok_or(())?;
+            let end = x.len() - x.iter().rev().position(|&x| x != b' ').ok_or(())?;
+            Ok(&x[start..end])
+        })
+        .collect::<Result<Vec<_>, ()>>()
+}
 
 fn parse_single_expr<'a>(x: &'a [u8]) -> Result<IntExpr, easy::Error<u8, &'a [u8]>> {
     let mut parser = int_expr();
@@ -806,6 +831,22 @@ mod test {
                 IntExpr::Func(IntFunc::Sin(Box::new(IntExpr::Func(IntFunc::Hitpoints)))),
                 IntExpr::Integer(2),
             )))
+        );
+    }
+
+    #[test]
+    fn test_2arg_fn() {
+        let mut parser = int_func();
+        let mut parse = |text| {
+            parser.parse(s(text))
+        };
+        assert_eq!(
+            empty_unwrap(parse(b"deaths(player, 5)")),
+            IntFunc::Deaths(Box::new((IntExpr::Func(IntFunc::Player), IntExpr::Integer(5)))),
+        );
+        assert_eq!(
+            empty_unwrap(parse(b"deaths( player, 5  )")),
+            IntFunc::Deaths(Box::new((IntExpr::Func(IntFunc::Player), IntExpr::Integer(5)))),
         );
     }
 }
