@@ -87,10 +87,16 @@ pub unsafe extern fn draw_image_hook(image: *mut c_void, orig: unsafe extern fn(
     let game = Game::get();
     let config = crate::config::config();
     let unit = sprite_to_unit((*image).parent);
-    let track = if crate::is_scr() {
-        Some(render_scr::track_image_render())
+    let track;
+    if crate::is_scr() {
+        track = Some(render_scr::track_image_render());
     } else {
-        None
+        track = None;
+        if let Some(unit) = unit {
+            if let Some(color) = upgrades::player_color_palette(&config, game, unit) {
+                (&mut (*bw::default_grp_remap)[0x8..0x10]).copy_from_slice(&color);
+            }
+        }
     };
     let mut restore_units_dat_flags = None;
     let mut restore_units_dat_has_shields = None;

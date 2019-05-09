@@ -37,6 +37,10 @@ whack_hooks!(stdcall, 0x00400000,
     0x00488410 => create_fow_sprite(u32, *mut c_void) -> *mut c_void;
 );
 
+whack_vars!(init_vars, 0x00400000,
+    0x0050CDC1 => default_grp_remap: [u8; 256];
+);
+
 pub mod storm {
     #[repr(C)]
     pub struct SCode {

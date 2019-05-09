@@ -399,6 +399,7 @@ pub enum Stat {
     GasHarvestCarryDepleted,
     SetUnitId,
     PlayerColor,
+    PlayerColorPalette,
     ShowEnergy,
     ShowShields,
 }
@@ -414,6 +415,7 @@ impl Stat {
     pub fn value_count(&self) -> u8 {
         match self {
             Stat::PlayerColor => 3,
+            Stat::PlayerColorPalette => 8,
             _ => 1,
         }
     }
@@ -593,6 +595,21 @@ pub fn player_color(config: &Config, game: Game, unit: Unit) -> Option<(f32, f32
                 clamp_u8(eval_int(&vals[1], unit, game)) as f32 / 255.0,
                 clamp_u8(eval_int(&vals[2], unit, game)) as f32 / 255.0,
             ));
+        }
+        _ => (),
+    });
+    color
+}
+
+pub fn player_color_palette(config: &Config, game: Game, unit: Unit) -> Option<[u8; 8]> {
+    let mut color = None;
+    config.upgrades.matches(game, unit, |stat, vals| match *stat {
+        Stat::PlayerColorPalette => {
+            let mut result = [0; 8];
+            for (val, out) in vals.iter().zip(result.iter_mut()) {
+                *out = clamp_u8(eval_int(val, unit, game));
+            }
+            color = Some(result);
         }
         _ => (),
     });

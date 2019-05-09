@@ -155,6 +155,7 @@ pub extern fn Initialize() {
 
             {
                 let mut exe = active_patcher.patch_exe(0x00400000);
+                bw::init_vars(&mut exe);
                 exe.hook_opt(bw::create_fow_sprite, frame_hook::check_fow_sprite_creation_desync);
             }
 
