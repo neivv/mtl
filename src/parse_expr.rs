@@ -580,10 +580,10 @@ pub fn bool_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = BoolExpr> {
 fn p1_bool_expr<'a>() -> impl Parser<Input = Bytes<'a>, Output = BoolExpr> {
     Stateless(attempt(int_expr()).and(
         choice!(
-            range(&b"<"[..]),
             range(&b"<="[..]),
-            range(&b">"[..]),
+            range(&b"<"[..]),
             range(&b">="[..]),
+            range(&b">"[..]),
             range(&b"=="[..]),
             range(&b"!="[..])
         ).skip(spaces())
@@ -801,6 +801,20 @@ mod test {
 
         assert_eq!(parse(b"true || false && true").unwrap().1.inner.input.len(), "&& true".len());
         parse(b"! true").unwrap_err();
+
+        assert_eq!(
+            empty_unwrap(parse(b"energy >= 50 && energy < 100")),
+            BoolExpr::And(Box::new((
+                BoolExpr::GreaterOrEqual(Box::new((
+                    IntExpr::Func(IntFunc::Energy),
+                    IntExpr::Integer(50),
+                ))),
+                BoolExpr::LessThan(Box::new((
+                    IntExpr::Func(IntFunc::Energy),
+                    IntExpr::Integer(100),
+                ))),
+            )))
+        );
     }
 
     #[test]
