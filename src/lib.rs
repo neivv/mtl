@@ -1,21 +1,9 @@
 #[cfg(debug_assertions)] extern crate backtrace;
-extern crate bincode;
-extern crate byteorder;
-extern crate chrono;
-#[macro_use] extern crate combine;
 #[macro_use] extern crate failure;
-extern crate fern;
 #[macro_use] extern crate lazy_static;
-extern crate libc;
 #[macro_use] extern crate log;
-extern crate pcx;
 #[macro_use] extern crate scopeguard;
-extern crate serde;
 #[macro_use] extern crate serde_derive;
-extern crate smallvec;
-extern crate thread_local;
-extern crate vec_map;
-extern crate winapi;
 #[macro_use] extern crate whack;
 
 extern crate bw_dat;
@@ -33,7 +21,6 @@ mod game;
 mod ini;
 mod order;
 mod order_hook;
-mod parse_expr;
 mod render;
 mod render_scr;
 mod unit;
@@ -42,8 +29,9 @@ mod upgrades;
 mod windows;
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use crate::game::Game;
 use winapi::um::processthreadsapi::{GetCurrentProcess, TerminateProcess};
+
+use bw_dat::Game;
 
 fn init() {
     if cfg!(debug_assertions) {
@@ -224,7 +212,7 @@ unsafe extern fn load(ptr: *const u8, len: usize) -> u32 {
 unsafe extern fn init_game() {
     samase::init_config(false);
 
-    let game = Game::get();
+    let game = crate::game::get();
     bw::init_game_start_vars();
     fix_campaign_music(game);
     frame_hook::init_tracked_spells();
@@ -234,18 +222,18 @@ unsafe extern fn init_game() {
 /// Fixes a BW issue where the music was hardcoded to match Blizz campaign races
 unsafe fn fix_campaign_music(game: Game) {
     const FIRST_MISSIONS: &[u8] = &[0x1, 0xc, 0x16, 0x20, 0x28, 0x31];
-    let mission = (*game.0).campaign_mission;
+    let mission = (**game).campaign_mission;
     if mission != 0 {
         let starting_map = FIRST_MISSIONS.iter()
             .map(|&x| u16::from(x))
             .find(|&first| first <= mission)
             .unwrap_or(0);
         let song = (mission - starting_map) % 3;
-        let music_id = match (*game.0).player_race {
+        let music_id = match (**game).player_race {
             0 => 1 + song,
             1 => 4 + song,
             2 | _ => 7 + song,
         };
-        (*game.0).bgm_song = music_id;
+        (**game).bgm_song = music_id;
     }
 }

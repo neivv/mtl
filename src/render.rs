@@ -4,10 +4,11 @@ use std::ptr::null_mut;
 
 use libc::c_void;
 
+use bw_dat::{Game, Unit};
+
 use crate::bw;
-use crate::game::Game;
 use crate::render_scr;
-use crate::unit::{active_units, Unit};
+use crate::unit::{active_units, UnitExt};
 use crate::upgrades;
 
 ome2_thread_local! {
@@ -44,7 +45,7 @@ fn sprite_to_unit(sprite: *mut bw::Sprite) -> Option<Unit> {
                 first = first.min(sprite as usize);
                 last = last.max(sprite as usize);
             }
-            if let Some(subunit) = unsafe { Unit::from_ptr((*unit.0).subunit) } {
+            if let Some(subunit) = unit.subunit_linked() {
                 if let Some(sprite) = subunit.sprite() {
                     first = first.min(sprite as usize);
                     last = last.max(sprite as usize);
@@ -60,12 +61,12 @@ fn sprite_to_unit(sprite: *mut bw::Sprite) -> Option<Unit> {
         for unit in active_units() {
             if let Some(sprite) = unit.sprite() {
                 let index = (sprite as usize - first) / mem::size_of::<bw::Sprite>();
-                sprite_to_unit.map[index] = unit.0;
+                sprite_to_unit.map[index] = *unit;
             }
-            if let Some(subunit) = unsafe { Unit::from_ptr((*unit.0).subunit) } {
+            if let Some(subunit) = unit.subunit_linked() {
                 if let Some(sprite) = subunit.sprite() {
                     let index = (sprite as usize - first) / mem::size_of::<bw::Sprite>();
-                    sprite_to_unit.map[index] = unit.0;
+                    sprite_to_unit.map[index] = *unit;
                 }
             }
         }
@@ -84,7 +85,7 @@ pub unsafe extern fn draw_image_hook(image: *mut c_void, orig: unsafe extern fn(
     let image = image as *mut bw::Image;
     let orig: unsafe extern fn(*mut bw::Image) = mem::transmute(orig);
 
-    let game = Game::get();
+    let game = Game::from_ptr(bw::game());
     let config = crate::config::config();
     let unit = sprite_to_unit((*image).parent);
     let track;

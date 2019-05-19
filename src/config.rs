@@ -1,14 +1,12 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-use combine::Parser;
-use combine::easy;
 use smallvec::SmallVec;
 
 use bw_dat::{UnitId, OrderId};
+use bw_dat::expr::{IntExpr, BoolExpr};
 use failure::{Context, Error, ResultExt};
 use crate::ini::Ini;
-use crate::parse_expr;
 use crate::upgrades::{Upgrades, Upgrade, UpgradeChanges, State, Stat};
 
 /// Various timers, in frames, unlike bw's 8-frame chunks.
@@ -216,37 +214,17 @@ impl<'a> Iterator for BraceSplit<'a> {
     }
 }
 
-fn parse_upgrade_condition(condition: &str) -> Result<parse_expr::BoolExpr, Error> {
-    use combine::stream::state::State;
-    use crate::parse_expr::SingleErrorStream;
-    parse_expr::bool_expr().parse(SingleErrorStream::new(State::new(condition.as_bytes())))
-        .map_err(|e| format_combine_err(&e, condition))
-        .and_then(|(result, rest)| {
-            let rest = rest.inner;
-            if !rest.input.is_empty() {
-                Err(format_err!("Trailing characters: {}", String::from_utf8_lossy(rest.input)))
-            } else {
-                Ok(result)
-            }
-        })
+fn parse_upgrade_condition(condition: &str) -> Result<BoolExpr, Error> {
+    BoolExpr::parse(condition.as_bytes())
+        .map_err(|e| e.into())
 }
 
-fn parse_int_expr(expr: &str) -> Result<parse_expr::IntExpr, Error> {
-    use combine::stream::state::State;
-    use crate::parse_expr::SingleErrorStream;
-    parse_expr::int_expr().parse(SingleErrorStream::new(State::new(expr.as_bytes())))
-        .map_err(|e| format_combine_err(&e, expr))
-        .and_then(|(result, rest)| {
-            let rest = rest.inner;
-            if !rest.input.is_empty() {
-                Err(format_err!("Trailing characters: {}", String::from_utf8_lossy(rest.input)))
-            } else {
-                Ok(result)
-            }
-        })
+fn parse_int_expr(expr: &str) -> Result<IntExpr, Error> {
+    IntExpr::parse(expr.as_bytes())
+        .map_err(|e| e.into())
 }
 
-fn parse_int_expr_tuple(expr: &str, count: u8) -> Result<Vec<parse_expr::IntExpr>, Error> {
+fn parse_int_expr_tuple(expr: &str, count: u8) -> Result<Vec<IntExpr>, Error> {
     let expr = expr.trim();
     if !expr.starts_with("(") || !expr.ends_with(")") {
         return Err(format_err!("Expected braced list"));
@@ -260,35 +238,6 @@ fn parse_int_expr_tuple(expr: &str, count: u8) -> Result<Vec<parse_expr::IntExpr
         return Err(format_err!("Expected {} items, got {}", count, result.len()));
     }
     Ok(result)
-}
-
-fn format_combine_err(e: &crate::parse_expr::SingleError<u8, &[u8], usize>, condition: &str) -> Error {
-    use std::fmt::Write;
-
-    fn format_info(i: &easy::Info<u8, &[u8]>) -> String {
-        match i {
-            easy::Info::Token(x) => format!("{}", x),
-            easy::Info::Range(x) => format!("{}", String::from_utf8_lossy(x)),
-            easy::Info::Owned(x) => format!("{}", x),
-            easy::Info::Borrowed(x) => format!("{}", x),
-        }
-    }
-    let mut msg = format!("Starting from {}\n", &condition[e.pos..]);
-    if let Some(ref err) = e.error {
-        match **err {
-            easy::Error::Expected(ref i) => {
-                writeln!(msg, "Expected {}", format_info(i)).unwrap()
-            }
-            easy::Error::Unexpected(ref i) => {
-                writeln!(msg, "Unexpected {}", format_info(i)).unwrap()
-            }
-            easy::Error::Message(ref i) => {
-                writeln!(msg, "Note: {}", format_info(i)).unwrap()
-            }
-            _ => (),
-        }
-    }
-    format_err!("{}", msg)
 }
 
 pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {

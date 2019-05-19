@@ -3,46 +3,50 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::ptr::null_mut;
 
-use byteorder::{ReadBytesExt, WriteBytesExt, LE};
-use bw_dat::{self, OrderId, UnitId, unit};
+use byteorder::{WriteBytesExt, LE};
+use bw_dat::{self, UnitId, Unit};
 use serde::{Serializer, Serialize, Deserializer, Deserialize};
 
 use crate::bw;
-use crate::game::Game;
 use crate::samase;
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct Unit(pub *mut bw::Unit);
-
-unsafe impl Send for Unit {}
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct HashableUnit(pub Unit);
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct SerializableUnit(pub Unit);
+
 impl Hash for HashableUnit {
     fn hash<H: Hasher>(&self, hasher: &mut H) {
-        hasher.write_usize((self.0).0 as usize);
+        hasher.write_usize((*self.0) as usize);
     }
 }
 
-impl Serialize for Unit {
+impl Serialize for SerializableUnit {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::Error;
-        match save_mapping().borrow().get(&HashableUnit(*self)) {
+        match save_mapping().borrow().get(&HashableUnit(self.0)) {
             Some(id) => id.serialize(serializer),
             None => Err(S::Error::custom(format!("Couldn't get id for unit {:?}", self))),
         }
     }
 }
 
-impl<'de> Deserialize<'de> for Unit {
+impl<'de> Deserialize<'de> for SerializableUnit {
     fn deserialize<S: Deserializer<'de>>(deserializer: S) -> Result<Self, S::Error> {
         use serde::de::Error;
         let id = u32::deserialize(deserializer)?;
         match load_mapping().borrow().get(&id) {
-            Some(&unit) => Ok(unit),
+            Some(&unit) => Ok(SerializableUnit(unit)),
             None => Err(S::Error::custom(format!("Couldn't get unit for id {:?}", id))),
         }
+    }
+}
+
+impl std::ops::Deref for SerializableUnit {
+    type Target = Unit;
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -82,7 +86,7 @@ impl Iterator for SaveIdMapping {
             }
             self.id += 1;
             let result = (self.next.unwrap(), self.id);
-            let unit = self.next.unwrap().0;
+            let unit = *self.next.unwrap();
             if (*unit).subunit != null_mut() && !self.in_subunit {
                 self.next = Unit::from_ptr((*unit).subunit);
                 self.in_subunit = true;
@@ -121,154 +125,14 @@ pub fn clear_load_mapping() {
     load_mapping().borrow_mut().clear();
 }
 
-impl Unit {
-    pub fn from_ptr(ptr: *mut bw::Unit) -> Option<Unit> {
-        if ptr == null_mut() {
-            None
-        } else {
-            Some(Unit(ptr))
-        }
-    }
+pub trait UnitExt {
+    fn set_unit_id(self, new: UnitId);
+    fn sprite(self) -> Option<*mut bw::Sprite>;
+    fn set_resource_amount(self, value: u16);
+}
 
-    pub fn sprite(&self) -> Option<*mut bw::Sprite> {
-        unsafe {
-            match (*self.0).sprite == null_mut() {
-                true => None,
-                false => Some((*self.0).sprite),
-            }
-        }
-    }
-
-    pub fn player(&self) -> u8 {
-        unsafe { (*self.0).player }
-    }
-
-    pub fn id(&self) -> UnitId {
-        UnitId(unsafe { (*self.0).unit_id })
-    }
-
-    pub fn matches_id(&self, other: UnitId) -> bool {
-        let id = self.id();
-        if other == unit::ANY_UNIT {
-            true
-        } else {
-            id == other
-        }
-    }
-
-    pub fn order(&self) -> OrderId {
-        unsafe { OrderId((*self.0).order) }
-    }
-
-    pub fn order_state(&self) -> u8 {
-        unsafe { (*self.0).order_state }
-    }
-
-    pub fn secondary_order(&self) -> OrderId {
-        unsafe { OrderId((*self.0).secondary_order) }
-    }
-
-    pub fn is_completed(&self) -> bool {
-        unsafe { (*self.0).flags & 0x1 != 0 }
-    }
-
-    pub fn is_under_dweb(&self) -> bool {
-        unsafe { (*self.0).flags & 0x8000 != 0 }
-    }
-
-    pub fn is_hallucination(&self) -> bool {
-        unsafe { (*self.0).flags & 0x40000000 != 0 }
-    }
-
-    pub fn is_invisible(&self) -> bool {
-        unsafe { (*self.0).flags & 0x300 != 0 }
-    }
-
-    pub fn has_free_cloak(&self) -> bool {
-        unsafe { (*self.0).flags & 0x800 != 0 }
-    }
-
-    pub fn is_burrowed(&self) -> bool {
-        unsafe { (*self.0).flags & 0x10 != 0 }
-    }
-
-    pub fn is_disabled(&self) -> bool {
-        unsafe {
-            (*self.0).flags & 0x400 != 0 ||
-                (*self.0).lockdown_timer != 0 ||
-                (*self.0).maelstrom_timer != 0 ||
-                (*self.0).stasis_timer != 0
-        }
-    }
-
-    pub fn powerup(&self) -> Option<Unit> {
-        if self.id().is_worker() {
-            let powerup = unsafe {
-                (&(*self.0).unit_specific[..]).read_u32::<LE>().unwrap() as *mut bw::Unit
-            };
-            Unit::from_ptr(powerup)
-        } else {
-            None
-        }
-    }
-
-    pub fn mine_amount(&self, game: Game) -> u8 {
-        let id = self.id();
-        if id == unit::VULTURE || id == unit::JIM_RAYNOR_VULTURE {
-            if id.is_hero() || game.tech_researched(self.player(), bw_dat::tech::SPIDER_MINES) {
-                unsafe { (*self.0).unit_specific[0] }
-            } else {
-                0
-            }
-        } else {
-            0
-        }
-    }
-
-    pub fn uses_fighters(&self) -> bool {
-        match self.id() {
-            unit::CARRIER | unit::GANTRITHOR | unit::REAVER | unit::WARBRINGER => true,
-            _ => false,
-        }
-    }
-
-    pub fn fighter_amount(&self) -> u8 {
-        if self.uses_fighters() {
-            unsafe { (*self.0).unit_specific[8] + (*self.0).unit_specific[9] }
-        } else {
-            0
-        }
-    }
-
-    pub fn resource_amount(&self) -> u16 {
-        unsafe { (&(*self.0).unit_specific2[0..]).read_u16::<LE>().unwrap() }
-    }
-
-    pub fn set_resource_amount(&self, value: u16) {
-        unsafe { (&mut (*self.0).unit_specific2[0..]).write_u16::<LE>(value).unwrap() }
-    }
-
-    pub fn hitpoints(&self) -> i32 {
-        unsafe { (*self.0).hitpoints }
-    }
-
-    pub fn shields(&self) -> i32 {
-        if self.id().has_shields() {
-            unsafe { (*self.0).shields }
-        } else {
-            0
-        }
-    }
-
-    pub fn energy(&self) -> u16 {
-        unsafe { (*self.0).energy }
-    }
-
-    pub fn target(&self) -> Option<Unit> {
-        unsafe { Unit::from_ptr((*self.0).target) }
-    }
-
-    pub fn set_unit_id(&self, new: UnitId) {
+impl UnitExt for Unit {
+    fn set_unit_id(self, new: UnitId) {
         // Otherwise would have to fix possearch and clip unit in map bounds
         assert!(
             self.id().dimensions() == new.dimensions(),
@@ -282,23 +146,36 @@ impl Unit {
         // Checks multi selection changes.
         unsafe {
             let old = self.id();
-            (*self.0).previous_unit_id = (*self.0).unit_id;
-            (*self.0).previous_hp = (((*self.0).hitpoints >> 8) as u16).max(1);
-            (*self.0).unit_id = new.0;
+            (**self).previous_unit_id = (**self).unit_id;
+            (**self).previous_hp = (((**self).hitpoints >> 8) as u16).max(1);
+            (**self).unit_id = new.0;
             let new_hp = (new.hitpoints() >> 8)
-                .saturating_mul(i32::from((*self.0).previous_hp))
+                .saturating_mul(i32::from((**self).previous_hp))
                 .checked_div(old.hitpoints() >> 8)
                 .unwrap_or(1);
-            (*self.0).hitpoints = new_hp << 8;
+            (**self).hitpoints = new_hp << 8;
             let buttons = if !self.is_completed() || self.is_disabled() {
                 0xe4
             } else {
                 new.0
             };
             if new.is_building() || buttons == 0xe4 {
-                (*self.0).buttons = buttons;
+                (**self).buttons = buttons;
             }
         }
+    }
+
+    fn sprite(self) -> Option<*mut bw::Sprite> {
+        unsafe {
+            match (**self).sprite == null_mut() {
+                true => None,
+                false => Some((**self).sprite),
+            }
+        }
+    }
+
+    fn set_resource_amount(self, value: u16) {
+        unsafe { (&mut (**self).unit_specific2[0..]).write_u16::<LE>(value).unwrap() }
     }
 }
 
@@ -328,7 +205,7 @@ impl Iterator for AliveUnits {
             }
             let unit = self.0;
             self.0 = (*unit).next;
-            Some(Unit(unit))
+            Some(Unit::from_ptr(unit).unwrap())
         }
     }
 }
@@ -350,7 +227,7 @@ impl Iterator for UnitListIter {
             if self.0 == null_mut() {
                 None
             } else {
-                let result = Some(Unit(self.0));
+                let result = Unit::from_ptr(self.0);
                 self.0 = (*self.0).next;
                 result
             }

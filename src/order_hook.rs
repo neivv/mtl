@@ -1,12 +1,11 @@
 use libc::c_void;
 
 use bw_dat::unit as unit_id;
-use bw_dat::{UpgradeId, upgrade};
+use bw_dat::{Unit, UpgradeId, upgrade};
 use crate::bw;
 use crate::config::config;
-use crate::game::Game;
-use crate::unit::Unit;
 use crate::upgrades;
+use crate::unit::UnitExt;
 
 struct MiningOverride {
     old_amount: u16,
@@ -18,8 +17,8 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
     use bw_dat::order::*;
 
     let config = config();
-    let game = Game::get();
-    let unit = Unit(u as *mut bw::Unit);
+    let game = crate::game::get();
+    let unit = Unit::from_ptr(u as *mut bw::Unit).unwrap();
     let order = unit.order();
     let mut return_cargo_order = false;
     let mut return_cargo_softcoded = false;
@@ -28,13 +27,13 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
     let mut unload_check = false;
     let mut mining_override = None;
     let mut upgrade_check = None;
-    let ground_cooldown_check = (*unit.0).ground_cooldown == 0;
-    let air_cooldown_check = (*unit.0).air_cooldown == 0;
+    let ground_cooldown_check = (**unit).ground_cooldown == 0;
+    let air_cooldown_check = (**unit).air_cooldown == 0;
     match order {
         HARVEST_GAS => {
             return_cargo_order = true;
             harvest_gas_check = unit.order_state() == 0;
-            if unit.order_state() == 5 && (*unit.0).order_timer == 0 {
+            if unit.order_state() == 5 && (**unit).order_timer == 0 {
                 if let Some(target) = unit.target() {
                     let reduce = upgrades::gas_harvest_reduce(&config, game, unit);
                     let carry = upgrades::gas_harvest_carry(&config, game, unit);
@@ -66,7 +65,7 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
         }
         HARVEST_MINERALS => {
             harvest_minerals_check = unit.order_state() == 0 || unit.order_state() == 4;
-            if unit.order_state() == 5 && (*unit.0).order_timer == 0 {
+            if unit.order_state() == 5 && (**unit).order_timer == 0 {
                 if let Some(target) = unit.target() {
                     let reduce = upgrades::mineral_harvest_reduce(&config, game, unit);
                     let carry = upgrades::mineral_harvest_carry(&config, game, unit);
@@ -93,11 +92,11 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
             return_cargo_order = true;
         }
         UNLOAD | MOVE_UNLOAD => {
-            unload_check = (*unit.0).order_timer == 0;
+            unload_check = (**unit).order_timer == 0;
         }
         UPGRADE => {
-            let upgrade = UpgradeId(u16::from((*unit.0).unit_specific[9]));
-            let level = (*unit.0).unit_specific[0xd];
+            let upgrade = UpgradeId(u16::from((**unit).unit_specific[9]));
+            let level = (**unit).unit_specific[0xd];
             if upgrade != upgrade::NONE {
                 if game.upgrade_level(unit.player(), upgrade) < level {
                     upgrade_check = Some((upgrade, level));
@@ -116,46 +115,46 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
             // be spawned when exiting the gas mine.
             // The reset collision order is a highprio order, so it'll be able to
             // execute return cargo order immediately afterwards.
-            (*game.0).completed_units_count[unit_id::COMMAND_CENTER.0 as usize][player] += 1;
+            (**game).completed_units_count[unit_id::COMMAND_CENTER.0 as usize][player] += 1;
         }
     }
     orig(u);
     if return_cargo_softcoded {
         let player = unit.player() as usize;
-        (*game.0).completed_units_count[unit_id::COMMAND_CENTER.0 as usize][player] -= 1;
+        (**game).completed_units_count[unit_id::COMMAND_CENTER.0 as usize][player] -= 1;
     }
     if harvest_gas_check {
         if unit.order_state() == 5 {
             if let Some(new_timer) = upgrades::gas_harvest_time(&config, game, unit) {
-                (*unit.0).order_timer = new_timer;
+                (**unit).order_timer = new_timer;
             }
         }
     }
     if harvest_minerals_check {
         if unit.order_state() == 5 {
             if let Some(new_timer) = upgrades::mineral_harvest_time(&config, game, unit) {
-                (*unit.0).order_timer = new_timer;
+                (**unit).order_timer = new_timer;
             }
         }
     }
     if unload_check {
-        if (*unit.0).order_timer > 0 {
+        if (**unit).order_timer > 0 {
             if let Some(new_time) = upgrades::unload_cooldown(&config, game, unit) {
-                (*unit.0).order_timer = new_time;
+                (**unit).order_timer = new_time;
             }
         }
     }
     if ground_cooldown_check {
-        if (*unit.0).ground_cooldown > 0 {
+        if (**unit).ground_cooldown > 0 {
             if let Some(new_time) = upgrades::cooldown(&config, game, unit) {
-                (*unit.0).ground_cooldown = new_time;
+                (**unit).ground_cooldown = new_time;
             }
         }
     }
     if air_cooldown_check {
-        if (*unit.0).air_cooldown > 0 {
+        if (**unit).air_cooldown > 0 {
             if let Some(new_time) = upgrades::cooldown(&config, game, unit) {
-                (*unit.0).air_cooldown = new_time;
+                (**unit).air_cooldown = new_time;
             }
         }
     }
@@ -163,7 +162,7 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
         if unit.target() == Some(vars.resource) {
             vars.resource.set_resource_amount(vars.old_amount);
         } else {
-            (*unit.0).unit_specific[0xf] = vars.carry;
+            (**unit).unit_specific[0xf] = vars.carry;
         }
     }
     if let Some((upgrade, level)) = upgrade_check {
@@ -181,7 +180,7 @@ pub unsafe extern fn hidden_order_hook(u: *mut c_void, orig: unsafe extern fn(*m
 pub unsafe extern fn secondary_order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_void)) {
     use bw_dat::order::*;
 
-    let unit = Unit(u as *mut bw::Unit);
+    let unit = Unit::from_ptr(u as *mut bw::Unit).unwrap();
     let config = config();
     let mut spread_creep_check = false;
     let mut larva_spawn_check = false;
@@ -199,49 +198,49 @@ pub unsafe extern fn secondary_order_hook(u: *mut c_void, orig: unsafe extern fn
             }
         }
         SPREAD_CREEP => {
-            let game = Game::get();
+            let game = crate::game::get();
             if let Some(new_timer) = upgrades::creep_spread_time(&config, game, unit) {
                 if new_timer == -1 {
-                    (*unit.0).unit_specific[0xc] = 10;
+                    (**unit).unit_specific[0xc] = 10;
                 } else {
                     creep_spread_time = Some(new_timer as u8);
                 }
             }
             if let Some(new_timer) = upgrades::larva_spawn_time(&config, game, unit) {
                 if new_timer == -1 {
-                    (*unit.0).unit_specific[0xa] = 10;
+                    (**unit).unit_specific[0xa] = 10;
                 } else {
                     larva_spawn_time = Some(new_timer as u8);
                 }
             }
-            spread_creep_check = (*unit.0).unit_specific[0xc] == 0;
-            larva_spawn_check = (*unit.0).unit_specific[0xa] == 0;
+            spread_creep_check = (**unit).unit_specific[0xc] == 0;
+            larva_spawn_check = (**unit).unit_specific[0xa] == 0;
         }
         SPAWNING_LARVA => {
-            let game = Game::get();
+            let game = crate::game::get();
             if let Some(new_timer) = upgrades::larva_spawn_time(&config, game, unit) {
                 if new_timer == -1 {
-                    (*unit.0).unit_specific[0xa] = 10;
+                    (**unit).unit_specific[0xa] = 10;
                 } else {
                     larva_spawn_time = Some(new_timer as u8);
                 }
             }
-            larva_spawn_check = (*unit.0).unit_specific[0xa] == 0;
+            larva_spawn_check = (**unit).unit_specific[0xa] == 0;
         }
         _ => ()
     }
     orig(u);
     if spread_creep_check {
-        if (*unit.0).unit_specific[0xc] != 0 {
+        if (**unit).unit_specific[0xc] != 0 {
             if let Some(new_timer) = creep_spread_time {
-                (*unit.0).unit_specific[0xc] = new_timer;
+                (**unit).unit_specific[0xc] = new_timer;
             }
         }
     }
     if larva_spawn_check {
-        if (*unit.0).unit_specific[0xa] != 0 {
+        if (**unit).unit_specific[0xa] != 0 {
             if let Some(new_timer) = larva_spawn_time {
-                (*unit.0).unit_specific[0xa] = new_timer;
+                (**unit).unit_specific[0xa] = new_timer;
             }
         }
     }

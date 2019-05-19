@@ -2,17 +2,16 @@ use std::cell::RefCell;
 
 use libc::c_void;
 
-use bw_dat::{self, UnitId};
+use bw_dat::{self, Game, Unit, UnitId};
 
 use crate::bw;
 use crate::config::config;
-use crate::game::Game;
-use crate::unit::{self, Unit};
+use crate::unit::{self, SerializableUnit};
 use crate::upgrades;
 
 #[derive(Serialize, Deserialize, Clone)]
 struct TrackedUnit {
-    unit: Unit,
+    unit: SerializableUnit,
     end_frame: u32,
 }
 
@@ -110,24 +109,24 @@ pub unsafe extern fn frame_hook() {
     crate::render::reset_sprite_to_unit();
     let config = config();
     let timers = &config.timers;
-    let game = Game::get();
+    let game = Game::from_ptr(bw::game());
     let upgrades = upgrades::global_state_changes();
     let mut tracked = tracked().borrow_mut();
     if game.frame_count() == 0 {
         // These can't be done at init_game
         crate::unit_pcolor_fix::game_start_hook();
         if let Some(max) = config.supplies.zerg_max {
-            for x in &mut (*game.0).zerg_supply_max {
+            for x in &mut (**game).supplies[0].max {
                 *x = max;
             }
         }
         if let Some(max) = config.supplies.terran_max {
-            for x in &mut (*game.0).terran_supply_max {
+            for x in &mut (**game).supplies[1].max {
                 *x = max;
             }
         }
         if let Some(max) = config.supplies.protoss_max {
-            for x in &mut (*game.0).protoss_supply_max {
+            for x in &mut (**game).supplies[2].max {
                 *x = max;
             }
         }
@@ -135,88 +134,89 @@ pub unsafe extern fn frame_hook() {
     tracked.remove_dead_units();
     for unit in unit::alive_units() {
         let t = &mut *tracked;
-        timer_override(&timers.lockdown, unit, &mut t.lockdown, &mut (*unit.0).lockdown_timer);
-        timer_override(&timers.maelstrom, unit, &mut t.maelstrom, &mut (*unit.0).maelstrom_timer);
-        timer_override(&timers.matrix, unit, &mut t.matrix, &mut (*unit.0).matrix_timer);
-        timer_override(&timers.stim, unit, &mut t.stim, &mut (*unit.0).stim_timer);
-        timer_override(&timers.ensnare, unit, &mut t.ensnare, &mut (*unit.0).ensnare_timer);
-        timer_override(&timers.irradiate, unit, &mut t.irradiate, &mut (*unit.0).irradiate_timer);
-        timer_override(&timers.stasis, unit, &mut t.stasis, &mut (*unit.0).stasis_timer);
-        timer_override(&timers.plague, unit, &mut t.plague, &mut (*unit.0).plague_timer);
+        timer_override(&timers.lockdown, game, unit, &mut t.lockdown, &mut (**unit).lockdown_timer);
+        timer_override(&timers.maelstrom, game, unit, &mut t.maelstrom, &mut (**unit).maelstrom_timer);
+        timer_override(&timers.matrix, game, unit, &mut t.matrix, &mut (**unit).matrix_timer);
+        timer_override(&timers.stim, game, unit, &mut t.stim, &mut (**unit).stim_timer);
+        timer_override(&timers.ensnare, game, unit, &mut t.ensnare, &mut (**unit).ensnare_timer);
+        timer_override(&timers.irradiate, game, unit, &mut t.irradiate, &mut (**unit).irradiate_timer);
+        timer_override(&timers.stasis, game, unit, &mut t.stasis, &mut (**unit).stasis_timer);
+        timer_override(&timers.plague, game, unit, &mut t.plague, &mut (**unit).plague_timer);
         for i in 0..9 {
             timer_override(
                 &timers.acid_spores,
+                game,
                 unit,
                 &mut t.acid_spores[i],
-                &mut (*unit.0).acid_spore_timers[i],
+                &mut (**unit).acid_spore_timers[i],
             );
         }
         if unit.is_hallucination() {
             if let Some(timer) = timers.hallucination_death {
-                death_timer(timer, unit, &mut t.hallucination_death);
+                death_timer(game, timer, unit, &mut t.hallucination_death);
             }
         } else {
             for &mut (id, timer, ref mut tracked) in &mut t.unit_deaths {
                 if unit.matches_id(id) {
-                    death_timer(timer, unit, tracked);
+                    death_timer(game, timer, unit, tracked);
                 }
             }
         }
         let regen = upgrades::regens(&config, game, unit);
         if let Some(hp_regen) = regen.hp {
-            (*unit.0).hitpoints = (*unit.0).hitpoints.saturating_add(hp_regen);
-            if (*unit.0).hitpoints <= 0 {
+            (**unit).hitpoints = (**unit).hitpoints.saturating_add(hp_regen);
+            if (**unit).hitpoints <= 0 {
                 // No code for killing units yet
-                (*unit.0).hitpoints = 1;
+                (**unit).hitpoints = 1;
             }
             let max_hp = unit.id().hitpoints();
-            if (*unit.0).hitpoints > max_hp {
-                (*unit.0).hitpoints = max_hp;
+            if (**unit).hitpoints > max_hp {
+                (**unit).hitpoints = max_hp;
             }
         }
         if let Some(regen) = regen.shield {
-            (*unit.0).shields = (*unit.0).shields.saturating_add(regen);
-            if (*unit.0).shields < 0 {
-                (*unit.0).shields = 0;
+            (**unit).shields = (**unit).shields.saturating_add(regen);
+            if (**unit).shields < 0 {
+                (**unit).shields = 0;
             }
             let max_shields = unit.id().shields();
-            if (*unit.0).shields > max_shields {
-                (*unit.0).shields = max_shields;
+            if (**unit).shields > max_shields {
+                (**unit).shields = max_shields;
             }
         }
         if let Some(regen) = regen.energy {
             if regen > 0 {
-                (*unit.0).energy = (*unit.0).energy.saturating_add(regen as u16);
+                (**unit).energy = (**unit).energy.saturating_add(regen as u16);
             } else {
                 let neg = regen.checked_abs().unwrap_or(0);
-                (*unit.0).energy = (*unit.0).energy.saturating_sub(neg as u16);
+                (**unit).energy = (**unit).energy.saturating_sub(neg as u16);
             }
             // Not handling past-the-max, bw hopefully handles that.
         }
-        if (*unit.0).build_queue[(*unit.0).current_build_slot as usize] != bw_dat::unit::NONE.0 {
+        if (**unit).build_queue[(**unit).current_build_slot as usize] != bw_dat::unit::NONE.0 {
             upgrades.update_build_queue(unit);
         }
     }
 }
 
-unsafe fn death_timer(time_frames: u32, unit: Unit, tracked: &mut Vec<TrackedUnit>) {
-    if (*unit.0).death_timer != 1 {
-        let unit_pos = match tracked.iter().position(|x| x.unit.0 == unit.0) {
+unsafe fn death_timer(game: Game, time_frames: u32, unit: Unit, tracked: &mut Vec<TrackedUnit>) {
+    if (**unit).death_timer != 1 {
+        let unit_pos = match tracked.iter().position(|x| x.unit.0 == unit) {
             Some(x) => x,
             None => {
                 tracked.push(TrackedUnit {
-                    unit,
-                    end_frame: bw::frame_count() + time_frames,
+                    unit: SerializableUnit(unit),
+                    end_frame: game.frame_count() + time_frames,
                 });
-                (*unit.0).death_timer = 0;
+                (**unit).death_timer = 0;
                 tracked.len() - 1
             }
         };
         // + 1 since the timer has to end at 1
         let frames_remaining =
-            tracked[unit_pos].end_frame.saturating_sub(bw::frame_count()) + 1;
+            tracked[unit_pos].end_frame.saturating_sub(game.frame_count()) + 1;
         if frames_remaining < 65536 {
-            (*unit.0).death_timer = frames_remaining as u16;
+            (**unit).death_timer = frames_remaining as u16;
         }
         if frames_remaining == 1 {
             tracked.remove(unit_pos);
@@ -226,6 +226,7 @@ unsafe fn death_timer(time_frames: u32, unit: Unit, tracked: &mut Vec<TrackedUni
 
 unsafe fn timer_override(
     timer: &Option<u32>,
+    game: Game,
     unit: Unit,
     tracked: &mut Vec<TrackedUnit>,
     bw_timer: *mut u8,
@@ -240,16 +241,16 @@ unsafe fn timer_override(
         match *bw_timer {
             0 | 1 => (),
             2 | 3 => {
-                let unit_pos = match tracked.iter().position(|x| x.unit.0 == unit.0) {
+                let unit_pos = match tracked.iter().position(|x| x.unit.0 == unit) {
                     Some(x) => x,
                     None => {
                         debug_fatal!(
-                            "Unit {:p} had timer at 2, but it wasn't tracked???", unit.0
+                            "Unit {:p} had timer at 2, but it wasn't tracked???", *unit
                         );
                         return;
                     }
                 };
-                if tracked[unit_pos].end_frame <= bw::frame_count() {
+                if tracked[unit_pos].end_frame <= game.frame_count() {
                     *bw_timer = 1;
                     tracked.remove(unit_pos);
                 } else {
@@ -258,10 +259,10 @@ unsafe fn timer_override(
             }
             _ => {
                 // Remove the old entry if it had this spell already
-                tracked.retain(|x| x.unit.0 != unit.0);
+                tracked.retain(|x| x.unit.0 != unit);
                 tracked.push(TrackedUnit {
-                    unit,
-                    end_frame: bw::frame_count() + time_frames,
+                    unit: SerializableUnit(unit),
+                    end_frame: game.frame_count() + time_frames,
                 });
                 *bw_timer = 3;
             }

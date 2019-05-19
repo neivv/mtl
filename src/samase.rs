@@ -56,18 +56,6 @@ pub fn game() -> *mut bw::Game {
     unsafe { GAME.get()() }
 }
 
-static mut AI_REGIONS: GlobalFunc<fn() -> *mut *mut bw::AiRegion> = GlobalFunc(None);
-pub fn ai_regions(player: u32) -> *mut bw::AiRegion {
-    assert!(player < 8);
-    unsafe { *(AI_REGIONS.get()()).offset(player as isize) }
-}
-
-static mut PLAYER_AI: GlobalFunc<fn() -> *mut bw::PlayerAiData> = GlobalFunc(None);
-pub fn player_ai(player: u32) -> *mut bw::PlayerAiData {
-    assert!(player < 8);
-    unsafe { (PLAYER_AI.get()()).offset(player as isize) }
-}
-
 static mut FIRST_ACTIVE_UNIT: GlobalFunc<fn() -> *mut bw::Unit> = GlobalFunc(None);
 pub fn first_active_unit() -> *mut bw::Unit {
     unsafe { FIRST_ACTIVE_UNIT.0.map(|x| x()).unwrap_or(null_mut()) }
@@ -81,11 +69,6 @@ pub fn first_hidden_unit() -> *mut bw::Unit {
 static mut GET_REGION: GlobalFunc<fn(u32, u32) -> u32> = GlobalFunc(None);
 pub fn get_region(x: u32, y: u32) -> u32 {
     unsafe { GET_REGION.get()(x, y) }
-}
-
-static mut CHANGE_AI_REGION_STATE: GlobalFunc<fn(*mut bw::AiRegion, u32)> = GlobalFunc(None);
-pub fn change_ai_region_state(region: *mut bw::AiRegion, state: u32) {
-    unsafe { CHANGE_AI_REGION_STATE.get()(region, state) }
 }
 
 static mut ISSUE_ORDER: GlobalFunc<

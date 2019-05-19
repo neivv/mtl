@@ -7,22 +7,12 @@ use libc::c_void;
 
 use crate::samase;
 
-pub mod structs;
-
 use bw_dat::DatTable;
 
-pub use self::structs::*;
-
-pub mod scr {
-    pub use super::structs::scr::*;
-}
+pub use bw_dat::structs::*;
 
 pub fn game() -> *mut Game {
     samase::game()
-}
-
-pub fn frame_count() -> u32 {
-    unsafe { (*game()).frame_count }
 }
 
 pub fn units_dat() -> &'static [DatTable] {

@@ -3,9 +3,7 @@ use std::io::Error;
 use std::sync::Mutex;
 
 use byteorder::{ReadBytesExt, LE};
-use pcx;
 
-use crate::game::Game;
 use crate::samase;
 
 lazy_static! {
@@ -53,12 +51,12 @@ pub fn game_start_hook() {
     if colors.is_none() && minimap_colors.is_none() {
         return;
     }
-    let game = Game::get();
+    let game = crate::game::get();
     let chk_filename = unsafe {
-        if (*game.0).campaign_mission == 0 {
+        if (**game).campaign_mission == 0 {
             Cow::Borrowed("staredit\\scenario.chk")
         } else {
-            let bytes = &((*game.0).map_path)[..];
+            let bytes = &((**game).map_path)[..];
             // Get the null-terminated subslice
             let bytes = bytes.split(|&x| x == 0).next().unwrap();
             let map_path = match ::std::str::from_utf8(bytes) {
@@ -83,10 +81,10 @@ pub fn game_start_hook() {
     for (player, &color) in colr.iter().enumerate().take(12) {
         unsafe {
             if let Some(colors) = colors.as_ref().and_then(|x| x.get(color as usize)) {
-                (*game.0).player_color_palette[player].copy_from_slice(&colors.0)
+                (**game).player_color_palette[player].copy_from_slice(&colors.0)
             }
             if let Some(&color) = minimap_colors.as_ref().and_then(|x| x.get(color as usize)) {
-                (*game.0).player_minimap_color[player] = color;
+                (**game).player_minimap_color[player] = color;
             }
         }
     }
