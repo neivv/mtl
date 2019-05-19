@@ -228,11 +228,20 @@ unsafe fn fix_campaign_music(game: Game) {
             .map(|&x| u16::from(x))
             .find(|&first| first <= mission)
             .unwrap_or(0);
-        let song = (mission - starting_map) % 3;
-        let music_id = match (**game).player_race {
-            0 => 1 + song,
-            1 => 4 + song,
-            2 | _ => 7 + song,
+        let music_id = if is_scr() {
+            let song = (mission - starting_map) % 4;
+            match (**game).player_race {
+                0 => 1 + song,
+                1 => 5 + song,
+                2 | _ => 9 + song,
+            }
+        } else {
+            let song = (mission - starting_map) % 3;
+            match (**game).player_race {
+                0 => 1 + song,
+                1 => 4 + song,
+                2 | _ => 7 + song,
+            }
         };
         (**game).bgm_song = music_id;
     }
