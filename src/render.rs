@@ -37,6 +37,7 @@ fn sprite_to_unit(sprite: *mut bw::Sprite) -> Option<Unit> {
     let sprite_to_unit = sprite_to_unit_obj();
     let mut sprite_to_unit = sprite_to_unit.borrow_mut();
     if !sprite_to_unit.valid {
+        sprite_to_unit.valid = true;
         sprite_to_unit.map.clear();
         let mut first = !0;
         let mut last = 0;
@@ -77,7 +78,7 @@ fn sprite_to_unit(sprite: *mut bw::Sprite) -> Option<Unit> {
     } else {
         let index =
             (sprite as usize - sprite_to_unit.first as usize) / mem::size_of::<bw::Sprite>();
-        sprite_to_unit.map.get(index).and_then(|&x| Unit::from_ptr(x))
+        sprite_to_unit.map.get(index).and_then(|&x| unsafe { Unit::from_ptr(x) })
     }
 }
 

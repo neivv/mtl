@@ -64,7 +64,7 @@ enum SaveIdState {
 
 fn save_id_mapping() -> SaveIdMapping {
     SaveIdMapping {
-        next: Unit::from_ptr(samase::first_active_unit()),
+        next: unsafe { Unit::from_ptr(samase::first_active_unit()) },
         list: SaveIdState::ActiveUnits,
         id: 0,
         in_subunit: false,

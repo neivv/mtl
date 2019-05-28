@@ -6,7 +6,7 @@ use smallvec::SmallVec;
 use vec_map::VecMap;
 
 use bw_dat::{order, UnitId, UpgradeId, OrderId};
-use bw_dat::expr::{BoolExpr, IntExpr};
+use bw_dat::expr::{BoolExpr, IntExpr, IntExprTree};
 use bw_dat::{Game, Unit};
 
 use crate::config::Config;
@@ -82,7 +82,10 @@ impl UpgradeStateChanges {
                         // Add permament changes only if they don't use unit-specific data
                         if changes.condition.is_none() && state_reqs.is_empty() {
                             for &(stat, ref values) in &changes.changes {
-                                let eval = |i| eval_constant_int(&values[i]);
+                                let eval = |i| {
+                                    let expr: &IntExpr = &values[i];
+                                    eval_constant_int(expr.inner())
+                                };
                                 match stat {
                                     Stat::SetUnitId => {
                                         if let Some(value) = eval(0) {
@@ -202,8 +205,8 @@ impl Upgrades {
     }
 }
 
-fn eval_constant_int(expr: &IntExpr) -> Option<i32> {
-    use bw_dat::expr::IntExpr::*;
+fn eval_constant_int(expr: &IntExprTree<bw_dat::expr::NoCustom>) -> Option<i32> {
+    use bw_dat::expr::IntExprTree::*;
     Some(match expr {
         Add(x) => eval_constant_int(&x.0)?.saturating_add(eval_constant_int(&x.1)?),
         Sub(x) => eval_constant_int(&x.0)?.saturating_sub(eval_constant_int(&x.1)?),
@@ -211,7 +214,7 @@ fn eval_constant_int(expr: &IntExpr) -> Option<i32> {
         Div(x) => eval_constant_int(&x.0)? / (eval_constant_int(&x.1)?),
         Modulo(x) => eval_constant_int(&x.0)? % (eval_constant_int(&x.1)?),
         Integer(i) => *i,
-        Func(_) => return None,
+        Func(_) | Custom(_) => return None,
     })
 }
 
