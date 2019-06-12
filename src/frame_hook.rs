@@ -273,7 +273,7 @@ unsafe fn timer_override(
 pub unsafe fn check_fow_sprite_creation_desync(
     unit_id: u32,
     base: *mut c_void,
-    orig: &Fn(u32, *mut c_void) -> *mut c_void,
+    orig: &dyn Fn(u32, *mut c_void) -> *mut c_void,
 ) -> *mut c_void {
     let old_seed = crate::samase::rng_seed();
     let result = orig(unit_id, base);
