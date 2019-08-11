@@ -143,7 +143,7 @@ pub fn read_file(name: &str) -> Option<SamaseBox> {
 pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
     crate::init();
 
-    let required_version = 13;
+    let required_version = 17;
     if (*api).version < required_version {
         fatal(&format!(
             "Newer samase is required. (Plugin API version {}, this plugin requires version {})",
@@ -209,37 +209,87 @@ pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
     if crate::is_scr() {
         ((*api).hook_renderer)(0, mem::transmute(render_scr::draw_hook as usize));
     }
+
+    if let Some(campaign) = config::campaign() {
+        let ok = ((*api).set_campaigns)(campaign.campaigns.as_ptr() as *const *mut c_void);
+        if ok == 0 {
+            ((*api).warn_unsupported_feature)(b"Campaigns\0".as_ptr());
+        }
+        // Ignore failure, used for campaign briefing races which shouldn't be critical
+        ((*api).hook_run_dialog)(crate::campaign_hook::run_dialog_hook);
+    }
 }
 
 pub unsafe extern fn init_config(exit_on_error: bool) {
-    let config = loop {
-        let config_slice = match read_file("samase/mtl.ini") {
-            Some(s) => s,
-            None => {
-                let msg = "Configuration file samase/mtl.ini not found.";
-                windows::message_box("Mtl", msg);
-                if exit_on_error {
-                    TerminateProcess(GetCurrentProcess(), 0x42302aef);
-                }
-                continue;
+    loop {
+        match read_config() {
+            Ok(o) => {
+                config::set_config(o);
+                break;
             }
-        };
-        match config::read_config(&config_slice) {
-            Ok(o) => break o,
-            Err(e) => {
-                use std::fmt::Write;
-                let mut msg = String::new();
-                for c in e.iter_chain() {
-                    writeln!(msg, "{}", c).unwrap();
-                }
-                let msg = format!("Unable to read config:\n{}", msg);
+            Err(msg) => {
                 windows::message_box("Mtl", &msg);
                 if exit_on_error {
-                    windows::message_box("Mtl", &msg);
                     TerminateProcess(GetCurrentProcess(), 0x42302aef);
                 }
             }
         }
+    }
+    // Only load campaigns on init as they can't be patched afterwards (ithink?)
+    if exit_on_error {
+        loop {
+            match read_campaign_ini() {
+                Ok(o) => {
+                    if let Some(campaign) = o {
+                        config::set_campaign_ini(campaign);
+                    }
+                    break;
+                }
+                Err(msg) => {
+                    windows::message_box("Mtl", &msg);
+                    if exit_on_error {
+                        TerminateProcess(GetCurrentProcess(), 0x42302aef);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn read_config() -> Result<config::Config, String> {
+    let config_slice = match read_file("samase/mtl.ini") {
+        Some(s) => s,
+        None => return Err(format!("Configuration file samase/mtl.ini not found.")),
     };
-    config::set_config(config);
+    match config::read_config(&config_slice) {
+        Ok(o) => Ok(o),
+        Err(e) => {
+            use std::fmt::Write;
+            let mut msg = String::new();
+            for c in e.iter_chain() {
+                writeln!(msg, "{}", c).unwrap();
+            }
+            let msg = format!("Unable to read config:\n{}", msg);
+            Err(msg)
+        }
+    }
+}
+
+fn read_campaign_ini() -> Result<Option<config::Campaign>, String> {
+    let config_slice = match read_file("samase/mtl_campaign.ini") {
+        Some(s) => s,
+        None => return Ok(None),
+    };
+    match config::read_campaign(&config_slice) {
+        Ok(o) => Ok(Some(o)),
+        Err(e) => {
+            use std::fmt::Write;
+            let mut msg = String::new();
+            for c in e.iter_chain() {
+                writeln!(msg, "{}", c).unwrap();
+            }
+            let msg = format!("Unable to read campaign ini:\n{}", msg);
+            Err(msg)
+        }
+    }
 }

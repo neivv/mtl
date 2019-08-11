@@ -15,6 +15,7 @@ pub mod samase;
 #[macro_use] mod macros;
 
 mod bw;
+mod campaign_hook;
 mod config;
 mod frame_hook;
 mod game;

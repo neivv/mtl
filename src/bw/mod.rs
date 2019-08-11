@@ -11,6 +11,15 @@ use bw_dat::DatTable;
 
 pub use bw_dat::structs::*;
 
+#[repr(C)]
+pub struct CampaignMission {
+    pub name_index: u16,
+    pub campaign_mission: u16,
+    pub cinematic: u16,
+    pub race: u8,
+    pub hidden: u8,
+}
+
 pub fn game() -> *mut Game {
     samase::game()
 }

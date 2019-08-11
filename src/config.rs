@@ -6,6 +6,8 @@ use smallvec::SmallVec;
 use bw_dat::{UnitId, OrderId};
 use bw_dat::expr::{IntExpr, BoolExpr};
 use failure::{Context, Error, ResultExt};
+
+use crate::bw;
 use crate::ini::Ini;
 use crate::upgrades::{Upgrades, Upgrade, UpgradeChanges, State, Stat};
 
@@ -65,8 +67,17 @@ impl Config {
     }
 }
 
+pub struct Campaign {
+    // No cleanup code for these, but no way to load them after game init either atm.
+    pub campaigns: [*mut bw::CampaignMission; 6],
+}
+
+unsafe impl Sync for Campaign {}
+unsafe impl Send for Campaign {}
+
 lazy_static! {
     static ref CONFIG: Mutex<Option<Arc<Config>>> = Mutex::new(None);
+    static ref CAMPAIGN: Mutex<Option<Arc<Campaign>>> = Mutex::new(None);
 }
 
 fn bool_field(out: &mut bool, value: &str, field: &'static str) -> Result<(), Error> {
@@ -110,6 +121,15 @@ fn parse_u8(value: &str) -> Result<u8, Error> {
     } else {
         u8::from_str_radix(value, 10)?
     })
+}
+
+fn parse_race(value: &str) -> Result<u8, Error> {
+    match value {
+        "zerg" => Ok(0),
+        "terran" => Ok(1),
+        "protoss" => Ok(2),
+        _ => parse_u8(value),
+    }
 }
 
 fn parse_u8_list<'a>(values: &'a str) -> impl Iterator<Item=Result<u8, Error>> + 'a {
@@ -426,12 +446,113 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
     })
 }
 
+pub fn read_campaign(mut data: &[u8]) -> Result<Campaign, Error> {
+    // Sections [zerg, terran, protoss, expzerg, expterran, expprotoss]
+    // Each section has lines (ordering matters), in form one of
+    // - map = name, mapid, race
+    // - hidden = name, mapid, race
+    // - cinematic = name, mapid, cinematic
+    let ini = Ini::open(&mut data)
+        .map_err(|e| e.context("Unable to read ini"))?;
+    let mut result = (0..6).map(|_| {
+        vec![bw::CampaignMission {
+            name_index: 1,
+            campaign_mission: 1,
+            cinematic: 0,
+            race: 1,
+            hidden: 0,
+        }, bw::CampaignMission {
+            name_index: 0,
+            campaign_mission: 0,
+            cinematic: 0,
+            race: 0,
+            hidden: 0,
+        }]
+    }).collect::<Vec<Vec<bw::CampaignMission>>>();
+
+    for section in &ini.sections {
+        let index = match &*section.name {
+            "zerg" => 0,
+            "terran" => 1,
+            "protoss" => 2,
+            "expzerg" => 3,
+            "expterran" => 4,
+            "expprotoss" => 5,
+            name => return Err(format_err!("Invalid campaign name {}", name)),
+        };
+        let mut missions = Vec::with_capacity(10);
+        for &(ref key, ref val) in &section.values {
+            let mut tokens = val.split(",").map(|x| x.trim());
+            let generic_error = || {
+                format_err!("Invalid setting format '{} = {}'", key, val)
+            };
+            match &**key {
+                "map" | "hidden" => {
+                    let name = tokens.next().ok_or_else(generic_error)?;
+                    let map = tokens.next().ok_or_else(generic_error)?;
+                    let race = tokens.next().ok_or_else(generic_error)?;
+                    let name = parse_u16(name).context("Name")?;
+                    let map = parse_u16(map).context("Map")?;
+                    let race = parse_race(race).context("Race")?;
+                    missions.push(bw::CampaignMission {
+                        name_index: name,
+                        campaign_mission: map,
+                        cinematic: 0,
+                        race,
+                        hidden: if key == "hidden" { 1 } else { 0 },
+                    });
+                }
+                "cinematic" | "hidden_cinematic" => {
+                    let name = tokens.next().ok_or_else(generic_error)?;
+                    let map = tokens.next().ok_or_else(generic_error)?;
+                    let cinematic = tokens.next().ok_or_else(generic_error)?;
+                    let name = parse_u16(name).context("Name")?;
+                    let map = parse_u16(map).context("Map")?;
+                    let cinematic = parse_u16(cinematic).context("Cinematic")?;
+                    missions.push(bw::CampaignMission {
+                        name_index: name,
+                        campaign_mission: map,
+                        cinematic,
+                        race: 0,
+                        hidden: if key == "hidden_cinematic" { 1 } else { 0 },
+                    });
+                }
+                x => return Err(Context::new(format!("unknown campaign setting {}", x)).into()),
+            }
+        }
+        missions.push(bw::CampaignMission {
+            name_index: 0,
+            campaign_mission: 0,
+            cinematic: 0,
+            race: 0,
+            hidden: 0,
+        });
+        result[index] = missions;
+    }
+    let mut campaigns = [std::ptr::null_mut(); 6];
+    for (i, mut vec) in result.into_iter().enumerate() {
+        campaigns[i] = vec.as_mut_ptr();
+        std::mem::forget(vec);
+    }
+    Ok(Campaign {
+        campaigns,
+    })
+}
+
 pub fn set_config(config: Config) {
     *CONFIG.lock().unwrap() = Some(Arc::new(config));
 }
 
+pub fn set_campaign_ini(campaign: Campaign) {
+    *CAMPAIGN.lock().unwrap() = Some(Arc::new(campaign));
+}
+
 pub fn config() -> Arc<Config> {
     CONFIG.lock().unwrap().as_ref().unwrap().clone()
+}
+
+pub fn campaign() -> Option<Arc<Campaign>> {
+    CAMPAIGN.lock().unwrap().clone()
 }
 
 #[test]
