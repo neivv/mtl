@@ -22,13 +22,23 @@ impl<T: Copy> GlobalFunc<T> {
         self.0.unwrap()
     }
 
-    fn init(&mut self, val: Option<*mut c_void>, desc: &str) {
-        let val = val.unwrap_or_else(|| fatal(&format!("Can't get {}", desc)));
+    fn try_init(&mut self, val: Option<*mut c_void>) -> bool {
+        let val = match val {
+            Some(s) => s,
+            None => return false,
+        };
         unsafe {
-            assert_eq!(mem::size_of::<T>(), 4);
-            let mut typecast_hack: T = mem::uninitialized();
-            *(&mut typecast_hack as *mut T as *mut *mut c_void) = val;
-            self.0 = Some(typecast_hack);
+            assert_eq!(mem::size_of::<T>(), mem::size_of::<*mut c_void>());
+            let mut typecast_hack: mem::MaybeUninit<T> = mem::MaybeUninit::uninit();
+            *(typecast_hack.as_mut_ptr() as *mut *mut c_void) = val;
+            self.0 = Some(typecast_hack.assume_init());
+        }
+        true
+    }
+
+    fn init(&mut self, val: Option<*mut c_void>, desc: &str) {
+        if !self.try_init(val) {
+            fatal(&format!("Can't get {}", desc));
         }
     }
 }
