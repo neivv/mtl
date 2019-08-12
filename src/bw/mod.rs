@@ -1,14 +1,14 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 
-use std::slice;
 use std::ptr::null_mut;
+use std::slice;
 
 use libc::c_void;
 
 use crate::samase;
 
-use bw_dat::DatTable;
+use bw_dat::{DatTable, UnitArray, UnitId, OrderId};
 
 pub use bw_dat::structs::*;
 
@@ -181,4 +181,20 @@ pub fn players() -> *mut Player {
 
 pub fn pathing() -> *mut Pathing {
     unsafe { samase::pathing() }
+}
+pub fn unit_array() -> UnitArray {
+    unsafe {
+        let (ptr, len) = samase::unit_array();
+        UnitArray::new(ptr, len)
+    }
+}
+
+pub unsafe fn issue_order(
+    unit: *mut Unit,
+    order: OrderId,
+    pos: Point,
+    target: *mut Unit,
+    fow_unit: UnitId,
+) {
+    samase::issue_order(unit, order, pos.x as u32, pos.y as u32, target, fow_unit)
 }

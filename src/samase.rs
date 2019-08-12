@@ -118,6 +118,14 @@ pub unsafe fn pathing() -> *mut bw::Pathing {
     PATHING.get()()
 }
 
+static mut UNIT_ARRAY_LEN: GlobalFunc<fn(*mut *mut bw::Unit, *mut usize)> = GlobalFunc(None);
+pub unsafe fn unit_array() -> (*mut bw::Unit, usize) {
+    let mut size = 0usize;
+    let mut ptr = null_mut();
+    UNIT_ARRAY_LEN.get()(&mut ptr, &mut size);
+    (ptr, size)
+}
+
 static mut GET_REGION: GlobalFunc<fn(u32, u32) -> u32> = GlobalFunc(None);
 pub fn get_region(x: u32, y: u32) -> u32 {
     unsafe { GET_REGION.get()(x, y) }
@@ -216,7 +224,7 @@ pub fn read_file(name: &str) -> Option<SamaseBox> {
 pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
     crate::init();
 
-    let required_version = 18;
+    let required_version = 20;
     if (*api).version < required_version {
         fatal(&format!(
             "Newer samase is required. (Plugin API version {}, this plugin requires version {})",
@@ -247,27 +255,29 @@ pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
     bw_dat::init_orders(orders_dat());
     init_config(true);
     //((*api).hook_on_first_file_access)(init_config);
-    let config = config::config();
+    //let config = config::config();
     let result = ((*api).hook_step_objects)(crate::frame_hook::frame_hook, 0);
     if result == 0 {
         fatal("Couldn't hook step_objects");
     }
-    if config.requires_order_hook() {
-        ISSUE_ORDER.init(((*api).issue_order)().map(|x| mem::transmute(x)), "issue_order");
-        let result = ((*api).hook_step_order)(crate::order_hook::order_hook);
-        if result == 0 {
-            fatal("Couldn't hook step_order");
-        }
-        let result = ((*api).hook_step_order_hidden)(crate::order_hook::hidden_order_hook);
-        if result == 0 {
-            fatal("Couldn't hook step_order_hidden");
-        }
+
+    ISSUE_ORDER.init(((*api).issue_order)().map(|x| mem::transmute(x)), "issue_order");
+    let result = ((*api).hook_step_order)(crate::order_hook::order_hook);
+    if result == 0 {
+        fatal("Couldn't hook step_order");
     }
-    if config.requires_secondary_order_hook() {
-        let result = ((*api).hook_step_secondary_order)(crate::order_hook::secondary_order_hook);
-        if result == 0 {
-            fatal("Couldn't hook step_secondary_order");
-        }
+    let result = ((*api).hook_step_order_hidden)(crate::order_hook::hidden_order_hook);
+    if result == 0 {
+        fatal("Couldn't hook step_order_hidden");
+    }
+
+    let result = ((*api).hook_step_secondary_order)(crate::order_hook::secondary_order_hook);
+    if result == 0 {
+        fatal("Couldn't hook step_secondary_order");
+    }
+    let result = ((*api).hook_step_secondary_order)(crate::order_hook::secondary_order_hook);
+    if result == 0 {
+        fatal("Couldn't hook step_secondary_order");
     }
     let result = ((*api).extend_save)("mtl\0".as_ptr(), Some(crate::save), Some(crate::load), crate::init_game);
     if result == 0 {
@@ -282,6 +292,7 @@ pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
     STEP_ISCRIPT_FRAME.0 = Some(mem::transmute(((*api).step_iscript)()));
     PLAYERS.0 = Some(mem::transmute(((*api).players)()));
     PATHING.0 = Some(mem::transmute(((*api).pathing)()));
+    UNIT_ARRAY_LEN.0 = Some(mem::transmute(((*api).unit_array_len)()));
     if let Some(tunit) = read_file("game\\tunit.pcx") {
         if let Err(e) = crate::unit_pcolor_fix::init_unit_colors(&tunit) {
             fatal(&format!("Invalid game\\tunit.pcx: {}", e));

@@ -5,9 +5,9 @@ use std::sync::{Mutex, MutexGuard};
 use libc::c_void;
 
 use bw_dat::unit as unit_id;
-use bw_dat::{Game, Unit, UpgradeId, SpriteId, order, upgrade, WeaponId};
+use bw_dat::{Game, Unit, UpgradeId, SpriteId, order, upgrade, WeaponId, UnitArray};
 use crate::bw;
-use crate::config::{config, Config};
+use crate::config::{config, Config, RallyOrder, OrderOrRclick};
 use crate::upgrades;
 use crate::unit_search::UnitSearch;
 use crate::unit::{self, UnitExt};
@@ -70,6 +70,7 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
     let mut unload_check = false;
     let mut mining_override = None;
     let mut upgrade_check = None;
+    let mut rally_check = None;
     let ground_cooldown_check = (**unit).ground_cooldown == 0;
     let air_cooldown_check = (**unit).air_cooldown == 0;
 
@@ -176,6 +177,13 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
                 return;
             }
         }
+        ZERG_BIRTH => {
+            if !unit.is_completed() {
+                if let Some(parent) = unit.related() {
+                    rally_check = RallyCheck::new(unit, parent);
+                }
+            }
+        }
         _ => (),
     }
     if return_cargo_order {
@@ -244,6 +252,10 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
             upgrades.upgrade_gained(&config, game, unit.player(), upgrade, level);
         }
     }
+    if let Some(rally) = rally_check {
+        let units = &bw::unit_array();
+        rally.rally_if_completed(game, units, &config);
+    }
 }
 
 pub unsafe extern fn hidden_order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_void)) {
@@ -260,6 +272,7 @@ pub unsafe extern fn secondary_order_hook(u: *mut c_void, orig: unsafe extern fn
     let mut creep_spread_time = None;
     let mut larva_spawn_time = None;
     let mut zerg_group_flags = None;
+    let mut rally_check = None;
     match unit.secondary_order() {
         TRAIN => {
             if config.zerg_building_training {
@@ -268,6 +281,9 @@ pub unsafe extern fn secondary_order_hook(u: *mut c_void, orig: unsafe extern fn
                 let orig_flags = *group_flags;
                 *group_flags &= !0x1;
                 zerg_group_flags = Some((group_flags, orig_flags));
+            }
+            if let Some(child) = unit.currently_building() {
+                rally_check = RallyCheck::new(child, unit);
             }
         }
         SPREAD_CREEP => {
@@ -320,6 +336,88 @@ pub unsafe extern fn secondary_order_hook(u: *mut c_void, orig: unsafe extern fn
     if let Some((out, orig)) = zerg_group_flags {
         *out = orig;
     }
+    if let Some(rally) = rally_check {
+        let units = &bw::unit_array();
+        let game = crate::game::get();
+        rally.rally_if_completed(game, units, &config);
+    }
+}
+
+struct RallyCheck {
+    unit: Unit,
+    /// Second active unit after dual birth is the dual birth copy
+    /// (New active units are not inserted first, but second)
+    /// This is the second active unit *before* dual birth, if it
+    /// has changed during the order, then the second active unit
+    /// is a new unit that needs to be rallied.
+    dual_birth_active1: Option<Unit>,
+    rally: UnitOrPoint,
+}
+
+impl RallyCheck {
+    /// Returns None if the parent has no rally point set
+    pub fn new(unit: Unit, parent: Unit) -> Option<RallyCheck> {
+        let rally_unit = unsafe {
+            Unit::from_ptr(*((**parent).rally_pylon.as_ptr().add(4) as *mut *mut bw::Unit))
+        };
+        let rally_point = unsafe {
+            *((**parent).rally_pylon.as_ptr() as *mut bw::Point)
+        };
+        if rally_unit == Some(parent) || rally_point.x == 0 {
+            // Rally not set
+            return None;
+        }
+        let rally = match rally_unit {
+            Some(s) => UnitOrPoint::Unit(s),
+            None => UnitOrPoint::Point(rally_point),
+        };
+        let dual_birth_active1 = unit::active_units().nth(1);
+        Some(RallyCheck {
+            unit,
+            dual_birth_active1,
+            rally,
+        })
+    }
+
+    pub fn rally_if_completed(&self, game: Game, units: &UnitArray, config: &Config) {
+        if !self.unit.is_completed() {
+            return;
+        }
+        let rally_order = match config.rally_order(self.unit.id()) {
+            Some(s) => s,
+            // Use BW default
+            None => return,
+        };
+        self.rally(game, units, self.unit, &rally_order);
+        if self.unit.id().flags() & 0x400 != 0 {
+            let other = unit::active_units().nth(1);
+            if self.dual_birth_active1.is_none() || self.dual_birth_active1 != other {
+                if let Some(other) = other {
+                    self.rally(game, units, other, &rally_order);
+                }
+            }
+        }
+    }
+
+    fn rally(&self, game: Game, units: &UnitArray, unit: Unit, order: &RallyOrder) {
+        match self.rally {
+            UnitOrPoint::Unit(target) => {
+                let order = match order.unit {
+                    OrderOrRclick::Rclick => unit.rclick_order(game, units, target),
+                    OrderOrRclick::Order(o) => o,
+                };
+                unit.issue_order_unit(order, target);
+            }
+            UnitOrPoint::Point(point) => {
+                unit.issue_order_ground(order.ground, point);
+            }
+        }
+    }
+}
+
+enum UnitOrPoint {
+    Unit(Unit),
+    Point(bw::Point),
 }
 
 unsafe fn order_bunker_guard(

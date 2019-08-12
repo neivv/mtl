@@ -42,31 +42,32 @@ pub struct Config {
     pub return_cargo_softcode: bool,
     pub zerg_building_training: bool,
     pub bunker_units: Vec<(UnitId, SpriteId, u8)>,
+    rallies: Rallies,
+}
+
+struct Rallies {
+    default_order: Option<RallyOrder>,
+    /// Contains indices to highest unit id with non-default rally order.
+    unit_orders: Vec<Option<RallyOrder>>,
+}
+
+#[derive(Eq, Copy, Clone, PartialEq, Debug)]
+pub struct RallyOrder {
+    pub ground: OrderId,
+    pub unit: OrderOrRclick,
+}
+
+#[derive(Eq, Copy, Clone, PartialEq, Debug)]
+pub enum OrderOrRclick {
+    Rclick,
+    Order(OrderId),
 }
 
 impl Config {
-    pub fn requires_order_hook(&self) -> bool {
-        let Config {
-            timers: _,
-            supplies: _,
-            return_cargo_softcode,
-            zerg_building_training: _,
-            ref upgrades,
-            ref bunker_units,
-        } = *self;
-        return_cargo_softcode || !upgrades.upgrades.is_empty() || !bunker_units.is_empty()
-    }
-
-    pub fn requires_secondary_order_hook(&self) -> bool {
-        let Config {
-            timers: _,
-            supplies: _,
-            return_cargo_softcode: _,
-            bunker_units: _,
-            zerg_building_training,
-            ref upgrades,
-        } = *self;
-        zerg_building_training || !upgrades.upgrades.is_empty()
+    pub fn rally_order(&self, unit: UnitId) -> Option<RallyOrder> {
+        self.rallies.unit_orders.get(unit.0 as usize).cloned()
+            .flatten()
+            .or_else(|| self.rallies.default_order)
     }
 }
 
@@ -263,6 +264,42 @@ fn parse_int_expr_tuple(expr: &str, count: u8) -> Result<Vec<IntExpr>, Error> {
     Ok(result)
 }
 
+fn parse_rally_order(val: &str) -> Result<RallyOrder, Error> {
+    // Accept in form 'ground:{id}, unit:{id}', unit id can be also 'rclick'
+    let val = val.trim();
+    let error = || {
+        format_err!("Rally must be in format 'ground:<ID>, unit:<ID|rclick>', received '{}'", val)
+    };
+    let val = skip_str(val, "ground:")
+        .ok_or_else(error)?;
+    let comma_pos = val.find(",")
+        .ok_or_else(error)?;
+    let order_id = (&val[..comma_pos]).trim();
+    let ground = OrderId(parse_u8(order_id).map_err(|_| error())?);
+    let val = (&val[comma_pos + 1..]).trim_start();
+    let val = skip_str(val, "unit:")
+        .ok_or_else(error)?
+        .trim();
+    let unit = if val == "rclick" {
+        OrderOrRclick::Rclick
+    } else {
+        let order = OrderId(parse_u8(val).map_err(|_| error())?);
+        OrderOrRclick::Order(order)
+    };
+    Ok(RallyOrder {
+        ground,
+        unit,
+    })
+}
+
+fn skip_str<'a>(val: &'a str, to_skip: &str) -> Option<&'a str> {
+    if val.starts_with(to_skip) {
+        Some(&val[to_skip.len()..])
+    } else {
+        None
+    }
+}
+
 pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
     let error_invalid_field = |name: &'static str, val: &str| {
         format_err!("Invalid field {} = {}", name, val)
@@ -276,6 +313,11 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
     let mut supplies: Supplies = Default::default();
     let mut upgrades: BTreeMap<u8, BTreeMap<Vec<State>, Vec<UpgradeChanges>>> = BTreeMap::new();
     let mut bunker_units = Vec::new();
+    let mut rallies = Rallies {
+        default_order: None,
+        unit_orders: Vec::new(),
+    };
+
     for section in &ini.sections {
         let name = &section.name;
         if name == "timers" {
@@ -347,6 +389,23 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
                         let directions = tokens.next().and_then(|x| parse_u8(x).ok())
                             .ok_or_else(|| error_invalid_field("orders.bunker_unit", val))?;
                         bunker_units.push((UnitId(unit_id), SpriteId(sprite_id), directions));
+                    }
+                    x => return Err(Context::new(format!("unknown key {}", x)).into()),
+                }
+            }
+        } else if name == "rally" {
+            for &(ref key, ref val) in &section.values {
+                match &**key {
+                    "default_order" => {
+                        rallies.default_order = Some(parse_rally_order(val)?);
+                    }
+                    x if x.starts_with("unit.") => {
+                        let unit_id = parse_u16(&x[5..]).ok()
+                            .ok_or_else(|| format_err!("Invalid unit id in '{}'", x))? as usize;
+                        if rallies.unit_orders.len() <= unit_id {
+                            rallies.unit_orders.resize(unit_id + 1, None);
+                        }
+                        rallies.unit_orders[unit_id] = Some(parse_rally_order(val)?);
                     }
                     x => return Err(Context::new(format!("unknown key {}", x)).into()),
                 }
@@ -458,6 +517,7 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
         zerg_building_training,
         upgrades,
         bunker_units,
+        rallies,
     })
 }
 
@@ -578,6 +638,18 @@ fn test_parse_states() {
         State::Order(vec![OrderId(4), OrderId(5), OrderId(0x40)].into())
     );
     assert_eq!(parse_state("animation(4, 0x5)").unwrap(), State::IscriptAnim(vec![4, 5].into()));
+}
+
+#[test]
+fn test_parse_rally_order() {
+    assert_eq!(parse_rally_order("ground:4,unit:0x7").unwrap(), RallyOrder {
+        ground: OrderId(4),
+        unit: OrderOrRclick::Order(OrderId(7)),
+    });
+    assert_eq!(parse_rally_order("ground:0x40, unit:rclick").unwrap(), RallyOrder {
+        ground: OrderId(0x40),
+        unit: OrderOrRclick::Rclick,
+    });
 }
 
 #[test]

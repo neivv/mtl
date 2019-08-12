@@ -4,7 +4,7 @@ use std::hash::{Hash, Hasher};
 use std::ptr::null_mut;
 
 use byteorder::{WriteBytesExt, LE};
-use bw_dat::{self, UnitId, Unit};
+use bw_dat::{self, Game, UnitId, Unit, UnitArray, unit, OrderId, order};
 use serde::{Serializer, Serialize, Deserializer, Deserialize};
 
 use crate::bw;
@@ -129,6 +129,13 @@ pub trait UnitExt {
     fn set_unit_id(self, new: UnitId);
     fn sprite(self) -> Option<*mut bw::Sprite>;
     fn set_resource_amount(self, value: u16);
+    fn issue_order(self, order: OrderId, pos: bw::Point, unit: Option<Unit>);
+    fn issue_order_ground(self, order: OrderId, target: bw::Point);
+    fn issue_order_unit(self, order: OrderId, target: Unit);
+    fn can_issue_order(self, order: OrderId) -> bool;
+    fn rclick_order(self, game: Game, units: &UnitArray, target: Unit) -> OrderId;
+    fn can_be_infested(self) -> bool;
+    fn can_harvest_gas_from(self, target: Unit) -> bool;
 }
 
 impl UnitExt for Unit {
@@ -176,6 +183,176 @@ impl UnitExt for Unit {
 
     fn set_resource_amount(self, value: u16) {
         unsafe { (&mut (**self).unit_specific2[0..]).write_u16::<LE>(value).unwrap() }
+    }
+
+    fn issue_order(self, order: OrderId, pos: bw::Point, unit: Option<Unit>) {
+        if self.can_issue_order(order) {
+            let unit_ptr = unit.map(|x| *x).unwrap_or(null_mut());
+            unsafe { bw::issue_order(*self, order, pos, unit_ptr, unit::NONE) }
+        }
+    }
+
+    fn issue_order_ground(self, order: OrderId, target: bw::Point) {
+        self.issue_order(order, target, None)
+    }
+
+    fn issue_order_unit(self, order: OrderId, target: Unit) {
+        self.issue_order(order, target.position(), Some(target));
+    }
+
+    fn can_issue_order(self, order: OrderId) -> bool {
+        // This is checked by targeted command/rclick/etc command handlers, but bw accepts
+        // it otherwise, but doesn't clear related unit, so things would end up buggy.
+        if self.id() == unit::SCV && self.order() == bw_dat::order::CONSTRUCTING_BUILDING {
+            return order == bw_dat::order::STOP;
+        }
+        // Technically should also check datreqs, oh well
+        self.is_completed() && !self.is_disabled()
+    }
+
+    fn rclick_order(self, game: Game, units: &UnitArray, target: Unit) -> OrderId {
+        if self.is_landed_building() {
+            return order::NOTHING;
+        }
+        let unit_id = self.id();
+        let action = if unit_id == unit::LURKER && self.is_burrowed() {
+            3
+        } else {
+            unit_id.rclick_action()
+        };
+        let normal_rclick_order = || -> OrderId {
+            if target.id().is_beacon() || target.id().is_powerup() {
+                order::MOVE
+            } else if self.is_enemy(game, target) {
+                order::ATTACK
+            } else if target.can_load_unit(game, units, self) {
+                order::ENTER_TRANSPORT
+            } else if target.is_burrowed() {
+                order::MOVE
+            } else {
+                order::FOLLOW
+            }
+        };
+        let worker_rclick_order = || -> Option<OrderId> {
+            let target_mineral = match target.id() {
+                unit::MINERAL_FIELD_1 | unit::MINERAL_FIELD_2 | unit::MINERAL_FIELD_3 => true,
+                _ => false,
+            };
+            if target.id().is_powerup() {
+                Some(order::MOVE)
+            } else if target_mineral {
+                if self.is_carrying_powerup() {
+                    Some(order::MOVE)
+                } else {
+                    Some(order::HARVEST_MINERALS_MOVE)
+                }
+            } else if {
+                self.can_harvest_gas_from(target) || target.id() == unit::VESPENE_GEYSER
+            } {
+                if self.is_carrying_powerup() {
+                    Some(order::MOVE)
+                } else {
+                    Some(order::HARVEST_GAS_MOVE)
+                }
+            } else if target.id().is_town_hall() && target.player() == self.player() {
+                if self.is_carrying_minerals() {
+                    Some(order::RETURN_MINERALS)
+                } else if self.is_carrying_gas() {
+                    Some(order::RETURN_GAS)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+        match action {
+            0 => order::NOTHING,
+            1 => normal_rclick_order(),
+            2 => {
+                if self.can_load_unit(game, units, target) {
+                    order::LOAD_UNIT_TRANSPORT
+                } else if target.can_load_unit(game, units, self) {
+                    order::ENTER_TRANSPORT
+                } else if target.is_burrowed() {
+                    order::MOVE
+                } else {
+                    let is_queen = unit_id == unit::QUEEN || unit_id == unit::MATRIARCH;
+                    if is_queen && !target.is_invincible() && target.can_be_infested() {
+                        order::INFEST
+                    } else if unit_id == unit::MEDIC {
+                        order::MEDIC_MOVE
+                    } else {
+                        order::FOLLOW
+                    }
+                }
+            }
+            3 => {
+                let not_enemy = target.id().is_beacon() ||
+                    target.id().is_powerup() ||
+                    !self.is_enemy(game, target);
+                if not_enemy {
+                    unit_id.return_to_idle_order()
+                } else {
+                    order::ATTACK
+                }
+            }
+            4 => {
+                worker_rclick_order().unwrap_or_else(|| normal_rclick_order())
+            }
+            5 => {
+                worker_rclick_order().unwrap_or_else(|| {
+                    if self.is_enemy(game, target) {
+                        return normal_rclick_order();
+                    }
+                    if target.is_landed_building() && !target.is_completed() {
+                        let can_continue = target.player() == self.player() &&
+                            target.id().races() == unit_id.races() &&
+                            target.related().filter(|&u| u != self).is_none();
+                        if can_continue {
+                            order::CONSTRUCTING_BUILDING
+                        } else {
+                            normal_rclick_order()
+                        }
+                    } else if {
+                        !target.id().is_building() && target.can_load_unit(game, units, self)
+                    } {
+                        // Non-bunker transports
+                        order::ENTER_TRANSPORT
+                    } else if {
+                        target.id().races() == unit_id.races() &&
+                            target.id().is_mechanical() &&
+                            target.id().hitpoints() != target.hitpoints()
+                    } {
+                        order::REPAIR
+                    } else if target.can_load_unit(game, units, self) {
+                        // Full hp bunker practically
+                        order::ENTER_TRANSPORT
+                    } else {
+                        normal_rclick_order()
+                    }
+                })
+            }
+            _ => order::NOTHING,
+        }
+    }
+
+    fn can_be_infested(self) -> bool {
+        let hp_ok = Some(())
+            .and_then(|()| {
+                let max_hp = self.id().hitpoints() / 256;
+                let current_hp = self.hitpoints().checked_add(255)? / 256;
+                let percent = current_hp.checked_mul(100)?.checked_div(max_hp)?;
+                Some(percent < 50)
+            })
+            .unwrap_or(true);
+        self.is_completed() && self.id() == unit::COMMAND_CENTER && hp_ok
+    }
+
+    fn can_harvest_gas_from(self, target: Unit) -> bool {
+        self.player() == target.player() &&
+            target.is_completed() &&
+            target.id().is_gas_building()
     }
 }
 
