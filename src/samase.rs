@@ -75,6 +75,48 @@ pub fn first_hidden_unit() -> *mut bw::Unit {
     unsafe { FIRST_HIDDEN_UNIT.0.map(|x| x()).unwrap_or(null_mut()) }
 }
 
+static mut AI_UPDATE_ATTACK_TARGET:
+    GlobalFunc<fn(*mut bw::Unit, u32, u32, u32) -> u32> = GlobalFunc(None);
+pub unsafe fn ai_update_attack_target(unit: *mut bw::Unit, a1: u32, a2: u32, a3: u32) -> u32 {
+    AI_UPDATE_ATTACK_TARGET.get()(unit, a1, a2, a3)
+}
+
+static mut UPDATE_VISIBILITY_POINT: GlobalFunc<fn(*mut bw::LoneSprite)> = GlobalFunc(None);
+pub unsafe fn update_visibility_point(sprite: *mut bw::LoneSprite) {
+    UPDATE_VISIBILITY_POINT.get()(sprite)
+}
+
+static mut CREATE_LONE_SPRITE:
+    GlobalFunc<fn(u32, i32, i32, u32) -> *mut bw::LoneSprite> = GlobalFunc(None);
+pub unsafe fn create_lone_sprite(id: u32, x: i32, y: i32, player: u32) -> *mut bw::LoneSprite {
+    CREATE_LONE_SPRITE.get()(id, x, y, player)
+}
+
+static mut GET_ISCRIPT_BIN: GlobalFunc<fn() -> *const u8> = GlobalFunc(None);
+pub unsafe fn get_iscript_bin() -> *const u8 {
+    GET_ISCRIPT_BIN.get()()
+}
+
+static mut STEP_ISCRIPT_FRAME:
+    GlobalFunc<fn(*mut bw::Image, *mut bw::Iscript, u32, *mut u32)> = GlobalFunc(None);
+pub unsafe fn step_iscript_frame(
+    image: *mut bw::Image,
+    iscript: *mut bw::Iscript,
+    dry_run: u32,
+    speed_out: *mut u32,
+) {
+    STEP_ISCRIPT_FRAME.get()(image, iscript, dry_run, speed_out);
+}
+
+static mut PLAYERS: GlobalFunc<fn() -> *mut bw::Player> = GlobalFunc(None);
+pub unsafe fn players() -> *mut bw::Player {
+    PLAYERS.get()()
+}
+
+static mut PATHING: GlobalFunc<fn() -> *mut bw::Pathing> = GlobalFunc(None);
+pub unsafe fn pathing() -> *mut bw::Pathing {
+    PATHING.get()()
+}
 
 static mut GET_REGION: GlobalFunc<fn(u32, u32) -> u32> = GlobalFunc(None);
 pub fn get_region(x: u32, y: u32) -> u32 {
@@ -86,9 +128,28 @@ static mut ISSUE_ORDER: GlobalFunc<
 > = GlobalFunc(None);
 
 static mut UNITS_DAT: GlobalFunc<unsafe extern fn() -> *mut DatTable> = GlobalFunc(None);
-
 pub fn units_dat() -> *mut DatTable {
     unsafe { UNITS_DAT.get()() }
+}
+
+static mut WEAPONS_DAT: GlobalFunc<fn() -> *mut bw_dat::DatTable> = GlobalFunc(None);
+pub fn weapons_dat() -> *mut bw_dat::DatTable {
+    unsafe { WEAPONS_DAT.get()() }
+}
+
+static mut UPGRADES_DAT: GlobalFunc<fn() -> *mut bw_dat::DatTable> = GlobalFunc(None);
+pub fn upgrades_dat() -> *mut bw_dat::DatTable {
+    unsafe { UPGRADES_DAT.get()() }
+}
+
+static mut TECHDATA_DAT: GlobalFunc<fn() -> *mut bw_dat::DatTable> = GlobalFunc(None);
+pub fn techdata_dat() -> *mut bw_dat::DatTable {
+    unsafe { TECHDATA_DAT.get()() }
+}
+
+static mut ORDERS_DAT: GlobalFunc<fn() -> *mut bw_dat::DatTable> = GlobalFunc(None);
+pub fn orders_dat() -> *mut bw_dat::DatTable {
+    unsafe { ORDERS_DAT.get()() }
 }
 
 pub fn issue_order(
@@ -118,6 +179,8 @@ pub struct SamaseBox {
     data: NonNull<u8>,
     len: usize,
 }
+
+unsafe impl Send for SamaseBox {}
 
 impl ops::Deref for SamaseBox {
     type Target = [u8];
@@ -153,7 +216,7 @@ pub fn read_file(name: &str) -> Option<SamaseBox> {
 pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
     crate::init();
 
-    let required_version = 17;
+    let required_version = 18;
     if (*api).version < required_version {
         fatal(&format!(
             "Newer samase is required. (Plugin API version {}, this plugin requires version {})",
@@ -174,6 +237,14 @@ pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
     READ_FILE.0 = Some(mem::transmute(((*api).read_file)()));
     UNITS_DAT.init(((*api).dat)(0).map(|x| mem::transmute(x)), "units_dat");
     bw_dat::init_units(units_dat());
+    WEAPONS_DAT.init(((*api).dat)(1).map(|x| mem::transmute(x)), "weapons.dat");
+    bw_dat::init_weapons(weapons_dat());
+    UPGRADES_DAT.init(((*api).dat)(3).map(|x| mem::transmute(x)), "upgrades.dat");
+    bw_dat::init_upgrades(upgrades_dat());
+    TECHDATA_DAT.init(((*api).dat)(4).map(|x| mem::transmute(x)), "techdata.dat");
+    bw_dat::init_techdata(techdata_dat());
+    ORDERS_DAT.init(((*api).dat)(7).map(|x| mem::transmute(x)), "orders.dat");
+    bw_dat::init_orders(orders_dat());
     init_config(true);
     //((*api).hook_on_first_file_access)(init_config);
     let config = config::config();
@@ -204,6 +275,13 @@ pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
     }
     PRINT_TEXT.0 = Some(mem::transmute(((*api).print_text)()));
     RNG_SEED.0 = Some(mem::transmute(((*api).rng_seed)()));
+    AI_UPDATE_ATTACK_TARGET.0 = Some(mem::transmute(((*api).ai_update_attack_target)()));
+    UPDATE_VISIBILITY_POINT.0 = Some(mem::transmute(((*api).update_visibility_point)()));
+    CREATE_LONE_SPRITE.0 = Some(mem::transmute(((*api).create_lone_sprite)()));
+    GET_ISCRIPT_BIN.0 = Some(mem::transmute(((*api).get_iscript_bin)()));
+    STEP_ISCRIPT_FRAME.0 = Some(mem::transmute(((*api).step_iscript)()));
+    PLAYERS.0 = Some(mem::transmute(((*api).players)()));
+    PATHING.0 = Some(mem::transmute(((*api).pathing)()));
     if let Some(tunit) = read_file("game\\tunit.pcx") {
         if let Err(e) = crate::unit_pcolor_fix::init_unit_colors(&tunit) {
             fatal(&format!("Invalid game\\tunit.pcx: {}", e));

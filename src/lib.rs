@@ -20,11 +20,14 @@ mod config;
 mod frame_hook;
 mod game;
 mod ini;
+mod lo;
 mod order;
 mod order_hook;
 mod render;
 mod render_scr;
+mod rng;
 mod unit;
+mod unit_search;
 mod unit_pcolor_fix;
 mod upgrades;
 mod windows;
@@ -145,6 +148,7 @@ pub extern fn Initialize() {
             {
                 let mut exe = active_patcher.patch_exe(0x00400000);
                 bw::init_vars(&mut exe);
+                bw::init_funcs(&mut exe);
                 exe.hook_opt(bw::create_fow_sprite, frame_hook::check_fow_sprite_creation_desync);
             }
 
@@ -173,6 +177,7 @@ pub extern fn Initialize() {
 struct SaveData {
     tracked_spells: frame_hook::TrackedSpells,
     upgrade_state_changes: upgrades::UpgradeStateChanges,
+    rng: rng::Rng,
 }
 
 unsafe extern fn save(set_data: unsafe extern fn(*const u8, usize)) {
@@ -181,6 +186,7 @@ unsafe extern fn save(set_data: unsafe extern fn(*const u8, usize)) {
     let save = SaveData {
         tracked_spells: frame_hook::tracked_spells(),
         upgrade_state_changes: upgrades::global_state_changes().clone(),
+        rng: rng::get().clone(),
     };
     match bincode::serialize(&save) {
         Ok(o) => {
@@ -207,10 +213,12 @@ unsafe extern fn load(ptr: *const u8, len: usize) -> u32 {
     };
     frame_hook::set_tracked_spells(data.tracked_spells);
     upgrades::set_state_changes(data.upgrade_state_changes);
+    rng::set_rng(data.rng);
     1
 }
 
 unsafe extern fn init_game() {
+    order_hook::invalidate_cached_unit_search();
     samase::init_config(false);
 
     let game = crate::game::get();

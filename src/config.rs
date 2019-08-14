@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use smallvec::SmallVec;
 
-use bw_dat::{UnitId, OrderId};
+use bw_dat::{UnitId, OrderId, SpriteId};
 use bw_dat::expr::{IntExpr, BoolExpr};
 use failure::{Context, Error, ResultExt};
 
@@ -41,6 +41,7 @@ pub struct Config {
     pub upgrades: Upgrades,
     pub return_cargo_softcode: bool,
     pub zerg_building_training: bool,
+    pub bunker_units: Vec<(UnitId, SpriteId, u8)>,
 }
 
 impl Config {
@@ -51,8 +52,9 @@ impl Config {
             return_cargo_softcode,
             zerg_building_training: _,
             ref upgrades,
+            ref bunker_units,
         } = *self;
-        return_cargo_softcode || !upgrades.upgrades.is_empty()
+        return_cargo_softcode || !upgrades.upgrades.is_empty() || !bunker_units.is_empty()
     }
 
     pub fn requires_secondary_order_hook(&self) -> bool {
@@ -60,6 +62,7 @@ impl Config {
             timers: _,
             supplies: _,
             return_cargo_softcode: _,
+            bunker_units: _,
             zerg_building_training,
             ref upgrades,
         } = *self;
@@ -261,8 +264,8 @@ fn parse_int_expr_tuple(expr: &str, count: u8) -> Result<Vec<IntExpr>, Error> {
 }
 
 pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
-    let error_invalid_field = |name: &'static str| {
-        format_err!("Invalid field {}", name)
+    let error_invalid_field = |name: &'static str, val: &str| {
+        format_err!("Invalid field {} = {}", name, val)
     };
 
     let ini = Ini::open(&mut data)
@@ -272,6 +275,7 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
     let mut zerg_building_training = false;
     let mut supplies: Supplies = Default::default();
     let mut upgrades: BTreeMap<u8, BTreeMap<Vec<State>, Vec<UpgradeChanges>>> = BTreeMap::new();
+    let mut bunker_units = Vec::new();
     for section in &ini.sections {
         let name = &section.name;
         if name == "timers" {
@@ -293,7 +297,7 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
                         for pair in val.split(",") {
                             let mut tokens = pair.split(":");
                             let unit_id = tokens.next()
-                                .ok_or_else(|| error_invalid_field("timers.unit_deaths"))?;
+                                .ok_or_else(|| error_invalid_field("timers.unit_deaths", val))?;
                             let unit_id = parse_u16(unit_id.trim()).map_err(|e| {
                                 let timer_index = timers.unit_deaths.len();
                                 e.context(format!(
@@ -302,7 +306,7 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
                                 ))
                             })?;
                             let time = tokens.next()
-                                .ok_or_else(|| error_invalid_field("timers.unit_deaths"))?;
+                                .ok_or_else(|| error_invalid_field("timers.unit_deaths", val))?;
                             let time = parse_u32(time.trim()).map_err(|e| {
                                 let timer_index = timers.unit_deaths.len();
                                 e.context(format!(
@@ -333,6 +337,16 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
                     }
                     "zerg_training" => {
                         bool_field(&mut zerg_building_training, &val, "zerg_training")?
+                    }
+                    "bunker_unit" => {
+                        let mut tokens = val.split(",").map(|x| x.trim());
+                        let unit_id = tokens.next().and_then(|x| parse_u16(x).ok())
+                            .ok_or_else(|| error_invalid_field("orders.bunker_unit", val))?;
+                        let sprite_id = tokens.next().and_then(|x| parse_u16(x).ok())
+                            .ok_or_else(|| error_invalid_field("orders.bunker_unit", val))?;
+                        let directions = tokens.next().and_then(|x| parse_u8(x).ok())
+                            .ok_or_else(|| error_invalid_field("orders.bunker_unit", val))?;
+                        bunker_units.push((UnitId(unit_id), SpriteId(sprite_id), directions));
                     }
                     x => return Err(Context::new(format!("unknown key {}", x)).into()),
                 }
@@ -443,6 +457,7 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
         return_cargo_softcode,
         zerg_building_training,
         upgrades,
+        bunker_units,
     })
 }
 

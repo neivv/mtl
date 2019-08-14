@@ -1,6 +1,6 @@
 [package]
 name = "mtl"
-version = "0.3.15"
+version = "0.3.16"
 authors = ["Markus Heikkinen <ittevien@gmail.com>"]
 edition = "2018"
 
@@ -10,7 +10,9 @@ crate-type = ["cdylib"]
 
 [profile.dev]
 panic = "abort"
+lto = "no"
 opt-level = 1
+codegen-units = 4
 
 [profile.release]
 debug = 1
@@ -30,6 +32,7 @@ lazy_static = "1.0"
 libc = "0.2"
 log = "0.4"
 pcx = "0.2"
+rand = "0.7"
 scopeguard = "1.0"
 serde = "1.0.15"
 serde_derive = "1.0.15"
@@ -49,3 +52,7 @@ git = "https://github.com/neivv/aise"
 
 [dependencies.whack]
 git = "https://github.com/neivv/whack/"
+
+[dependencies.rand_xorshift]
+version = "0.2.0"
+features = ["serde1"]
