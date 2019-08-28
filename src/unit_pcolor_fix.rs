@@ -78,8 +78,11 @@ pub fn game_start_hook() {
         Some(s) => s,
         None => &default[..],
     };
-    for (player, &color) in colr.iter().enumerate().take(12) {
+    for player in 0..12 {
         unsafe {
+            let orig_id = (**game).player_randomization.get(player).cloned()
+                .unwrap_or(player as u32);
+            let color = colr.get(orig_id as usize).cloned().unwrap_or(0);
             if let Some(colors) = colors.as_ref().and_then(|x| x.get(color as usize)) {
                 (**game).player_color_palette[player].copy_from_slice(&colors.0)
             }
