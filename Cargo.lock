@@ -218,7 +218,7 @@ dependencies = [
 
 [[package]]
 name = "mtl"
-version = "0.3.17"
+version = "0.3.18"
 dependencies = [
  "backtrace 0.3.35 (registry+https://github.com/rust-lang/crates.io-index)",
  "bincode 1.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
