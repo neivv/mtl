@@ -124,6 +124,7 @@ pub fn global_state_changes() -> RefMut<'static, UpgradeStateChanges> {
 pub struct Upgrades {
     pub upgrades: VecMap<Upgrade>,
     units_with_upgrades: Vec<bool>,
+    units_with_color_upgrades: Vec<bool>,
 }
 
 #[derive(Debug)]
@@ -152,9 +153,29 @@ impl Upgrades {
         } else {
             vec![true; bw_dat::unit::NONE.0 as usize]
         };
+        let mut units_with_color_upgrades = vec![false; largest_unit_id as usize + 1];
+        {
+            let changes = upgrades.iter()
+                .flat_map(|x| x.1.changes.values())
+                .flat_map(|x| x.iter());
+            for change in changes {
+                fn is_color_stat(stat: Stat) -> bool {
+                    match stat {
+                        Stat::PlayerColor | Stat::PlayerColorPalette => true,
+                        _ => false,
+                    }
+                }
+                if change.changes.iter().any(|x| is_color_stat(x.0)) {
+                    for unit in &change.units {
+                        units_with_color_upgrades[unit.0 as usize] = true;
+                    }
+                }
+            }
+        }
         Upgrades {
             upgrades,
             units_with_upgrades,
+            units_with_color_upgrades,
         }
     }
 
@@ -202,6 +223,10 @@ impl Upgrades {
                 }
             }
         }
+    }
+
+    pub fn may_have_color_upgrade(&self, unit: UnitId) -> bool {
+        self.units_with_color_upgrades.get(unit.0 as usize).cloned().unwrap_or(false)
     }
 }
 

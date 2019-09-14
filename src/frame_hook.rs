@@ -196,6 +196,15 @@ pub unsafe extern fn frame_hook() {
         if (**unit).build_queue[(**unit).current_build_slot as usize] != bw_dat::unit::NONE.0 {
             upgrades.update_build_queue(unit);
         }
+
+        // Just unconditionally redraw anything which may have dynamic color changes
+        if !crate::is_scr() && config.upgrades.may_have_color_upgrade(unit.id()) {
+            let mut image = (*(**unit).sprite).first_image;
+            while !image.is_null() {
+                (*image).flags |= 0x1;
+                image = (*image).next;
+            }
+        }
     }
 }
 
