@@ -43,6 +43,7 @@ whack_funcs!(init_funcs, 0x00400000,
 
 whack_vars!(init_vars, 0x00400000,
     0x0050CDC1 => default_grp_remap: [u8; 256];
+    0x00512960 => trans50: *mut u8;
 );
 
 pub mod storm {
