@@ -672,7 +672,7 @@ unsafe fn weapon_range(game: Game, unit: Unit, weapon: WeaponId) -> u32 {
 }
 
 unsafe fn target_acquisition_range(game: Game, unit: Unit) -> u8 {
-    let mut bonus = 0;;
+    let mut bonus = 0;
     match unit.id() {
         unit_id::GHOST | unit_id::SARAH_KERRIGAN | unit_id::SAMIR_DURAN |
             unit_id::ALEXEI_STUKOV | unit_id::INFESTED_DURAN =>
