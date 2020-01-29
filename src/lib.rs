@@ -33,6 +33,7 @@ mod upgrades;
 mod windows;
 
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 use winapi::um::processthreadsapi::{GetCurrentProcess, TerminateProcess};
 
 use bw_dat::Game;
@@ -125,7 +126,7 @@ fn init() {
 
 
 lazy_static! {
-    static ref PATCHER: whack::Patcher = whack::Patcher::new();
+    static ref PATCHER: Mutex<whack::Patcher> = Mutex::new(whack::Patcher::new());
 }
 static IS_1161: AtomicBool = AtomicBool::new(false);
 

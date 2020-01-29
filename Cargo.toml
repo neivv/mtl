@@ -27,7 +27,7 @@ bincode = "1.0"
 byteorder = "1.1"
 chrono = "0.4"
 failure = "0.1.1"
-fern = "0.5"
+fern = "=0.5.8"
 lazy_static = "1.0"
 libc = "0.2"
 log = "0.4"
@@ -36,8 +36,8 @@ rand = "0.7"
 scopeguard = "1.0"
 serde = "1.0.15"
 serde_derive = "1.0.15"
-smallvec = "0.6"
-thread_local = "0.3.5"
+smallvec = "1.0"
+thread_local = "1.0"
 vec_map = "0.8.0"
 
 [dependencies.winapi]
@@ -46,12 +46,15 @@ features = ["heapapi", "libloaderapi", "processthreadsapi", "winuser"]
 
 [dependencies.samase_shim]
 git = "https://github.com/neivv/samase_plugin"
+rev = "ffb7305433e7232c1bdc71b909795bff224750c2"
 
 [dependencies.bw_dat]
 git = "https://github.com/neivv/aise"
+rev = "4aff5e227ff08621af05b080cac2a47d7e3619ec"
 
 [dependencies.whack]
 git = "https://github.com/neivv/whack/"
+rev = "e8e847864c2938735040ca3c68ef1cf9e03b692f"
 
 [dependencies.rand_xorshift]
 version = "0.2.0"
