@@ -46,6 +46,7 @@ pub struct Config {
 }
 
 struct Rallies {
+    can_rally: Vec<UnitId>,
     default_order: Option<RallyOrder>,
     /// Contains indices to highest unit id with non-default rally order.
     unit_orders: Vec<Option<RallyOrder>>,
@@ -64,6 +65,23 @@ pub enum OrderOrRclick {
 }
 
 impl Config {
+    pub fn requires_rclick_hook(&self) -> bool {
+        let Config {
+            timers: _,
+            supplies: _,
+            return_cargo_softcode: _,
+            zerg_building_training: _,
+            bunker_units: _,
+            ref rallies,
+            upgrades: _,
+        } = *self;
+        !rallies.can_rally.is_empty()
+    }
+
+    pub fn has_rally(&self, unit: UnitId) -> bool {
+        self.rallies.can_rally.iter().any(|&x| x == unit)
+    }
+
     pub fn rally_order(&self, unit: UnitId) -> Option<RallyOrder> {
         self.rallies.unit_orders.get(unit.0 as usize).cloned()
             .flatten()
@@ -314,6 +332,7 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
     let mut upgrades: BTreeMap<u8, BTreeMap<Vec<State>, Vec<UpgradeChanges>>> = BTreeMap::new();
     let mut bunker_units = Vec::new();
     let mut rallies = Rallies {
+        can_rally: Vec::new(),
         default_order: None,
         unit_orders: Vec::new(),
     };
@@ -396,6 +415,12 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
         } else if name == "rally" {
             for &(ref key, ref val) in &section.values {
                 match &**key {
+                    "can_rally" => {
+                        rallies.can_rally = val.split(",")
+                            .map(|x| parse_u16(x.trim()).map(UnitId))
+                            .collect::<Result<Vec<UnitId>, _>>()
+                            .context("rallies.can_rally")?;
+                    }
                     "default_order" => {
                         rallies.default_order = Some(parse_rally_order(val)?);
                     }

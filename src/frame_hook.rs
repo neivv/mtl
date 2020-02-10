@@ -132,6 +132,7 @@ pub unsafe extern fn frame_hook() {
         }
     }
     tracked.remove_dead_units();
+    crate::rally::rally_cursor_marker_frame_hook(&config, game);
     for unit in unit::alive_units() {
         let t = &mut *tracked;
         timer_override(&timers.lockdown, game, unit, &mut t.lockdown, &mut (**unit).lockdown_timer);

@@ -108,6 +108,11 @@ pub unsafe fn step_iscript_frame(
     STEP_ISCRIPT_FRAME.get()(image, iscript, dry_run, speed_out);
 }
 
+static mut SEND_COMMAND: GlobalFunc<fn(*const u8, u32)> = GlobalFunc(None);
+pub unsafe fn send_command(data: &[u8]) {
+    SEND_COMMAND.get()(data.as_ptr(), data.len() as u32)
+}
+
 static mut PLAYERS: GlobalFunc<fn() -> *mut bw::Player> = GlobalFunc(None);
 pub unsafe fn players() -> *mut bw::Player {
     PLAYERS.get()()
@@ -118,12 +123,62 @@ pub unsafe fn pathing() -> *mut bw::Pathing {
     PATHING.get()()
 }
 
+static mut IS_REPLAY: GlobalFunc<fn() -> u32> = GlobalFunc(None);
+pub unsafe fn is_replay() -> u32 {
+    IS_REPLAY.get()()
+}
+
+static mut IS_OUTSIDE_GAME_SCREEN: GlobalFunc<fn(i32, i32) -> u32> = GlobalFunc(None);
+pub unsafe fn is_outside_game_screen(x: i32, y: i32) -> u32 {
+    IS_OUTSIDE_GAME_SCREEN.get()(x, y)
+}
+
+static mut CLIENT_SELECTION: GlobalFunc<fn() -> *mut *mut bw::Unit> = GlobalFunc(None);
+pub unsafe fn client_selection() -> *mut *mut bw::Unit {
+    CLIENT_SELECTION.get()()
+}
+
 static mut UNIT_ARRAY_LEN: GlobalFunc<fn(*mut *mut bw::Unit, *mut usize)> = GlobalFunc(None);
 pub unsafe fn unit_array() -> (*mut bw::Unit, usize) {
     let mut size = 0usize;
     let mut ptr = null_mut();
     UNIT_ARRAY_LEN.get()(&mut ptr, &mut size);
     (ptr, size)
+}
+
+static mut LOCAL_PLAYER_ID: GlobalFunc<fn() -> u32> = GlobalFunc(None);
+pub unsafe fn local_player_id() -> u32 {
+    LOCAL_PLAYER_ID.get()()
+}
+
+static mut UI_SCALE: GlobalFunc<fn() -> f32> = GlobalFunc(None);
+pub unsafe fn ui_scale() -> f32 {
+    UI_SCALE.get()()
+}
+
+static mut SCREEN_POS: GlobalFunc<fn(*mut i32, *mut i32)> = GlobalFunc(None);
+pub unsafe fn screen_pos(x: *mut i32, y: *mut i32) {
+    SCREEN_POS.get()(x, y)
+}
+
+static mut FIRST_LONE_SPRITE: GlobalFunc<fn() -> *mut bw::Sprite> = GlobalFunc(None);
+pub unsafe fn first_lone_sprite() -> *mut bw::Sprite {
+    FIRST_LONE_SPRITE.get()()
+}
+
+static mut SPRITE_HLINES: GlobalFunc<fn() -> *mut *mut bw::Sprite> = GlobalFunc(None);
+pub unsafe fn sprite_hlines() -> *mut *mut bw::Sprite {
+    SPRITE_HLINES.get()()
+}
+
+static mut SPRITE_HLINES_END: GlobalFunc<fn() -> *mut *mut bw::Sprite> = GlobalFunc(None);
+pub unsafe fn sprite_hlines_end() -> *mut *mut bw::Sprite {
+    SPRITE_HLINES_END.get()()
+}
+
+static mut SELECTIONS: GlobalFunc<fn() -> *mut *mut bw::Unit> = GlobalFunc(None);
+pub unsafe fn selections() -> *mut *mut bw::Unit {
+    SELECTIONS.get()()
 }
 
 static mut GET_REGION: GlobalFunc<fn(u32, u32) -> u32> = GlobalFunc(None);
@@ -222,6 +277,7 @@ pub fn read_file(name: &str) -> Option<SamaseBox> {
 // Just using samase_shim's definition so that there isn't duplication/unnecessary mismatches
 #[no_mangle]
 pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
+    bw_dat::set_is_scr(crate::is_scr());
     crate::init();
 
     let required_version = 20;
@@ -255,7 +311,7 @@ pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
     bw_dat::init_orders(orders_dat());
     init_config(true);
     //((*api).hook_on_first_file_access)(init_config);
-    //let config = config::config();
+    let config = config::config();
     let result = ((*api).hook_step_objects)(crate::frame_hook::frame_hook, 0);
     if result == 0 {
         fatal("Couldn't hook step_objects");
@@ -279,6 +335,12 @@ pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
     if result == 0 {
         fatal("Couldn't hook step_secondary_order");
     }
+    if config.requires_rclick_hook() {
+        let result = ((*api).hook_game_screen_rclick)(crate::rally::game_screen_rclick);
+        if result == 0 {
+            fatal("Couldn't hook game_screen_rclick");
+        }
+    }
     let result = ((*api).extend_save)("mtl\0".as_ptr(), Some(crate::save), Some(crate::load), crate::init_game);
     if result == 0 {
         ((*api).warn_unsupported_feature)(b"Saving\0".as_ptr());
@@ -290,9 +352,20 @@ pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
     CREATE_LONE_SPRITE.0 = Some(mem::transmute(((*api).create_lone_sprite)()));
     GET_ISCRIPT_BIN.0 = Some(mem::transmute(((*api).get_iscript_bin)()));
     STEP_ISCRIPT_FRAME.0 = Some(mem::transmute(((*api).step_iscript)()));
+    SEND_COMMAND.0 = Some(mem::transmute(((*api).send_command)()));
+    IS_OUTSIDE_GAME_SCREEN.0 = Some(mem::transmute(((*api).is_outside_game_screen)()));
     PLAYERS.0 = Some(mem::transmute(((*api).players)()));
     PATHING.0 = Some(mem::transmute(((*api).pathing)()));
+    IS_REPLAY.0 = Some(mem::transmute(((*api).is_replay)()));
+    CLIENT_SELECTION.0 = Some(mem::transmute(((*api).client_selection)()));
     UNIT_ARRAY_LEN.0 = Some(mem::transmute(((*api).unit_array_len)()));
+    LOCAL_PLAYER_ID.0 = Some(mem::transmute(((*api).local_player_id)()));
+    UI_SCALE.0 = Some(mem::transmute(((*api).ui_scale)()));
+    SCREEN_POS.0 = Some(mem::transmute(((*api).screen_pos)()));
+    FIRST_LONE_SPRITE.0 = Some(mem::transmute(((*api).first_lone_sprite)()));
+    SPRITE_HLINES.0 = Some(mem::transmute(((*api).sprite_hlines)()));
+    SPRITE_HLINES_END.0 = Some(mem::transmute(((*api).sprite_hlines_end)()));
+    SELECTIONS.0 = Some(mem::transmute(((*api).selections)()));
     if let Some(tunit) = read_file("game\\tunit.pcx") {
         if let Err(e) = crate::unit_pcolor_fix::init_unit_colors(&tunit) {
             fatal(&format!("Invalid game\\tunit.pcx: {}", e));
@@ -303,6 +376,14 @@ pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
             fatal(&format!("Invalid game\\tminimap.pcx: {}", e));
         }
     }
+
+    let _ = ((*api).hook_ingame_command)(
+        0xcc,
+        crate::rally::command_handler,
+        Some(crate::rally::command_length),
+    );
+    let _ = ((*api).hook_ingame_command)(0x14, crate::rally::targeted_command_old_hook, None);
+    let _ = ((*api).hook_ingame_command)(0x61, crate::rally::targeted_command_new_hook, None);
 
     ((*api).hook_draw_image)(render::draw_image_hook);
     if crate::is_scr() {

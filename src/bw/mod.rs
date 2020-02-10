@@ -3,6 +3,7 @@
 
 use std::ptr::null_mut;
 use std::slice;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use libc::c_void;
 
@@ -27,8 +28,8 @@ pub fn game() -> *mut Game {
 
 pub fn units_dat() -> &'static [DatTable] {
     unsafe {
-        assert_ne!(UNITS_DAT, !0);
-        let dat = UNITS_DAT as *mut DatTable;
+        let dat = UNITS_DAT.load(Ordering::Relaxed) as *mut DatTable;
+        assert!(dat.is_null() == false);
         slice::from_raw_parts_mut(dat, 0x35)
     }
 }
@@ -58,10 +59,30 @@ pub mod storm {
     );
 }
 
-static mut UNITS_DAT: usize = !0;
+static UNITS_DAT: AtomicUsize = AtomicUsize::new(0);
+static CURSOR_MARKER: AtomicUsize = AtomicUsize::new(0);
 
 pub unsafe fn init_game_start_vars() {
-    UNITS_DAT = samase::units_dat() as usize;
+    UNITS_DAT.store(samase::units_dat() as usize, Ordering::Relaxed);
+    CURSOR_MARKER.store(0, Ordering::Relaxed);
+}
+
+/// Not same what BW uses since it is linked to a one-off global that controls
+/// whether it is drawn.
+///
+/// This one gets hidden in frame_hook instead.
+pub fn cursor_marker() -> *mut Sprite {
+    let marker = CURSOR_MARKER.load(Ordering::Relaxed);
+    if marker != 0 {
+        return marker as *mut Sprite;
+    }
+    unsafe {
+        let sprite = create_lone_sprite(bw_dat::SpriteId(318), &Point { x: 0, y: 0 }, 0);
+        let sprite = (*sprite).sprite;
+        (*(*sprite).main_image).flags |= 0x40;
+        CURSOR_MARKER.store(sprite as usize, Ordering::Relaxed);
+        sprite
+    }
 }
 
 pub fn print_text<M: AsRef<str>>(msg: M) {
@@ -182,11 +203,36 @@ pub fn players() -> *mut Player {
 pub fn pathing() -> *mut Pathing {
     unsafe { samase::pathing() }
 }
+
+pub fn send_command(data: &[u8]) {
+    unsafe { samase::send_command(data) }
+}
+
 pub fn unit_array() -> UnitArray {
     unsafe {
         let (ptr, len) = samase::unit_array();
         UnitArray::new(ptr, len)
     }
+}
+
+pub fn local_player_id() -> u8 {
+    unsafe { samase::local_player_id() as u8 }
+}
+
+pub fn client_selection() -> &'static [*mut Unit] {
+    unsafe {
+        let ptr = samase::client_selection();
+        let len = (0..12).position(|x| (*ptr.add(x)).is_null()).unwrap_or(12);
+        std::slice::from_raw_parts(ptr, len)
+    }
+}
+
+pub fn is_replay() -> bool {
+    unsafe { samase::is_replay() != 0 }
+}
+
+pub fn is_outside_game_screen(x: i16, y: i16) -> bool {
+    unsafe { samase::is_outside_game_screen(x.into(), y.into()) != 0 }
 }
 
 pub unsafe fn issue_order(
@@ -197,4 +243,23 @@ pub unsafe fn issue_order(
     fow_unit: UnitId,
 ) {
     samase::issue_order(unit, order, pos.x as u32, pos.y as u32, target, fow_unit)
+}
+
+pub fn screen_coord_to_game(x: i16, y: i16) -> Point {
+    unsafe {
+        let mut screen_x = 0;
+        let mut screen_y = 0;
+        samase::screen_pos(&mut screen_x, &mut screen_y);
+        let scale = samase::ui_scale();
+        let game_x = screen_x.saturating_add((x as f32 / scale) as i32);
+        let game_y = screen_y.saturating_add((y as f32 / scale) as i32);
+        Point {
+            x: game_x as i16,
+            y: game_y as i16,
+        }
+    }
+}
+
+pub fn selections() -> *mut *mut Unit {
+    unsafe { samase::selections() }
 }
