@@ -385,8 +385,10 @@ impl RallyCheck {
         }
         let rally_order = match config.rally_order(self.unit.id()) {
             Some(s) => s,
-            // Use BW default
-            None => return,
+            None => RallyOrder {
+                ground: order::MOVE,
+                unit: OrderOrRclick::Order(order::FOLLOW),
+            },
         };
         self.rally(game, units, self.unit, &rally_order);
         if self.unit.id().flags() & 0x400 != 0 {

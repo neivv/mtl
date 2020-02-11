@@ -5,7 +5,7 @@ use byteorder::{ByteOrder, LittleEndian};
 use libc::c_void;
 
 use bw_dat::dialog::Event;
-use bw_dat::{Game, Unit, UnitId, order, OrderId};
+use bw_dat::{Game, unit, Unit, UnitId, order, OrderId};
 
 use crate::bw;
 use crate::config::Config;
@@ -111,7 +111,9 @@ pub unsafe fn rally_cursor_marker_frame_hook(config: &Config, game: Game) {
                 };
                 if !has_vanilla_rally {
                     let point = *((**unit).rally_pylon.as_ptr() as *mut bw::Point);
-                    show_cursor_marker(game, cursor_marker, &point);
+                    if point.x != 0 {
+                        show_cursor_marker(game, cursor_marker, &point);
+                    }
                 }
             }
         }
@@ -405,7 +407,7 @@ pub unsafe extern fn command_handler(
 unsafe fn set_rally_command(player: u8, uniq_player: u8, pos: &bw::Point, target: Option<Unit>) {
     let selected = crate::selection::Selection::normal(uniq_player);
     if let Some(unit) = selected.into_iter().next() {
-        if unit.player() == player {
+        if unit.player() == player && unit.id() != unit::PYLON {
             *((**unit).rally_pylon.as_ptr().add(4) as *mut *mut bw::Unit) =
                 target.map(|x| *x).unwrap_or_else(null_mut);
             *((**unit).rally_pylon.as_ptr() as *mut bw::Point) = *pos;
