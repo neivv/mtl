@@ -161,8 +161,8 @@ pub unsafe fn screen_pos(x: *mut i32, y: *mut i32) {
     SCREEN_POS.get()(x, y)
 }
 
-static mut FIRST_LONE_SPRITE: GlobalFunc<fn() -> *mut bw::Sprite> = GlobalFunc(None);
-pub unsafe fn first_lone_sprite() -> *mut bw::Sprite {
+static mut FIRST_LONE_SPRITE: GlobalFunc<fn() -> *mut bw::LoneSprite> = GlobalFunc(None);
+pub unsafe fn first_lone_sprite() -> *mut bw::LoneSprite {
     FIRST_LONE_SPRITE.get()()
 }
 
@@ -179,6 +179,11 @@ pub unsafe fn sprite_hlines_end() -> *mut *mut bw::Sprite {
 static mut SELECTIONS: GlobalFunc<fn() -> *mut *mut bw::Unit> = GlobalFunc(None);
 pub unsafe fn selections() -> *mut *mut bw::Unit {
     SELECTIONS.get()()
+}
+
+static mut DRAW_CURSOR_MARKER: GlobalFunc<fn(u32)> = GlobalFunc(None);
+pub fn draw_cursor_marker(draw: u32) {
+    unsafe { DRAW_CURSOR_MARKER.get()(draw) }
 }
 
 static mut GET_REGION: GlobalFunc<fn(u32, u32) -> u32> = GlobalFunc(None);
@@ -366,6 +371,7 @@ pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
     SPRITE_HLINES.0 = Some(mem::transmute(((*api).sprite_hlines)()));
     SPRITE_HLINES_END.0 = Some(mem::transmute(((*api).sprite_hlines_end)()));
     SELECTIONS.0 = Some(mem::transmute(((*api).selections)()));
+    DRAW_CURSOR_MARKER.0 = Some(mem::transmute(((*api).draw_cursor_marker)()));
     if let Some(tunit) = read_file("game\\tunit.pcx") {
         if let Err(e) = crate::unit_pcolor_fix::init_unit_colors(&tunit) {
             fatal(&format!("Invalid game\\tunit.pcx: {}", e));

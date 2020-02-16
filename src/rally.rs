@@ -69,8 +69,6 @@ unsafe fn show_command_response(game: Game, target: Option<Unit>, point: &bw::Po
             (*sprite).selection_flash_timer = 0x1f;
         }
     } else {
-        // BW actually recycles the same sprite but that also uses an annoying
-        // global to show/hide so pass on that.
         let sprite = bw::cursor_marker();
         show_cursor_marker(game, sprite, point);
     }
@@ -84,17 +82,13 @@ unsafe fn show_cursor_marker(game: Game, sprite: *mut bw::Sprite, point: &bw::Po
         bw::set_iscript_animation(image, 2);
         image = (*image).next;
     }
+    crate::samase::draw_cursor_marker(1);
 }
 
 pub unsafe fn rally_cursor_marker_frame_hook(config: &Config, game: Game) {
     static LAST_FRAME_SELECTED_UNIT: AtomicUsize = AtomicUsize::new(0);
 
     let cursor_marker = bw::cursor_marker();
-    // Heuristic, but assuming nobody uses cursor markers with long animation waits
-    // nor changes its infloop to have shorter waits than 8 frames.
-    if (*(*cursor_marker).main_image).iscript.wait > 8 {
-        (*(*cursor_marker).main_image).flags |= 0x41;
-    }
 
     let client_selection = bw::client_selection();
     let prev_selected = LAST_FRAME_SELECTED_UNIT.load(Ordering::Relaxed) as *mut bw::Unit;

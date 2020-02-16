@@ -67,21 +67,22 @@ pub unsafe fn init_game_start_vars() {
     CURSOR_MARKER.store(0, Ordering::Relaxed);
 }
 
-/// Not same what BW uses since it is linked to a one-off global that controls
-/// whether it is drawn.
-///
-/// This one gets hidden in frame_hook instead.
 pub fn cursor_marker() -> *mut Sprite {
     let marker = CURSOR_MARKER.load(Ordering::Relaxed);
     if marker != 0 {
         return marker as *mut Sprite;
     }
     unsafe {
-        let sprite = create_lone_sprite(bw_dat::SpriteId(318), &Point { x: 0, y: 0 }, 0);
-        let sprite = (*sprite).sprite;
-        (*(*sprite).main_image).flags |= 0x40;
-        CURSOR_MARKER.store(sprite as usize, Ordering::Relaxed);
-        sprite
+        let mut lone = samase::first_lone_sprite();
+        while lone.is_null() == false {
+            let sprite = (*lone).sprite;
+            if (*sprite).sprite_id == 318 {
+                CURSOR_MARKER.store(sprite as usize, Ordering::Relaxed);
+                return sprite;
+            }
+            lone = (*lone).next;
+        }
+        panic!("Couldn't find cursor marker");
     }
 }
 
