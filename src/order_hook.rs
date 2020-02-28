@@ -5,7 +5,7 @@ use std::sync::{Mutex, MutexGuard};
 use libc::c_void;
 
 use bw_dat::unit as unit_id;
-use bw_dat::{Game, Unit, UpgradeId, SpriteId, order, upgrade, WeaponId, UnitArray};
+use bw_dat::{Game, Unit, UnitId, UpgradeId, SpriteId, order, upgrade, WeaponId, UnitArray};
 use crate::bw;
 use crate::config::{config, Config, RallyOrder, OrderOrRclick};
 use crate::upgrades;
@@ -180,7 +180,14 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
         ZERG_BIRTH => {
             if !unit.is_completed() {
                 if let Some(parent) = unit.related() {
-                    rally_check = RallyCheck::new(unit, parent);
+                    // BW actually checks for != cocoon && != lurker egg,
+                    // checking for egg instead as if this is ever softcoded
+                    // it would make sense to specify list of units that will
+                    // rally on zerg birth (defaulting to egg),
+                    // instead of a list of units that won't.
+                    if UnitId((**unit).previous_unit_id) == unit_id::EGG {
+                        rally_check = RallyCheck::new(unit, parent);
+                    }
                 }
             }
         }
