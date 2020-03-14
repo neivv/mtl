@@ -1,8 +1,9 @@
 use std::cell::RefCell;
+use std::ptr::null_mut;
 
 use libc::c_void;
 
-use bw_dat::{self, Game, Unit, UnitId};
+use bw_dat::{self, Game, Unit, UnitId, order};
 
 use crate::bw;
 use crate::config::config;
@@ -134,6 +135,23 @@ pub unsafe extern fn frame_hook() {
     tracked.remove_dead_units();
     crate::rally::rally_cursor_marker_frame_hook(&config, game);
     for unit in unit::alive_units() {
+        if config.has_rally(unit.id()) {
+            // Remove rallying to unit if the unit has disappeared from vision or started dying
+            let rally_unit = {
+                Unit::from_ptr(*((**unit).rally_pylon.as_ptr().add(4) as *mut *mut bw::Unit))
+            };
+            if let Some(target) = rally_unit {
+                let player = unit.player();
+                let clear = !target.is_visible_to(player) ||
+                    target.is_invisible_hidden_to(player) ||
+                    target.order() == order::DIE;
+                if clear {
+                    *((**unit).rally_pylon.as_ptr().add(4) as *mut *mut bw::Unit) = null_mut();
+                    *((**unit).rally_pylon.as_ptr() as *mut bw::Point) = target.position();
+                }
+            }
+        }
+
         let t = &mut *tracked;
         timer_override(&timers.lockdown, game, unit, &mut t.lockdown, &mut (**unit).lockdown_timer);
         timer_override(&timers.maelstrom, game, unit, &mut t.maelstrom, &mut (**unit).maelstrom_timer);
