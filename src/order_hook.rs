@@ -73,6 +73,8 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
     let mut rally_check = None;
     let ground_cooldown_check = (**unit).ground_cooldown == 0;
     let air_cooldown_check = (**unit).air_cooldown == 0;
+    let mut old_buttons = 0;
+    let mut currently_building = None;
 
     match order {
         HARVEST_GAS => {
@@ -191,6 +193,12 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
                 }
             }
         }
+        DRONE_BUILD2 => {
+            old_buttons = (**unit).buttons;
+        }
+        SCV_BUILD | PROBE_BUILD => {
+            currently_building = unit.currently_building();
+        }
         _ => (),
     }
     if return_cargo_order {
@@ -207,6 +215,31 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
         }
     }
     orig(u);
+    match order {
+        DRONE_BUILD2 => {
+            if (**unit).buttons != old_buttons {
+                if unit.id().is_building() {
+                    // Set buttonset with/without rally
+                    (**unit).buttons = match config.has_rally(unit.id()) {
+                        true => 0xea,
+                        false => 0xe9,
+                    };
+                }
+            }
+        }
+        SCV_BUILD | PROBE_BUILD => {
+            if currently_building.is_none() {
+                if let Some(new) = unit.currently_building() {
+                    // Set buttonset with/without rally
+                    (**new).buttons = match config.has_rally(new.id()) {
+                        true => 0xe8,
+                        false => 0xe7,
+                    };
+                }
+            }
+        }
+        _ => (),
+    }
     if return_cargo_softcoded {
         let player = unit.player() as usize;
         (**game).completed_units_count[unit_id::COMMAND_CENTER.0 as usize][player] -= 1;
