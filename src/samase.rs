@@ -186,6 +186,12 @@ pub fn draw_cursor_marker(draw: u32) {
     unsafe { DRAW_CURSOR_MARKER.get()(draw) }
 }
 
+static mut MISC_UI_STATE: GlobalFunc<fn(*mut u8)> = GlobalFunc(None);
+pub fn misc_ui_state(out: &mut [u8]) {
+    assert_eq!(out.len(), 3);
+    unsafe { MISC_UI_STATE.get()(out.as_mut_ptr()) }
+}
+
 static mut GET_REGION: GlobalFunc<fn(u32, u32) -> u32> = GlobalFunc(None);
 pub fn get_region(x: u32, y: u32) -> u32 {
     unsafe { GET_REGION.get()(x, y) }
@@ -281,11 +287,11 @@ pub fn read_file(name: &str) -> Option<SamaseBox> {
 
 // Just using samase_shim's definition so that there isn't duplication/unnecessary mismatches
 #[no_mangle]
-pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
+pub unsafe extern fn samase_plugin_init(api: *const samase_shim::PluginApi) {
     bw_dat::set_is_scr(crate::is_scr());
     crate::init();
 
-    let required_version = 20;
+    let required_version = 21;
     if (*api).version < required_version {
         fatal(&format!(
             "Newer samase is required. (Plugin API version {}, this plugin requires version {})",
@@ -372,6 +378,7 @@ pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
     SPRITE_HLINES_END.0 = Some(mem::transmute(((*api).sprite_hlines_end)()));
     SELECTIONS.0 = Some(mem::transmute(((*api).selections)()));
     DRAW_CURSOR_MARKER.0 = Some(mem::transmute(((*api).draw_cursor_marker)()));
+    MISC_UI_STATE.0 = Some(mem::transmute(((*api).misc_ui_state)(3)));
     if let Some(tunit) = read_file("game\\tunit.pcx") {
         if let Err(e) = crate::unit_pcolor_fix::init_unit_colors(&tunit) {
             fatal(&format!("Invalid game\\tunit.pcx: {}", e));
@@ -390,6 +397,7 @@ pub unsafe extern fn samase_plugin_init(api: *const ::samase_shim::PluginApi) {
     );
     let _ = ((*api).hook_ingame_command)(0x14, crate::rally::targeted_command_old_hook, None);
     let _ = ((*api).hook_ingame_command)(0x61, crate::rally::targeted_command_new_hook, None);
+    ((*api).hook_spawn_dialog)(crate::rally::spawn_dialog_hook);
 
     ((*api).hook_draw_image)(render::draw_image_hook);
     if crate::is_scr() {

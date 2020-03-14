@@ -264,3 +264,19 @@ pub fn screen_coord_to_game(x: i16, y: i16) -> Point {
 pub fn selections() -> *mut *mut Unit {
     unsafe { samase::selections() }
 }
+
+pub struct MiscUiState {
+    pub is_paused: bool,
+    pub is_targeting: bool,
+    pub is_placing_building: bool,
+}
+
+pub fn misc_ui_state() -> MiscUiState {
+    let mut out = [0u8; 3];
+    samase::misc_ui_state(&mut out);
+    MiscUiState {
+        is_paused: out[0] != 0,
+        is_targeting: out[1] != 0,
+        is_placing_building: out[2] != 0,
+    }
+}

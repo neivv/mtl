@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use byteorder::{ByteOrder, LittleEndian};
 use libc::c_void;
 
-use bw_dat::dialog::Event;
+use bw_dat::dialog::{Control, Dialog, Event, EventHandler};
 use bw_dat::{Game, unit, Unit, UnitId, order, OrderId};
 
 use crate::bw;
@@ -48,6 +48,15 @@ pub unsafe extern fn game_screen_rclick(
     let point = bw::screen_coord_to_game(x, y);
     let search = UnitSearch::from_bw();
     let target = find_clicked_unit(&search, local_player_id, &point);
+    set_selected_unit_rally_to(&point, game, target);
+    // Rallying cannot error or play yes anim
+}
+
+unsafe fn set_selected_unit_rally_to(
+    point: &bw::Point,
+    game: Game,
+    target: Option<Unit>,
+) {
     show_command_response(game, target, &point);
 
     let mut command = [0u8; 0xa];
@@ -58,7 +67,6 @@ pub unsafe extern fn game_screen_rclick(
     LittleEndian::write_i16(&mut command[4..], point.y);
     LittleEndian::write_u32(&mut command[6..], units.to_unique_id_opt(target));
     bw::send_command(&command[..]);
-    // Rallying cannot error or play yes anim
 }
 
 // Bw function would return also fow id, but not relevant atm
@@ -406,5 +414,100 @@ unsafe fn set_rally_command(player: u8, uniq_player: u8, pos: &bw::Point, target
                 target.map(|x| *x).unwrap_or_else(null_mut);
             *((**unit).rally_pylon.as_ptr() as *mut bw::Point) = *pos;
         }
+    }
+}
+
+static MINIMAP_IMG_EVENT_HANDLER: EventHandler = EventHandler::new();
+
+pub unsafe extern fn spawn_dialog_hook(
+    raw: *mut c_void,
+    unk: usize,
+    event_handler: *mut c_void,
+    orig: unsafe extern fn(*mut c_void, usize, *mut c_void) -> u32,
+) -> u32 {
+    let result = orig(raw, unk, event_handler);
+    let dialog = Dialog::new(raw as *mut bw::Dialog);
+    if dialog.as_control().string() == "Minimap" {
+        if let Some(image) = dialog.child_by_id(1) {
+            image.set_event_handler(MINIMAP_IMG_EVENT_HANDLER.init(minimap_image_event_handler));
+        } else {
+            warn!("Couldn't find minimap dialog's image control")
+        }
+    }
+    result
+}
+
+unsafe extern fn minimap_image_event_handler(
+    ctrl: *mut bw::Control,
+    event: *mut bw::ControlEvent,
+    orig: unsafe extern fn(*mut bw::Control, *mut bw::ControlEvent) -> u32,
+) -> u32 {
+    {
+        let event = Event::new(event);
+        let ctrl = Control::new(ctrl);
+        match event.event_type() {
+            // rclick, double rclick
+            7 | 9 => {
+                let handled = handle_minimap_rally(ctrl, event);
+                if handled {
+                    return 1;
+                }
+            }
+            _ => (),
+        };
+    }
+    orig(ctrl, event)
+}
+
+unsafe fn handle_minimap_rally(ctrl: Control, event: Event) -> bool {
+    let ui = bw::misc_ui_state();
+    if ui.is_targeting || ui.is_paused || ui.is_placing_building {
+        return false;
+    }
+
+    let local_player_id = bw::local_player_id();
+    let client_selection = bw::client_selection();
+    if client_selection.is_empty() {
+        return false;
+    }
+    let unit = Unit::from_ptr(client_selection[0]).unwrap();
+    if unit.player() != local_player_id {
+        return false;
+    }
+    if !unit.is_landed_building() {
+        return false;
+    }
+
+    let config = crate::config::config();
+    if !config.has_rally(unit.id()) || client_selection.len() != 1 {
+        return false;
+    }
+
+    let game = crate::game::get();
+    let point = minimap_screen_coord_to_game(game, ctrl, event.mouse_pos());
+    set_selected_unit_rally_to(&point, game, None);
+    true
+}
+
+fn minimap_screen_coord_to_game(
+    game: Game,
+    minimap_image: Control,
+    (x, y): (i16, i16),
+) -> bw::Point {
+    let ctrl_screen = minimap_image.screen_coords();
+    let ctrl_relative_pos = bw::Point {
+        x: x as i16,
+        y: y as i16,
+    }.relative_to_rect_clamped(&ctrl_screen);
+    let greater_dimension = game.map_width_tiles().max(game.map_height_tiles());
+    let mul = match greater_dimension {
+        0 ..= 64 => 16,
+        65 ..= 128 => 32,
+        129 ..= 256 => 64,
+        _ => 64,
+    };
+    bw::Point {
+        x: ctrl_relative_pos.x * mul,
+        y: ctrl_relative_pos.y * mul,
     }
 }
