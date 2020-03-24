@@ -36,7 +36,7 @@ PS_OUTPUT main(VS_OUTPUT v)
     o.frag_effect = float4(0, 0, 0, spriteColor.a);
 
     float mask_value = tex2D(teamcolorTex, v.texCoord).r;
-    o.frag_color.rgb = TeamColor(spriteColor.rgb, teamColor.rgb, mask_value);
+    o.frag_color.rgb = TeamColor(spriteColor.rgb, teamColor.rgb, mask_value) * multiplyColor.rgb;
     o.frag_color.a = spriteColor.a;
 	return o;
 }

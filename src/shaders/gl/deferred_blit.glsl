@@ -21,6 +21,7 @@ uniform samplerBuffer lightBuffer;
 uniform float spriteWidth;
 uniform vec2 invResolution;
 uniform vec4 data;
+uniform vec4 multiplyColor;
 
 void main()
 {
@@ -44,10 +45,18 @@ void main()
     vec2 resolution = (1 / invResolution);
     vec3 eye = vec3(vec2(resolution) * vec2(0.5, 0.25), 500 * lightingScale);
 
+    float avgLight = dot(multiplyColor.rgb, vec3(1.0 / 3.0));
+
     // Directional Light
     fragment.pos = vec3(0, 0, 0);
+    // This is a bit hacky way to reduce specular lighting when the global light is
+    // not vec4(1.0). Without this the units would have strange specular reflections in dark
+    // when facing the camera.
+    vec4 tmpSpec = fragment.specular;
     vec3 base_color = fragment.color.rgb;
-    vec3 lit_color = DirectionalLighting(fragment, eye);
+    fragment.specular *= multiplyColor;
+    vec3 lit_color = DirectionalLighting(fragment, eye, multiplyColor.rgb);
+    fragment.specular = tmpSpec;
 
     // Draw the shadows
     lit_color = ApplyEffect_Shadow(lit_color, effect.rgb);
@@ -64,12 +73,13 @@ void main()
         light.pos = posTexel.rgb;
         light.color = colTexel.rgb;
         float lightRadius = posTexel.a;
-        float lightIntensity = colTexel.a;
+        //float lightIntensity = colTexel.a;
+        float lightIntensity = mix(1.0, 0.0, avgLight - min(colTexel.a, avgLight));
         offset += 2;
 
 #if 1
-        light.color *= 2;
-        lightIntensity *= 0.6;
+        //light.color *= 2;
+        //lightIntensity *= 0.6;
 #endif
 
         // gl_FragCoord starts in the lower left, lights start in the upper left

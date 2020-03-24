@@ -412,6 +412,10 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_shim::PluginApi) {
         // Ignore failure, used for campaign briefing races which shouldn't be critical
         ((*api).hook_run_dialog)(crate::campaign_hook::run_dialog_hook);
     }
+    if !config.dont_override_shaders {
+        ((*api).hook_file_read)(b"ShadersGLSL\\\0".as_ptr(), render_scr::gl_shader_hook);
+        ((*api).hook_file_read)(b"ShadersHLSL\\\0".as_ptr(), render_scr::d3d_shader_hook);
+    }
 }
 
 pub unsafe extern fn init_config(exit_on_error: bool) {

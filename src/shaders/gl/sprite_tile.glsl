@@ -4,10 +4,12 @@ layout(location = 0) out vec4 frag_color;
 layout(location = 1) out vec4 frag_effect;
 uniform sampler2D spriteTex;
 
+uniform vec4 multiplyColor;
+
 void main()
 {
     vec4 tex = texture(spriteTex, texCoord);
-    frag_color = tex;
+    frag_color = tex * multiplyColor;
 
 #if DRAW_EFFECT
     frag_effect = tex;

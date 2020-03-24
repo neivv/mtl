@@ -29,7 +29,7 @@ void main()
     frag_effect = vec4(0, 0, 0, spriteColor.a);
 
     float mask_value = texture(teamcolorTex, texCoord).r;
-    frag_color.rgb = TeamColor(spriteColor.rgb, teamColor.rgb, mask_value);
+    frag_color.rgb = TeamColor(spriteColor.rgb, teamColor.rgb, mask_value) * multiplyColor.rgb;
     frag_color.a = spriteColor.a;
 }
 

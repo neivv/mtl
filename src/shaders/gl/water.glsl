@@ -14,6 +14,7 @@ in vec2 mapCoord;  // large tiles
 in vec2 mapCoord2; // small tiles
 
 uniform vec4 data;
+uniform vec4 multiplyColor;
 
 uniform sampler2D sampleTex;  // normal 1 frame 1
 uniform sampler2D sampleTex2; // normal 1 frame 2 (for interpolation)
@@ -102,6 +103,6 @@ void main()
     frag_specular = vec4(vec3(0), 1);
     frag_normal = vec4(unscale(normal), destMask);
 #endif
-    frag_color = vec4(vec3(mix(groundColor, waterColor, destMask)), 1.0);
+    frag_color = vec4(vec3(mix(groundColor, waterColor, destMask)), 1.0) * multiplyColor;
 }
 

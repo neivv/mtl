@@ -7,6 +7,7 @@ use bw_dat::{self, Game, Unit, UnitId, order};
 
 use crate::bw;
 use crate::config::config;
+use crate::render;
 use crate::unit::{self, SerializableUnit};
 use crate::upgrades;
 
@@ -107,7 +108,11 @@ pub fn set_tracked_spells(spells: TrackedSpells) {
 }
 
 pub unsafe extern fn frame_hook() {
-    crate::render::reset_sprite_to_unit();
+    {
+        let mut lighting_state = render::lighting_state();
+        lighting_state.frame = lighting_state.frame.wrapping_add(1);
+    }
+    render::reset_sprite_to_unit();
     let config = config();
     let timers = &config.timers;
     let game = Game::from_ptr(bw::game());

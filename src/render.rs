@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::mem;
 use std::ptr::null_mut;
+use std::sync::{Mutex, MutexGuard};
 
 use libc::c_void;
 
@@ -20,10 +21,33 @@ ome2_thread_local! {
     }));
 }
 
+lazy_static! {
+    static ref LIGHTING_STATE: Mutex<LightingState> = Mutex::new(LightingState::new());
+}
+
 struct SpriteToUnit {
     valid: bool,
     first: *mut bw::Sprite,
     map: Vec<*mut bw::Unit>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[derive(Clone)]
+pub struct LightingState {
+    // Increases with game frames if lighting is enabled
+    pub frame: u32,
+}
+
+impl LightingState {
+    pub fn new() -> LightingState {
+        LightingState {
+            frame: 0,
+        }
+    }
+}
+
+pub fn lighting_state() -> MutexGuard<'static, LightingState> {
+    LIGHTING_STATE.lock().unwrap()
 }
 
 unsafe impl Send for SpriteToUnit {}
@@ -131,6 +155,10 @@ pub unsafe extern fn draw_image_hook(image: *mut c_void, orig: unsafe extern fn(
     }
     orig(image);
     if let Some(track) = track {
+        if let Some(ref lighting) = config.lighting {
+            let lighting_state = lighting_state();
+            track.set_multiply(render_scr::global_light(lighting, &lighting_state));
+        }
         if track.changed() {
             if let Some(unit) = unit {
                 if let Some(color) = upgrades::player_color(&config, game, unit) {

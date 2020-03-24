@@ -41,11 +41,11 @@ vec3 Lighting(LightInfo light, FragmentInfo fragment, float falloff, vec3 eye)
     return result;
 }
 
-vec3 DirectionalLighting(FragmentInfo fragment, vec3 eye)
+vec3 DirectionalLighting(FragmentInfo fragment, vec3 eye, vec3 lightColor)
 {
     LightInfo directional;
     directional.pos = vec3(200, 50, 500);
-    directional.color = vec3(1.0);
+    directional.color = lightColor;
     return Lighting(directional, fragment, 1.0, eye);
 }
 

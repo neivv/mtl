@@ -42,7 +42,16 @@ pub struct Config {
     pub return_cargo_softcode: bool,
     pub zerg_building_training: bool,
     pub bunker_units: Vec<(UnitId, SpriteId, u8)>,
+    pub lighting: Option<Lighting>,
+    pub dont_override_shaders: bool,
     rallies: Rallies,
+}
+
+pub struct Lighting {
+    pub start: (f32, f32, f32),
+    pub end: (f32, f32, f32),
+    // Frames for single cycle of start -> end -> start
+    pub cycle: u32,
 }
 
 struct Rallies {
@@ -74,6 +83,8 @@ impl Config {
             bunker_units: _,
             ref rallies,
             upgrades: _,
+            dont_override_shaders: _,
+            lighting: _,
         } = *self;
         !rallies.can_rally.is_empty()
     }
@@ -282,6 +293,22 @@ fn parse_int_expr_tuple(expr: &str, count: u8) -> Result<Vec<IntExpr>, Error> {
     Ok(result)
 }
 
+fn parse_f32_tuple(expr: &str, count: u8) -> Result<Vec<f32>, Error> {
+    let expr = expr.trim();
+    if !expr.starts_with("(") || !expr.ends_with(")") {
+        return Err(format_err!("Expected braced list"));
+    }
+    let expr = &expr[1..expr.len() - 1];
+    let result = brace_aware_split(expr, ",")
+        .map(|x| x.trim())
+        .map(|x| x.parse::<f32>().map_err(|x| x.into()))
+        .collect::<Result<Vec<_>, Error>>()?;
+    if result.len() != count as usize {
+        return Err(format_err!("Expected {} items, got {}", count, result.len()));
+    }
+    Ok(result)
+}
+
 fn parse_rally_order(val: &str) -> Result<RallyOrder, Error> {
     // Accept in form 'ground:{id}, unit:{id}', unit id can be also 'rclick'
     let val = val.trim();
@@ -328,6 +355,7 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
     let mut timers: Timers = Default::default();
     let mut return_cargo_softcode = false;
     let mut zerg_building_training = false;
+    let mut dont_override_shaders = false;
     let mut supplies: Supplies = Default::default();
     let mut upgrades: BTreeMap<u8, BTreeMap<Vec<State>, Vec<UpgradeChanges>>> = BTreeMap::new();
     let mut bunker_units = Vec::new();
@@ -336,6 +364,7 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
         default_order: None,
         unit_orders: Vec::new(),
     };
+    let mut lighting = None;
 
     for section in &ini.sections {
         let name = &section.name;
@@ -435,6 +464,43 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
                     x => return Err(Context::new(format!("unknown key {}", x)).into()),
                 }
             }
+        } else if name == "render" {
+            for &(ref key, ref val) in &section.values {
+                match &**key {
+                    "dont_override_shaders" => {
+                        bool_field(&mut dont_override_shaders, &val, "dont_override_shaders")?
+                    }
+                    x => return Err(Context::new(format!("unknown key {}", x)).into()),
+                }
+            }
+        } else if name == "lighting" {
+            lighting = {
+                let mut lighting = Lighting {
+                    start: (1.0, 1.0, 1.0),
+                    end: (1.0, 1.0, 1.0),
+                    cycle: 0,
+                };
+                for &(ref key, ref val) in &section.values {
+                    match &**key {
+                        "start" => {
+                            lighting.start = parse_f32_tuple(val, 3)
+                                .map(|x| (x[0], x[1], x[2]))
+                                .context("lighting.start")?;
+                        }
+                        "end" => {
+                            lighting.end = parse_f32_tuple(val, 3)
+                                .map(|x| (x[0], x[1], x[2]))
+                                .context("lighting.end")?;
+                        }
+                        "cycle" => {
+                            lighting.cycle = parse_u32(val)
+                                .context("lighting.cycle")?;
+                        }
+                        x => return Err(Context::new(format!("unknown key {}", x)).into()),
+                    }
+                }
+                Some(lighting)
+            };
         } else if name.starts_with("upgrade") {
             let mut tokens = name.split(".").skip(1);
             let generic_error = || {
@@ -543,6 +609,8 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
         upgrades,
         bunker_units,
         rallies,
+        lighting,
+        dont_override_shaders,
     })
 }
 

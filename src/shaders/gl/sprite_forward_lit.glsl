@@ -63,7 +63,7 @@ void main()
     vec3 eye = vec3(vec2(resolution) * vec2(0.5, 0.25), 500 * lightingScale);
 
     fragment.pos = vec3(0, 0, 0);
-    frag_color.rgb = DirectionalLighting(fragment, eye);
+    frag_color.rgb = DirectionalLighting(fragment, eye, vec3(1.0));
 
 #if ALL_LIGHTS
     fragment.pos = vec3(gl_FragCoord.xy, z);

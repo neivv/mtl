@@ -16,11 +16,13 @@ struct PS_OUTPUT
 
 sampler2D spriteTex : register(s0) : register(t0);
 
+float4 multiplyColor;
+
 PS_OUTPUT main(VS_OUTPUT v)
 {
     PS_OUTPUT o;
     float4 tex = tex2D(spriteTex, v.texCoord);
-    o.frag_color = tex;
+    o.frag_color = tex * multiplyColor;
 
 #if DRAW_EFFECT
     o.frag_effect = tex;
