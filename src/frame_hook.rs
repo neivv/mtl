@@ -108,14 +108,22 @@ pub fn set_tracked_spells(spells: TrackedSpells) {
 }
 
 pub unsafe extern fn frame_hook() {
+    let config = config();
+    let game = Game::from_ptr(bw::game());
     {
-        let mut lighting_state = render::lighting_state();
-        lighting_state.frame = lighting_state.frame.wrapping_add(1);
+        if let Some(ref light) = config.lighting {
+            let step = match light.bound_death {
+                Some((player, unit_id)) => (**game).deaths[unit_id.0 as usize][player as usize],
+                None => 1,
+            };
+            if step != 0 {
+                let mut lighting_state = render::lighting_state();
+                lighting_state.frame = lighting_state.frame.wrapping_add(step);
+            }
+        }
     }
     render::reset_sprite_to_unit();
-    let config = config();
     let timers = &config.timers;
-    let game = Game::from_ptr(bw::game());
     let upgrades = upgrades::global_state_changes();
     let mut tracked = tracked().borrow_mut();
     if game.frame_count() == 0 {

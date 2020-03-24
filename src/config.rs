@@ -52,6 +52,8 @@ pub struct Lighting {
     pub end: (f32, f32, f32),
     // Frames for single cycle of start -> end -> start
     pub cycle: u32,
+    // if set, only step lighting when death is nonzero at frame rate of death value
+    pub bound_death: Option<(u8, UnitId)>,
 }
 
 struct Rallies {
@@ -293,6 +295,22 @@ fn parse_int_expr_tuple(expr: &str, count: u8) -> Result<Vec<IntExpr>, Error> {
     Ok(result)
 }
 
+fn parse_u32_tuple(expr: &str, count: u8) -> Result<Vec<u32>, Error> {
+    let expr = expr.trim();
+    if !expr.starts_with("(") || !expr.ends_with(")") {
+        return Err(format_err!("Expected braced list"));
+    }
+    let expr = &expr[1..expr.len() - 1];
+    let result = brace_aware_split(expr, ",")
+        .map(|x| x.trim())
+        .map(|x| parse_u32(x))
+        .collect::<Result<Vec<_>, Error>>()?;
+    if result.len() != count as usize {
+        return Err(format_err!("Expected {} items, got {}", count, result.len()));
+    }
+    Ok(result)
+}
+
 fn parse_f32_tuple(expr: &str, count: u8) -> Result<Vec<f32>, Error> {
     let expr = expr.trim();
     if !expr.starts_with("(") || !expr.ends_with(")") {
@@ -479,6 +497,7 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
                     start: (1.0, 1.0, 1.0),
                     end: (1.0, 1.0, 1.0),
                     cycle: 0,
+                    bound_death: None,
                 };
                 for &(ref key, ref val) in &section.values {
                     match &**key {
@@ -495,6 +514,11 @@ pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
                         "cycle" => {
                             lighting.cycle = parse_u32(val)
                                 .context("lighting.cycle")?;
+                        }
+                        "death" => {
+                            lighting.bound_death = parse_u32_tuple(val, 2)
+                                .map(|x| Some((x[0] as u8, UnitId(x[1] as u16))))
+                                .context("lighting.death")?;
                         }
                         x => return Err(Context::new(format!("unknown key {}", x)).into()),
                     }
