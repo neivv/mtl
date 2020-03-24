@@ -134,26 +134,36 @@ pub struct Upgrade {
 }
 
 impl Upgrades {
-    pub fn new(upgrades: VecMap<Upgrade>) -> Upgrades {
+    pub fn new() -> Upgrades {
+        Upgrades {
+            upgrades: VecMap::new(),
+            units_with_upgrades: Vec::new(),
+            units_with_color_upgrades: Vec::new(),
+        }
+    }
+
+    pub fn update(&mut self, upgrades: VecMap<Upgrade>) {
         let largest_unit_id = upgrades.iter()
             .flat_map(|x| x.1.all_matching_units.iter())
             .map(|x| x.0)
             .max()
-            .unwrap_or(0);
-        let units_with_upgrades = if largest_unit_id != bw_dat::unit::ANY_UNIT.0 {
-            let mut units_with_upgrades = vec![false; largest_unit_id as usize + 1];
-            {
-                let units = upgrades.iter()
-                    .flat_map(|x| x.1.all_matching_units.iter());
-                for unit in units {
-                    units_with_upgrades[unit.0 as usize] = true;
-                }
+            .unwrap_or(0)
+            .max(self.units_with_upgrades.len() as u16);
+        if largest_unit_id != bw_dat::unit::ANY_UNIT.0 {
+            if self.units_with_upgrades.len() < largest_unit_id as usize + 1 {
+                self.units_with_upgrades.resize(largest_unit_id as usize + 1, false);
             }
-            units_with_upgrades
+            let units = upgrades.iter()
+                .flat_map(|x| x.1.all_matching_units.iter());
+            for unit in units {
+                self.units_with_upgrades[unit.0 as usize] = true;
+            }
         } else {
-            vec![true; bw_dat::unit::NONE.0 as usize]
+            self.units_with_upgrades = vec![true; bw_dat::unit::NONE.0 as usize];
         };
-        let mut units_with_color_upgrades = vec![false; largest_unit_id as usize + 1];
+        if self.units_with_color_upgrades.len() < largest_unit_id as usize + 1 {
+            self.units_with_color_upgrades.resize(largest_unit_id as usize + 1, false);
+        }
         {
             let changes = upgrades.iter()
                 .flat_map(|x| x.1.changes.values())
@@ -167,16 +177,12 @@ impl Upgrades {
                 }
                 if change.changes.iter().any(|x| is_color_stat(x.0)) {
                     for unit in &change.units {
-                        units_with_color_upgrades[unit.0 as usize] = true;
+                        self.units_with_color_upgrades[unit.0 as usize] = true;
                     }
                 }
             }
         }
-        Upgrades {
-            upgrades,
-            units_with_upgrades,
-            units_with_color_upgrades,
-        }
+        self.upgrades.extend(upgrades);
     }
 
     fn matches<F: FnMut(&Stat, &[IntExpr])>(&self, game: Game, unit: Unit, mut fun: F) {

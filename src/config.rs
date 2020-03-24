@@ -100,6 +100,298 @@ impl Config {
             .flatten()
             .or_else(|| self.rallies.default_order)
     }
+
+    pub fn update(&mut self, mut data: &[u8]) -> Result<(), Error> {
+        let error_invalid_field = |name: &'static str, val: &str| {
+            format_err!("Invalid field {} = {}", name, val)
+        };
+
+        let ini = Ini::open(&mut data)
+            .map_err(|e| e.context("Unable to read ini"))?;
+        let mut upgrades: BTreeMap<u8, BTreeMap<Vec<State>, Vec<UpgradeChanges>>> = BTreeMap::new();
+
+        for section in &ini.sections {
+            let name = &section.name;
+            if name == "timers" {
+                let timers = &mut self.timers;
+                for &(ref key, ref val) in &section.values {
+                    match &**key {
+                        "hallucination_death" => {
+                            u32_field(&mut timers.hallucination_death, &val, "hallucination_death")?
+                        }
+                        "matrix" => u32_field(&mut timers.matrix, &val, "matrix")?,
+                        "stim" => u32_field(&mut timers.stim, &val, "stim")?,
+                        "ensnare" => u32_field(&mut timers.ensnare, &val, "ensnare")?,
+                        "lockdown" => u32_field(&mut timers.lockdown, &val, "lockdown")?,
+                        "irradiate" => u32_field(&mut timers.irradiate, &val, "irradiate")?,
+                        "stasis" => u32_field(&mut timers.stasis, &val, "stasis")?,
+                        "plague" => u32_field(&mut timers.plague, &val, "plague")?,
+                        "maelstrom" => u32_field(&mut timers.maelstrom, &val, "maelstrom")?,
+                        "acid_spores" => u32_field(&mut timers.acid_spores, &val, "acid_spores")?,
+                        "unit_deaths" => {
+                            for pair in val.split(",") {
+                                let mut tokens = pair.split(":");
+                                let unit_id = tokens.next()
+                                    .ok_or_else(|| error_invalid_field("timers.unit_deaths", val))?;
+                                let unit_id = parse_u16(unit_id.trim()).map_err(|e| {
+                                    let timer_index = timers.unit_deaths.len();
+                                    e.context(format!(
+                                        "timers.unit_deaths #{} unit id is not u16",
+                                        timer_index
+                                    ))
+                                })?;
+                                let time = tokens.next()
+                                    .ok_or_else(|| error_invalid_field("timers.unit_deaths", val))?;
+                                let time = parse_u32(time.trim()).map_err(|e| {
+                                    let timer_index = timers.unit_deaths.len();
+                                    e.context(format!(
+                                        "timers.unit_deaths #{} time is not u32",
+                                        timer_index
+                                    ))
+                                })?;
+                                timers.unit_deaths.push((UnitId(unit_id), time));
+                            }
+                        }
+                        x => return Err(Context::new(format!("unknown key timers.{}", x)).into()),
+                    }
+                }
+            } else if name == "supplies" {
+                let supplies = &mut self.supplies;
+                for &(ref key, ref val) in &section.values {
+                    match &**key {
+                        "zerg_max" => u32_field(&mut supplies.zerg_max, &val, "zerg_max")?,
+                        "terran_max" => u32_field(&mut supplies.terran_max, &val, "terran_max")?,
+                        "protoss_max" => {
+                            u32_field(&mut supplies.protoss_max, &val, "protoss_max")?
+                        }
+                        x => {
+                            return Err(
+                                Context::new(format!("unknown key supplies.{}", x)).into()
+                            )
+                        }
+                    }
+                }
+            } else if name == "orders" {
+                for &(ref key, ref val) in &section.values {
+                    match &**key {
+                        "return_cargo_softcode" => {
+                            bool_field(
+                                &mut self.return_cargo_softcode,
+                                &val,
+                                "return_cargo_softcode",
+                            )?
+                        }
+                        "zerg_training" => {
+                            bool_field(&mut self.zerg_building_training, &val, "zerg_training")?
+                        }
+                        "bunker_unit" => {
+                            let mut tokens = val.split(",").map(|x| x.trim());
+                            let unit_id = tokens.next().and_then(|x| parse_u16(x).ok())
+                                .ok_or_else(|| error_invalid_field("orders.bunker_unit", val))?;
+                            let sprite_id = tokens.next().and_then(|x| parse_u16(x).ok())
+                                .ok_or_else(|| error_invalid_field("orders.bunker_unit", val))?;
+                            let directions = tokens.next().and_then(|x| parse_u8(x).ok())
+                                .ok_or_else(|| error_invalid_field("orders.bunker_unit", val))?;
+                            self.bunker_units.push(
+                                (UnitId(unit_id), SpriteId(sprite_id), directions)
+                            );
+                        }
+                        x => return Err(Context::new(format!("unknown key {}", x)).into()),
+                    }
+                }
+            } else if name == "rally" {
+                let rallies = &mut self.rallies;
+                for &(ref key, ref val) in &section.values {
+                    match &**key {
+                        "can_rally" => {
+                            rallies.can_rally = val.split(",")
+                                .map(|x| parse_u16(x.trim()).map(UnitId))
+                                .collect::<Result<Vec<UnitId>, _>>()
+                                .context("rallies.can_rally")?;
+                        }
+                        "default_order" => {
+                            rallies.default_order = Some(parse_rally_order(val)?);
+                        }
+                        x if x.starts_with("unit.") => {
+                            let unit_id = parse_u16(&x[5..]).ok()
+                                .ok_or_else(|| format_err!("Invalid unit id in '{}'", x))? as usize;
+                            if rallies.unit_orders.len() <= unit_id {
+                                rallies.unit_orders.resize(unit_id + 1, None);
+                            }
+                            rallies.unit_orders[unit_id] = Some(parse_rally_order(val)?);
+                        }
+                        x => return Err(Context::new(format!("unknown key {}", x)).into()),
+                    }
+                }
+            } else if name == "render" {
+                for &(ref key, ref val) in &section.values {
+                    match &**key {
+                        "dont_override_shaders" => {
+                            bool_field(
+                                &mut self.dont_override_shaders,
+                                &val,
+                                "dont_override_shaders",
+                            )?
+                        }
+                        x => return Err(Context::new(format!("unknown key {}", x)).into()),
+                    }
+                }
+            } else if name == "lighting" {
+                self.lighting = {
+                    let mut lighting = Lighting {
+                        start: (1.0, 1.0, 1.0),
+                        end: (1.0, 1.0, 1.0),
+                        cycle: 0,
+                        bound_death: None,
+                    };
+                    for &(ref key, ref val) in &section.values {
+                        match &**key {
+                            "start" => {
+                                lighting.start = parse_f32_tuple(val, 3)
+                                    .map(|x| (x[0], x[1], x[2]))
+                                    .context("lighting.start")?;
+                            }
+                            "end" => {
+                                lighting.end = parse_f32_tuple(val, 3)
+                                    .map(|x| (x[0], x[1], x[2]))
+                                    .context("lighting.end")?;
+                            }
+                            "cycle" => {
+                                lighting.cycle = parse_u32(val)
+                                    .context("lighting.cycle")?;
+                            }
+                            "death" => {
+                                lighting.bound_death = parse_u32_tuple(val, 2)
+                                    .map(|x| Some((x[0] as u8, UnitId(x[1] as u16))))
+                                    .context("lighting.death")?;
+                            }
+                            x => return Err(Context::new(format!("unknown key {}", x)).into()),
+                        }
+                    }
+                    Some(lighting)
+                };
+            } else if name.starts_with("upgrade") {
+                let mut tokens = name.split(".").skip(1);
+                let generic_error = || {
+                    format_err!(
+                        "Upgrade section {} isn't formatted as \"upgrade.<x>.level.<y>\"", name
+                    )
+                };
+                let id = tokens.next().ok_or_else(generic_error)?;
+                let level_str = tokens.next().ok_or_else(generic_error)?;
+                let level = tokens.next().ok_or_else(generic_error)?;
+                if level_str != "level" {
+                    return Err(generic_error());
+                }
+                let id = parse_u8(id)
+                    .map_err(|e| e.context(format!("Invalid upgrade id \"{}\"", id)))?;
+                let level = parse_u8(level)
+                    .map_err(|e| e.context(format!("Invalid upgrade level \"{}\"", level)))?;
+
+                let mut units = Vec::new();
+                let mut states = Vec::new();
+                let mut stats = Vec::new();
+                let mut condition = None;
+                for &(ref key, ref val) in &section.values {
+                    match &**key {
+                        "units" => {
+                            for tok in val.split(",").map(|x| x.trim()) {
+                                let id = parse_u16(tok)
+                                    .map_err(|e| e.context(format!("{} units", name)))?;
+                                units.push(UnitId(id));
+                            }
+                        }
+                        "state" => {
+                            for tok in brace_aware_split(val, ",").map(|x| x.trim()) {
+                                let state = parse_state(tok)
+                                    .map_err(|e| e.context(format!("{} state", name)))?;
+                                states.push(state);
+                            }
+                        }
+                        "condition" => {
+                            if condition.is_some() {
+                                return Err(format_err!("Cannot have multiple conditions"));
+                            }
+                            let cond = parse_upgrade_condition(val)
+                                .with_context(|_| format!("Condition of {}", name))?;
+                            condition = Some(cond);
+                        }
+                        x => {
+                            let stat = parse_stat(x)
+                                .map_err(|e| e.context(format!("In {}:{}", name, x)))?;
+                            let value_count = stat.value_count();
+                            let values = if value_count == 1 {
+                                let mut vec = SmallVec::new();
+                                let val = parse_int_expr(&val)
+                                    .map_err(|e| e.context(format!("In {}:{}", name, x)))?;
+                                vec.push(val);
+                                vec
+                            } else {
+                                parse_int_expr_tuple(&val, value_count)
+                                    .map_err(|e| e.context(format!("In {}:{}", name, x)))?
+                                    .into()
+                            };
+                            stats.push((stat, values));
+                        }
+                    }
+                }
+                if units.is_empty() {
+                    return Err(format_err!("{} did not specify any units", name));
+                }
+                let changes = UpgradeChanges {
+                    units,
+                    level,
+                    changes: stats,
+                    condition,
+                };
+                upgrades.entry(id).or_insert_with(|| Default::default())
+                    .entry(states).or_insert_with(|| Default::default())
+                    .push(changes);
+            } else {
+                return Err(format_err!("Unknown section name \"{}\"", name));
+            }
+        }
+        let upgrades = upgrades.into_iter().map(|(id, mut changes)| {
+            let mut all_matching_units = Vec::with_capacity(8);
+            for change_lists in changes.values_mut() {
+                for changes in change_lists.iter() {
+                    for &u in &changes.units {
+                        if !all_matching_units.iter().any(|&x| x == u) {
+                            all_matching_units.push(u);
+                        }
+                    }
+                }
+                change_lists.sort_by_key(|x| x.level);
+            }
+            let upgrade = Upgrade {
+                all_matching_units,
+                changes,
+            };
+            (id as usize, upgrade)
+        }).collect();
+        self.upgrades.update(upgrades);
+        Ok(())
+    }
+}
+
+impl Default for Config {
+    fn default() -> Config {
+        Config {
+            timers: Timers::default(),
+            supplies: Supplies::default(),
+            return_cargo_softcode: false,
+            zerg_building_training: false,
+            dont_override_shaders: false,
+            upgrades: Upgrades::new(),
+            lighting: None,
+            bunker_units: Vec::new(),
+            rallies: Rallies {
+                can_rally: Vec::new(),
+                default_order: None,
+                unit_orders: Vec::new(),
+            }
+        }
+    }
 }
 
 pub struct Campaign {
@@ -361,281 +653,6 @@ fn skip_str<'a>(val: &'a str, to_skip: &str) -> Option<&'a str> {
     } else {
         None
     }
-}
-
-pub fn read_config(mut data: &[u8]) -> Result<Config, Error> {
-    let error_invalid_field = |name: &'static str, val: &str| {
-        format_err!("Invalid field {} = {}", name, val)
-    };
-
-    let ini = Ini::open(&mut data)
-        .map_err(|e| e.context("Unable to read ini"))?;
-    let mut timers: Timers = Default::default();
-    let mut return_cargo_softcode = false;
-    let mut zerg_building_training = false;
-    let mut dont_override_shaders = false;
-    let mut supplies: Supplies = Default::default();
-    let mut upgrades: BTreeMap<u8, BTreeMap<Vec<State>, Vec<UpgradeChanges>>> = BTreeMap::new();
-    let mut bunker_units = Vec::new();
-    let mut rallies = Rallies {
-        can_rally: Vec::new(),
-        default_order: None,
-        unit_orders: Vec::new(),
-    };
-    let mut lighting = None;
-
-    for section in &ini.sections {
-        let name = &section.name;
-        if name == "timers" {
-            for &(ref key, ref val) in &section.values {
-                match &**key {
-                    "hallucination_death" => {
-                        u32_field(&mut timers.hallucination_death, &val, "hallucination_death")?
-                    }
-                    "matrix" => u32_field(&mut timers.matrix, &val, "matrix")?,
-                    "stim" => u32_field(&mut timers.stim, &val, "stim")?,
-                    "ensnare" => u32_field(&mut timers.ensnare, &val, "ensnare")?,
-                    "lockdown" => u32_field(&mut timers.lockdown, &val, "lockdown")?,
-                    "irradiate" => u32_field(&mut timers.irradiate, &val, "irradiate")?,
-                    "stasis" => u32_field(&mut timers.stasis, &val, "stasis")?,
-                    "plague" => u32_field(&mut timers.plague, &val, "plague")?,
-                    "maelstrom" => u32_field(&mut timers.maelstrom, &val, "maelstrom")?,
-                    "acid_spores" => u32_field(&mut timers.acid_spores, &val, "acid_spores")?,
-                    "unit_deaths" => {
-                        for pair in val.split(",") {
-                            let mut tokens = pair.split(":");
-                            let unit_id = tokens.next()
-                                .ok_or_else(|| error_invalid_field("timers.unit_deaths", val))?;
-                            let unit_id = parse_u16(unit_id.trim()).map_err(|e| {
-                                let timer_index = timers.unit_deaths.len();
-                                e.context(format!(
-                                    "timers.unit_deaths #{} unit id is not u16",
-                                    timer_index
-                                ))
-                            })?;
-                            let time = tokens.next()
-                                .ok_or_else(|| error_invalid_field("timers.unit_deaths", val))?;
-                            let time = parse_u32(time.trim()).map_err(|e| {
-                                let timer_index = timers.unit_deaths.len();
-                                e.context(format!(
-                                    "timers.unit_deaths #{} time is not u32",
-                                    timer_index
-                                ))
-                            })?;
-                            timers.unit_deaths.push((UnitId(unit_id), time));
-                        }
-                    }
-                    x => return Err(Context::new(format!("unknown key timers.{}", x)).into()),
-                }
-            }
-        } else if name == "supplies" {
-            for &(ref key, ref val) in &section.values {
-                match &**key {
-                    "zerg_max" => u32_field(&mut supplies.zerg_max, &val, "zerg_max")?,
-                    "terran_max" => u32_field(&mut supplies.terran_max, &val, "terran_max")?,
-                    "protoss_max" => u32_field(&mut supplies.protoss_max, &val, "protoss_max")?,
-                    x => return Err(Context::new(format!("unknown key supplies.{}", x)).into()),
-                }
-            }
-        } else if name == "orders" {
-            for &(ref key, ref val) in &section.values {
-                match &**key {
-                    "return_cargo_softcode" => {
-                        bool_field(&mut return_cargo_softcode, &val, "return_cargo_softcode")?
-                    }
-                    "zerg_training" => {
-                        bool_field(&mut zerg_building_training, &val, "zerg_training")?
-                    }
-                    "bunker_unit" => {
-                        let mut tokens = val.split(",").map(|x| x.trim());
-                        let unit_id = tokens.next().and_then(|x| parse_u16(x).ok())
-                            .ok_or_else(|| error_invalid_field("orders.bunker_unit", val))?;
-                        let sprite_id = tokens.next().and_then(|x| parse_u16(x).ok())
-                            .ok_or_else(|| error_invalid_field("orders.bunker_unit", val))?;
-                        let directions = tokens.next().and_then(|x| parse_u8(x).ok())
-                            .ok_or_else(|| error_invalid_field("orders.bunker_unit", val))?;
-                        bunker_units.push((UnitId(unit_id), SpriteId(sprite_id), directions));
-                    }
-                    x => return Err(Context::new(format!("unknown key {}", x)).into()),
-                }
-            }
-        } else if name == "rally" {
-            for &(ref key, ref val) in &section.values {
-                match &**key {
-                    "can_rally" => {
-                        rallies.can_rally = val.split(",")
-                            .map(|x| parse_u16(x.trim()).map(UnitId))
-                            .collect::<Result<Vec<UnitId>, _>>()
-                            .context("rallies.can_rally")?;
-                    }
-                    "default_order" => {
-                        rallies.default_order = Some(parse_rally_order(val)?);
-                    }
-                    x if x.starts_with("unit.") => {
-                        let unit_id = parse_u16(&x[5..]).ok()
-                            .ok_or_else(|| format_err!("Invalid unit id in '{}'", x))? as usize;
-                        if rallies.unit_orders.len() <= unit_id {
-                            rallies.unit_orders.resize(unit_id + 1, None);
-                        }
-                        rallies.unit_orders[unit_id] = Some(parse_rally_order(val)?);
-                    }
-                    x => return Err(Context::new(format!("unknown key {}", x)).into()),
-                }
-            }
-        } else if name == "render" {
-            for &(ref key, ref val) in &section.values {
-                match &**key {
-                    "dont_override_shaders" => {
-                        bool_field(&mut dont_override_shaders, &val, "dont_override_shaders")?
-                    }
-                    x => return Err(Context::new(format!("unknown key {}", x)).into()),
-                }
-            }
-        } else if name == "lighting" {
-            lighting = {
-                let mut lighting = Lighting {
-                    start: (1.0, 1.0, 1.0),
-                    end: (1.0, 1.0, 1.0),
-                    cycle: 0,
-                    bound_death: None,
-                };
-                for &(ref key, ref val) in &section.values {
-                    match &**key {
-                        "start" => {
-                            lighting.start = parse_f32_tuple(val, 3)
-                                .map(|x| (x[0], x[1], x[2]))
-                                .context("lighting.start")?;
-                        }
-                        "end" => {
-                            lighting.end = parse_f32_tuple(val, 3)
-                                .map(|x| (x[0], x[1], x[2]))
-                                .context("lighting.end")?;
-                        }
-                        "cycle" => {
-                            lighting.cycle = parse_u32(val)
-                                .context("lighting.cycle")?;
-                        }
-                        "death" => {
-                            lighting.bound_death = parse_u32_tuple(val, 2)
-                                .map(|x| Some((x[0] as u8, UnitId(x[1] as u16))))
-                                .context("lighting.death")?;
-                        }
-                        x => return Err(Context::new(format!("unknown key {}", x)).into()),
-                    }
-                }
-                Some(lighting)
-            };
-        } else if name.starts_with("upgrade") {
-            let mut tokens = name.split(".").skip(1);
-            let generic_error = || {
-                format_err!(
-                    "Upgrade section {} isn't formatted as \"upgrade.<x>.level.<y>\"", name
-                )
-            };
-            let id = tokens.next().ok_or_else(generic_error)?;
-            let level_str = tokens.next().ok_or_else(generic_error)?;
-            let level = tokens.next().ok_or_else(generic_error)?;
-            if level_str != "level" {
-                return Err(generic_error());
-            }
-            let id = parse_u8(id)
-                .map_err(|e| e.context(format!("Invalid upgrade id \"{}\"", id)))?;
-            let level = parse_u8(level)
-                .map_err(|e| e.context(format!("Invalid upgrade level \"{}\"", level)))?;
-
-            let mut units = Vec::new();
-            let mut states = Vec::new();
-            let mut stats = Vec::new();
-            let mut condition = None;
-            for &(ref key, ref val) in &section.values {
-                match &**key {
-                    "units" => {
-                        for tok in val.split(",").map(|x| x.trim()) {
-                            let id = parse_u16(tok)
-                                .map_err(|e| e.context(format!("{} units", name)))?;
-                            units.push(UnitId(id));
-                        }
-                    }
-                    "state" => {
-                        for tok in brace_aware_split(val, ",").map(|x| x.trim()) {
-                            let state = parse_state(tok)
-                                .map_err(|e| e.context(format!("{} state", name)))?;
-                            states.push(state);
-                        }
-                    }
-                    "condition" => {
-                        if condition.is_some() {
-                            return Err(format_err!("Cannot have multiple conditions"));
-                        }
-                        let cond = parse_upgrade_condition(val)
-                            .with_context(|_| format!("Condition of {}", name))?;
-                        condition = Some(cond);
-                    }
-                    x => {
-                        let stat = parse_stat(x)
-                            .map_err(|e| e.context(format!("In {}:{}", name, x)))?;
-                        let value_count = stat.value_count();
-                        let values = if value_count == 1 {
-                            let mut vec = SmallVec::new();
-                            let val = parse_int_expr(&val)
-                                .map_err(|e| e.context(format!("In {}:{}", name, x)))?;
-                            vec.push(val);
-                            vec
-                        } else {
-                            parse_int_expr_tuple(&val, value_count)
-                                .map_err(|e| e.context(format!("In {}:{}", name, x)))?
-                                .into()
-                        };
-                        stats.push((stat, values));
-                    }
-                }
-            }
-            if units.is_empty() {
-                return Err(format_err!("{} did not specify any units", name));
-            }
-            let changes = UpgradeChanges {
-                units,
-                level,
-                changes: stats,
-                condition,
-            };
-            upgrades.entry(id).or_insert_with(|| Default::default())
-                .entry(states).or_insert_with(|| Default::default())
-                .push(changes);
-        } else {
-            return Err(format_err!("Unknown section name \"{}\"", name));
-        }
-    }
-    let upgrades = upgrades.into_iter().map(|(id, mut changes)| {
-        let mut all_matching_units = Vec::with_capacity(8);
-        for change_lists in changes.values_mut() {
-            for changes in change_lists.iter() {
-                for &u in &changes.units {
-                    if !all_matching_units.iter().any(|&x| x == u) {
-                        all_matching_units.push(u);
-                    }
-                }
-            }
-            change_lists.sort_by_key(|x| x.level);
-        }
-        let upgrade = Upgrade {
-            all_matching_units,
-            changes,
-        };
-        (id as usize, upgrade)
-    }).collect();
-    let upgrades = Upgrades::new(upgrades);
-    Ok(Config {
-        timers,
-        supplies,
-        return_cargo_softcode,
-        zerg_building_training,
-        upgrades,
-        bunker_units,
-        rallies,
-        lighting,
-        dont_override_shaders,
-    })
 }
 
 pub fn read_campaign(mut data: &[u8]) -> Result<Campaign, Error> {

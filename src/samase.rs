@@ -7,7 +7,7 @@ use libc::c_void;
 use winapi::um::heapapi::{GetProcessHeap, HeapFree};
 use winapi::um::processthreadsapi::{GetCurrentProcess, TerminateProcess};
 
-use bw_dat::{self, DatTable, UnitId};
+use bw_dat::{self, DatTable, UnitId, Game};
 
 use crate::bw;
 use crate::config;
@@ -320,7 +320,7 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_shim::PluginApi) {
     bw_dat::init_techdata(techdata_dat());
     ORDERS_DAT.init(((*api).dat)(7).map(|x| mem::transmute(x)), "orders.dat");
     bw_dat::init_orders(orders_dat());
-    init_config(true);
+    init_config(true, None);
     //((*api).hook_on_first_file_access)(init_config);
     let config = config::config();
     let result = ((*api).hook_step_objects)(crate::frame_hook::frame_hook, 0);
@@ -418,9 +418,9 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_shim::PluginApi) {
     }
 }
 
-pub unsafe extern fn init_config(exit_on_error: bool) {
+pub unsafe extern fn init_config(exit_on_error: bool, game: Option<Game>) {
     loop {
-        match read_config() {
+        match read_config(game) {
             Ok(o) => {
                 config::set_config(o);
                 break;
@@ -454,13 +454,29 @@ pub unsafe extern fn init_config(exit_on_error: bool) {
     }
 }
 
-fn read_config() -> Result<config::Config, String> {
+fn read_config(game: Option<Game>) -> Result<config::Config, String> {
     let config_slice = match read_file("samase/mtl.ini") {
         Some(s) => s,
         None => return Err(format!("Configuration file samase/mtl.ini not found.")),
     };
-    match config::read_config(&config_slice) {
-        Ok(o) => Ok(o),
+    if game.is_none() {
+        match read_file("samase\\mtl_map.ini") {
+            Some(_) => return Err("Global mtl_map.ini is not allowed".into()),
+            None => (),
+        }
+    }
+    let mut config = config::Config::default();
+    let result = config.update(&config_slice)
+        .and_then(|()| {
+            if let Some(game) = game {
+                if let Some(map_ini) = crate::read_map_file(game, "samase\\mtl_map.ini") {
+                    return config.update(&map_ini);
+                }
+            }
+            Ok(())
+        });
+    match result {
+        Ok(()) => Ok(config),
         Err(e) => {
             use std::fmt::Write;
             let mut msg = String::new();

@@ -224,11 +224,11 @@ unsafe extern fn load(ptr: *const u8, len: usize) -> u32 {
 }
 
 unsafe extern fn init_game() {
+    // NOTE: Config cannot be updated at this point to have map-specific data
+    let game = crate::game::get();
     order_hook::invalidate_cached_unit_search();
-    samase::init_config(false);
     *render::lighting_state() = render::LightingState::new();
 
-    let game = crate::game::get();
     bw::init_game_start_vars();
     fix_campaign_music(game);
     frame_hook::init_tracked_spells();
@@ -261,4 +261,23 @@ unsafe fn fix_campaign_music(game: Game) {
         };
         (**game).bgm_song = music_id;
     }
+}
+
+fn read_map_file(game: Game, filename: &str) -> Option<samase::SamaseBox> {
+    use std::borrow::Cow;
+    let filename = unsafe {
+        if (**game).campaign_mission == 0 {
+            Cow::Borrowed(filename)
+        } else {
+            let bytes = &((**game).map_path)[..];
+            // Get the null-terminated subslice
+            let bytes = bytes.split(|&x| x == 0).next().unwrap();
+            let map_path = match ::std::str::from_utf8(bytes) {
+                Ok(s) => s,
+                Err(_) => return None,
+            };
+            format!("{}\\{}", map_path, filename).into()
+        }
+    };
+    samase::read_file(&filename)
 }

@@ -108,8 +108,11 @@ pub fn set_tracked_spells(spells: TrackedSpells) {
 }
 
 pub unsafe extern fn frame_hook() {
-    let config = config();
     let game = Game::from_ptr(bw::game());
+    if game.frame_count() == 0 {
+        crate::samase::init_config(false, Some(game));
+    }
+    let config = config();
     {
         if let Some(ref light) = config.lighting {
             let step = match light.bound_death {

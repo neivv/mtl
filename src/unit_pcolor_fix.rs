@@ -1,10 +1,7 @@
-use std::borrow::Cow;
 use std::io::Error;
 use std::sync::Mutex;
 
 use byteorder::{ReadBytesExt, LE};
-
-use crate::samase;
 
 lazy_static! {
     static ref COLORS: Mutex<Option<Vec<Color>>> = Mutex::new(None);
@@ -52,21 +49,7 @@ pub fn game_start_hook() {
         return;
     }
     let game = crate::game::get();
-    let chk_filename = unsafe {
-        if (**game).campaign_mission == 0 {
-            Cow::Borrowed("staredit\\scenario.chk")
-        } else {
-            let bytes = &((**game).map_path)[..];
-            // Get the null-terminated subslice
-            let bytes = bytes.split(|&x| x == 0).next().unwrap();
-            let map_path = match ::std::str::from_utf8(bytes) {
-                Ok(s) => s,
-                Err(_) => return,
-            };
-            format!("{}\\staredit\\scenario.chk", map_path).into()
-        }
-    };
-    let scenario_chk = match samase::read_file(&chk_filename) {
+    let scenario_chk = match crate::read_map_file(game, "staredit\\scenario.chk") {
         Some(s) => s,
         None => {
             error!("No scenario.chk ???");
