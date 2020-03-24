@@ -1,0 +1,43 @@
+#include <util_team_color.hlsl9>
+
+struct PS_OUTPUT
+{
+	float4 frag_color : COLOR0;
+	float4 frag_effect : COLOR1;
+};
+
+sampler2D spriteTex : register(s0) : register(t0);
+sampler2D teamcolorTex : register(s2) : register(t2);
+
+float spriteWidth;
+float4 multiplyColor; // Only used for the alpha channel for fading out in this shader
+float4 teamColor;
+
+struct VS_OUTPUT
+{
+#ifdef DX11
+	float4 pos : SV_POSITION;
+#endif
+	float2 texCoord : TEXCOORD0;
+};
+
+PS_OUTPUT main(VS_OUTPUT v)
+{
+	PS_OUTPUT o;
+    float4 spriteColor = tex2D(spriteTex, v.texCoord);
+
+    float3 dp = float3(0.30196078, 0.59215686, 0.10980392);
+    float brightness = dot(dp, float3(spriteColor.xxx));
+
+    if(brightness < multiplyColor.a)
+        discard;
+
+    // overwrite shadow and cloak information
+    o.frag_effect = float4(0, 0, 0, spriteColor.a);
+
+    float mask_value = tex2D(teamcolorTex, v.texCoord).r;
+    o.frag_color.rgb = TeamColor(spriteColor.rgb, teamColor.rgb, mask_value);
+    o.frag_color.a = spriteColor.a;
+	return o;
+}
+
