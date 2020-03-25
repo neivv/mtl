@@ -57,7 +57,10 @@ pub unsafe extern fn draw_hook(
                     0x18 | 0x19 | 0x1a | 0x21 => false,
                     _ => false,
                 };
-                if is_game_shader {
+                if cmd.uniforms[3] == -4.0 {
+                    // HP bar
+                    cmd.uniforms[3] = 1.0;
+                } else if is_game_shader {
                     cmd.uniforms[0] = color.0;
                     cmd.uniforms[1] = color.1;
                     cmd.uniforms[2] = color.2;
@@ -85,6 +88,15 @@ pub unsafe fn track_image_render() -> TrackImageRender {
 impl TrackImageRender {
     pub unsafe fn changed(&self) -> bool {
         (*self.draw_commands).draw_command_count != self.old_command_count
+    }
+
+    pub unsafe fn mark_hp_bar(&self) {
+        let old_len = self.old_command_count as usize;
+        let new_len = (*self.draw_commands).draw_command_count as usize;
+        for cmd in &mut (*self.draw_commands).commands[old_len..new_len] {
+            // Tells to not apply lighting later on at draw_hook
+            cmd.uniforms[3] = -4.0;
+        }
     }
 
     pub unsafe fn set_multiply(&self, color: (f32, f32, f32)) {

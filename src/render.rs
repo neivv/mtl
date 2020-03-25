@@ -155,11 +155,16 @@ pub unsafe extern fn draw_image_hook(image: *mut c_void, orig: unsafe extern fn(
     }
     orig(image);
     if let Some(track) = track {
-        if let Some(ref lighting) = config.lighting {
-            let lighting_state = lighting_state();
-            track.set_multiply(render_scr::global_light(lighting, &lighting_state));
-        }
         if track.changed() {
+            if let Some(ref lighting) = config.lighting {
+                // Hp bar
+                if (*image).drawfunc == 0xb {
+                    track.mark_hp_bar();
+                } else {
+                    let lighting_state = lighting_state();
+                    track.set_multiply(render_scr::global_light(lighting, &lighting_state));
+                }
+            }
             if let Some(unit) = unit {
                 if let Some(color) = upgrades::player_color(&config, game, unit) {
                     track.set_player_color(color);
