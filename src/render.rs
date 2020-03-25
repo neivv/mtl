@@ -157,9 +157,15 @@ pub unsafe extern fn draw_image_hook(image: *mut c_void, orig: unsafe extern fn(
     if let Some(track) = track {
         if track.changed() {
             if let Some(ref lighting) = config.lighting {
-                // Hp bar
+                // This is no-op if RTL is enabled. RTL's lighting change
+                // is done by changing deferred_blit shader's uniforms.
                 if (*image).drawfunc == 0xb {
+                    // Hp bar
                     track.mark_hp_bar();
+                } else if (*image).drawfunc == 0x9 {
+                    // Don't set lighting for 1161 remapped images
+                    // as they generally are explosions that are more of their
+                    // own light source.
                 } else {
                     let lighting_state = lighting_state();
                     track.set_multiply(render_scr::global_light(lighting, &lighting_state));
