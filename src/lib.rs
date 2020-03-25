@@ -233,6 +233,7 @@ unsafe extern fn init_game() {
     fix_campaign_music(game);
     frame_hook::init_tracked_spells();
     upgrades::init_state_changes();
+    frame_hook::enable_first_frame_hook();
 }
 
 /// Fixes a BW issue where the music was hardcoded to match Blizz campaign races

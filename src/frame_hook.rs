@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::ptr::null_mut;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use libc::c_void;
 
@@ -10,6 +11,14 @@ use crate::config::config;
 use crate::render;
 use crate::unit::{self, SerializableUnit};
 use crate::upgrades;
+
+/// Set to true at game init so that frame hook knows
+/// to do init things that were too early to do at game init hook.
+static FIRST_FRAME: AtomicBool = AtomicBool::new(false);
+
+pub fn enable_first_frame_hook() {
+    FIRST_FRAME.store(true, Ordering::Relaxed);
+}
 
 #[derive(Serialize, Deserialize, Clone)]
 struct TrackedUnit {
@@ -109,7 +118,10 @@ pub fn set_tracked_spells(spells: TrackedSpells) {
 
 pub unsafe extern fn frame_hook() {
     let game = Game::from_ptr(bw::game());
-    if game.frame_count() == 0 {
+    // Not doing frame_count == 0 as there are actually 2 frame 0s
+    let first_frame = FIRST_FRAME.load(Ordering::Relaxed);
+    if first_frame {
+        FIRST_FRAME.store(false, Ordering::Relaxed);
         crate::samase::init_config(false, Some(game));
     }
     let config = config();
@@ -129,7 +141,7 @@ pub unsafe extern fn frame_hook() {
     let timers = &config.timers;
     let upgrades = upgrades::global_state_changes();
     let mut tracked = tracked().borrow_mut();
-    if game.frame_count() == 0 {
+    if first_frame {
         // These can't be done at init_game
         crate::unit_pcolor_fix::game_start_hook();
         if let Some(max) = config.supplies.zerg_max {
