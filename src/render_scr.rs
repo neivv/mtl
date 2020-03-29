@@ -57,6 +57,10 @@ pub unsafe extern fn draw_hook(
                     0x18 | 0x19 | 0x1a | 0x21 => false,
                     _ => false,
                 };
+                let is_deferred_sprite = match cmd.shader_id {
+                    0x18 | 0x19 | 0x1a => true,
+                    _ => false,
+                };
                 if cmd.uniforms[3] == -4.0 {
                     // HP bar
                     cmd.uniforms[3] = 1.0;
@@ -64,6 +68,18 @@ pub unsafe extern fn draw_hook(
                     cmd.uniforms[0] = color.0;
                     cmd.uniforms[1] = color.1;
                     cmd.uniforms[2] = color.2;
+                } else if is_deferred_sprite {
+                    // Deferred sprite.
+                    // Set lighting enable always to 1.0 (expect for HP bars
+                    // which were in the above branch).
+                    // This fixes foliage not having lighting enable set,
+                    // which most likely is a bug in unmodded BW.
+                    // Hopefully there isn't anything else that may need it to be 0.0..
+                    //
+                    // There is also the foliage fish which uses shaders 0x28/0x29
+                    // and those shaders won't even write to lighting enable
+                    // (Making it undefined). Leaving that as is for now though.
+                    cmd.uniforms[0x12] = 1.0;
                 }
             }
         }

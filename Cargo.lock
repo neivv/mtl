@@ -211,7 +211,7 @@ dependencies = [
 
 [[package]]
 name = "mtl"
-version = "0.3.25"
+version = "0.3.26"
 dependencies = [
  "arrayvec 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "backtrace 0.3.42 (registry+https://github.com/rust-lang/crates.io-index)",
