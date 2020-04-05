@@ -41,7 +41,14 @@ pub unsafe extern fn game_screen_rclick(
     }
 
     let config = crate::config::config();
-    if !config.has_rally(unit.id()) || client_selection.len() != 1 {
+    if !config.has_rally(unit.id()) {
+        if unit.id().rclick_action() == 3 {
+            // Normal handling for towers which can rclick to attack
+            orig(raw_event);
+        }
+        return;
+    }
+    if client_selection.len() != 1 {
         return;
     }
     let game = crate::game::get();
@@ -480,7 +487,12 @@ unsafe fn handle_minimap_rally(ctrl: Control, event: Event) -> bool {
 
     let config = crate::config::config();
     if !config.has_rally(unit.id()) || client_selection.len() != 1 {
-        return false;
+        if unit.id().rclick_action() == 3 {
+            // Normal handling for towers which can rclick to attack
+            return false;
+        } else {
+            return true;
+        }
     }
 
     let game = crate::game::get();
