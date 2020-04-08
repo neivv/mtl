@@ -5,12 +5,12 @@ use byteorder::{ByteOrder, LittleEndian};
 use libc::c_void;
 
 use bw_dat::dialog::{Control, Dialog, Event, EventHandler};
-use bw_dat::{Game, unit, Unit, UnitId, order, OrderId};
+use bw_dat::{Game, unit, Unit, UnitId, order, OrderId, Sprite};
 
 use crate::bw;
 use crate::config::Config;
 use crate::unit_search::UnitSearch;
-use crate::unit::UnitExt;
+use crate::samase::SpriteExt;
 
 pub unsafe extern fn game_screen_rclick(
     raw_event: *mut c_void,
@@ -81,7 +81,7 @@ unsafe fn show_command_response(game: Game, target: Option<Unit>, point: &bw::Po
     // Not going to show fow command response for rally pointing, that's rare anyway
     if let Some(target) = target {
         if let Some(sprite) = target.sprite() {
-            (*sprite).selection_flash_timer = 0x1f;
+            sprite.set_selection_flash_timer(0x1f);
         }
     } else {
         let sprite = bw::cursor_marker();
@@ -89,13 +89,16 @@ unsafe fn show_command_response(game: Game, target: Option<Unit>, point: &bw::Po
     }
 }
 
-unsafe fn show_cursor_marker(game: Game, sprite: *mut bw::Sprite, point: &bw::Point) {
-    (*(*sprite).main_image).flags &= !0x40;
+unsafe fn show_cursor_marker(game: Game, sprite: Sprite, point: &bw::Point) {
+    if true {
+        return;
+    }
+    if let Some(image) = sprite.main_image() {
+        image.set_hidden(false);
+    }
     move_sprite(game, sprite, point);
-    let mut image = (*sprite).first_image;
-    while image.is_null() == false {
-        bw::set_iscript_animation(image, 2);
-        image = (*image).next;
+    for image in sprite.images() {
+        bw::set_iscript_animation(*image, 2);
     }
     crate::samase::draw_cursor_marker(1);
 }
@@ -129,82 +132,80 @@ pub unsafe fn rally_cursor_marker_frame_hook(config: &Config, game: Game) {
     }
 }
 
-unsafe fn move_sprite(game: Game, sprite: *mut bw::Sprite, point: &bw::Point) {
-    if (*sprite).position == *point {
+unsafe fn move_sprite(game: Game, sprite: Sprite, point: &bw::Point) {
+    let current_pos = sprite.position();
+    if current_pos == *point {
         return;
     }
     let x = point.x.max(0).min(game.map_width_tiles() as i16 * 32 - 1);
     let y = point.y.max(0).min(game.map_height_tiles() as i16 * 32 - 1);
     let y_tile = y / 32;
-    let old_y_tile = (*sprite).position.y / 32;
+    let old_y_tile = current_pos.y / 32;
     if y_tile != old_y_tile {
         // Linked list move
         let hlines = crate::samase::sprite_hlines();
         let hlines_end = crate::samase::sprite_hlines_end();
 
-        if (*sprite).next.is_null() {
-            *hlines_end.add(old_y_tile as usize) = (*sprite).prev;
+        if (**sprite).next.is_null() {
+            *hlines_end.add(old_y_tile as usize) = (**sprite).prev;
         } else {
-            (*(*sprite).next).prev = (*sprite).prev;
+            (*(**sprite).next).prev = (**sprite).prev;
         }
-        if (*sprite).prev.is_null() {
-            *hlines.add(old_y_tile as usize) = (*sprite).next;
+        if (**sprite).prev.is_null() {
+            *hlines.add(old_y_tile as usize) = (**sprite).next;
         } else {
-            (*(*sprite).prev).next = (*sprite).next;
+            (*(**sprite).prev).next = (**sprite).next;
         }
 
-        (*sprite).prev = null_mut();
+        (**sprite).prev = null_mut();
         let next = *hlines.add(y_tile as usize);
-        (*sprite).next = next;
+        (**sprite).next = next;
         if next.is_null() {
-            *hlines_end.add(y_tile as usize) = sprite;
+            *hlines_end.add(y_tile as usize) = *sprite;
         } else {
             assert!((*next).prev.is_null());
-            (*next).prev = sprite;
+            (*next).prev = *sprite;
         }
-        *hlines.add(y_tile as usize) = sprite;
+        *hlines.add(y_tile as usize) = *sprite;
     }
-    (*sprite).position.x = x;
-    (*sprite).position.y = y;
-    let mut image = (*sprite).first_image;
-    while image.is_null() == false {
-        (*image).flags |= 0x1; // Redraw
-        image = (*image).next;
+    sprite.set_position(bw::Point {
+        x,
+        y,
+    });
+    for image in sprite.images() {
+        image.redraw();
     }
 }
 
 fn clickable_area(unit: Unit) -> bw::Rect {
     unsafe {
         let mut result: Option<bw::Rect> = None;
-        let mut image = match unit.sprite() {
-            Some(s) => (*s).first_image,
-            None => null_mut(),
-        };
-        while image.is_null() == false {
-            // Shown flag
-            if (*image).flags & 0x20 != 0 {
-                let frame = (*image).frame;
-                let grp = (*image).grp as *const u8;
-                let frame = grp.add(6 + frame as usize * 8);
-                let map_position = (*image).map_position;
-                let new = bw::Rect {
-                    left: map_position.x,
-                    top: map_position.y,
-                    right: map_position.x.saturating_add(*frame.add(2) as i16).saturating_sub(1),
-                    bottom: map_position.y.saturating_add(*frame.add(3) as i16).saturating_sub(1),
-                };
-                if let Some(old) = result {
-                    result = Some(bw::Rect {
-                        left: old.left.min(new.left),
-                        top: old.top.min(new.top),
-                        right: old.right.max(new.right),
-                        bottom: old.bottom.max(new.bottom),
-                    })
-                } else {
-                    result = Some(new);
+        if let Some(sprite) = unit.sprite() {
+            for image in sprite.images() {
+                // Shown flag
+                if (**image).flags & 0x20 != 0 {
+                    let frame = (**image).frame;
+                    let grp = (**image).grp as *const u8;
+                    let frame = grp.add(6 + frame as usize * 8);
+                    let map_position = (**image).map_position;
+                    let new = bw::Rect {
+                        left: map_position.x,
+                        top: map_position.y,
+                        right: map_position.x.saturating_add(*frame.add(2) as i16).saturating_sub(1),
+                        bottom: map_position.y.saturating_add(*frame.add(3) as i16).saturating_sub(1),
+                    };
+                    if let Some(old) = result {
+                        result = Some(bw::Rect {
+                            left: old.left.min(new.left),
+                            top: old.top.min(new.top),
+                            right: old.right.max(new.right),
+                            bottom: old.bottom.max(new.bottom),
+                        })
+                    } else {
+                        result = Some(new);
+                    }
                 }
             }
-            image = (*image).next;
         }
         result.unwrap_or_else(|| bw::Rect {
             left: 0,
@@ -228,8 +229,10 @@ unsafe fn find_clicked_unit(search: &UnitSearch, player: u8, point: &bw::Point) 
         .filter(|&unit| clickable_area(unit).contains_point(point));
     let mut units = Vec::with_capacity(0x40);
     for unit in unit_iter {
-        let sort_order = sprite_sort_order((**unit).sprite);
-        units.push((unit, sort_order));
+        if let Some(sprite) = unit.sprite() {
+            let sort_order = sprite_sort_order(sprite, &unit.position());
+            units.push((unit, sort_order));
+        }
     }
     let (mut best, mut best_sort_order) = units.first()?;
     let mut best_clickable_sort_order = (0, 0);
@@ -298,18 +301,17 @@ fn is_unselectable(id: UnitId) -> bool {
 ///
 /// That however makes the returned value unsaveable / synchronizable, even though
 /// it won't affect comparisions as long as all sprites are in a single array
-fn sprite_sort_order(sprite: *mut bw::Sprite) -> (u32, usize) {
-    unsafe {
-        let y = if (*sprite).elevation_level <= 4 {
-            (*sprite).position.y as u16 as u32
-        } else {
-            0
-        };
-        let key = (((*sprite).elevation_level as u32) << 24) |
-            (y << 8) |
-            (((*sprite).flags & 0x10) as u32);
-        (key, sprite as usize)
-    }
+fn sprite_sort_order(sprite: Sprite, position: &bw::Point) -> (u32, usize) {
+    // TODO: Arg position from caller unit just since sprite.position() isn't implemented yet
+    let y = if sprite.elevation_level() <= 4 {
+        position.y as u16 as u32
+    } else {
+        0
+    };
+    let key = ((sprite.elevation_level() as u32) << 24) |
+        (y << 8) |
+        ((sprite.flags() & 0x10) as u32);
+    (key, *sprite as usize)
 }
 
 unsafe fn is_clickable_pixel(unit: Unit, point: &bw::Point) -> bool {

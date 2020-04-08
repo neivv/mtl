@@ -1,6 +1,6 @@
 [package]
 name = "mtl"
-version = "0.3.27"
+version = "0.3.28"
 authors = ["Markus Heikkinen <ittevien@gmail.com>"]
 edition = "2018"
 
@@ -51,7 +51,7 @@ rev = "fa2c53e71b483bc6c0d01141c9fe66a014cd39ca"
 
 [dependencies.bw_dat]
 git = "https://github.com/neivv/aise"
-rev = "6064a0a2ac76a994e6dc6b968f1217d11f3a640e"
+rev = "923202ccd1f25f1b660b07a7448d25816d6894a5"
 
 [dependencies.whack]
 git = "https://github.com/neivv/whack/"

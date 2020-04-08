@@ -1,6 +1,5 @@
 use std::cell::{RefCell, RefMut};
 use std::collections::BTreeMap;
-use std::ptr::null_mut;
 
 use smallvec::SmallVec;
 use vec_map::VecMap;
@@ -288,15 +287,12 @@ impl State {
             }
             Order(o) => o.iter().any(|&x| unit.order() == x),
             IscriptAnim(a) => unsafe {
-                if (**unit).sprite == null_mut() {
-                    return false;
-                }
-                let sprite = (**unit).sprite;
-                if (*sprite).main_image == null_mut() {
-                    return false;
-                }
-                let image = (*sprite).main_image;
-                a.iter().any(|&x| (*image).iscript.animation == x)
+                unit.sprite()
+                    .and_then(|s| s.main_image())
+                    .map(|image| {
+                        a.iter().any(|&x| (**image).iscript.animation == x)
+                    })
+                    .unwrap_or(false)
             },
         }
     }

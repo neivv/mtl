@@ -67,18 +67,19 @@ pub unsafe fn init_game_start_vars() {
     CURSOR_MARKER.store(0, Ordering::Relaxed);
 }
 
-pub fn cursor_marker() -> *mut Sprite {
+pub fn cursor_marker() -> bw_dat::Sprite {
     let marker = CURSOR_MARKER.load(Ordering::Relaxed);
-    if marker != 0 {
-        return marker as *mut Sprite;
-    }
     unsafe {
+        if marker != 0 {
+            return bw_dat::Sprite::from_ptr(marker as *mut Sprite).unwrap();
+        }
         let mut lone = samase::first_lone_sprite();
         while lone.is_null() == false {
-            let sprite = (*lone).sprite;
-            if (*sprite).sprite_id == 318 {
-                CURSOR_MARKER.store(sprite as usize, Ordering::Relaxed);
-                return sprite;
+            if let Some(sprite) = bw_dat::Sprite::from_ptr((*lone).sprite) {
+                if sprite.id().0 == 318 {
+                    CURSOR_MARKER.store(*sprite as usize, Ordering::Relaxed);
+                    return sprite;
+                }
             }
             lone = (*lone).next;
         }

@@ -507,3 +507,18 @@ fn read_campaign_ini() -> Result<Option<config::Campaign>, String> {
         }
     }
 }
+
+pub trait SpriteExt {
+    fn position(self) -> bw::Point;
+    fn set_position(self, pos: bw::Point);
+}
+
+impl SpriteExt for bw_dat::Sprite {
+    fn position(self) -> bw::Point {
+        unimplemented!();
+    }
+
+    fn set_position(self, pos: bw::Point) {
+        unimplemented!();
+    }
+}

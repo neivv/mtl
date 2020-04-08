@@ -5,7 +5,9 @@ use std::sync::{Mutex, MutexGuard};
 use libc::c_void;
 
 use bw_dat::unit as unit_id;
-use bw_dat::{Game, Unit, UnitId, UpgradeId, SpriteId, order, upgrade, WeaponId, UnitArray};
+use bw_dat::{
+    Game, Unit, UnitId, UpgradeId, Sprite, SpriteId, order, upgrade, WeaponId, UnitArray,
+};
 use crate::bw;
 use crate::config::{config, Config, RallyOrder, OrderOrRclick};
 use crate::upgrades;
@@ -575,18 +577,18 @@ unsafe fn attack_at_point(
     let cooldown = (cooldown as i32 + (rng.synced_rand(0..3) as i32) - 1) as u8;
     (**unit).ground_cooldown = cooldown;
     (**unit).air_cooldown = cooldown;
-    set_iscript_animation((**unit).sprite, animation, true);
+    if let Some(sprite) = unit.sprite() {
+        set_iscript_animation(sprite, animation, true);
+    }
     true
 }
 
-unsafe fn set_iscript_animation(sprite: *mut bw::Sprite, animation: u8, force: bool) {
-    if (*sprite).flags & 0x80 != 0 && !force {
+unsafe fn set_iscript_animation(sprite: Sprite, animation: u8, force: bool) {
+    if sprite.flags() & 0x80 != 0 && !force {
         return;
     }
-    let mut image = (*sprite).first_image;
-    while !image.is_null() {
-        bw::set_iscript_animation(image, animation);
-        image = (*image).next;
+    for image in sprite.images() {
+        bw::set_iscript_animation(*image, animation);
     }
 }
 
@@ -982,7 +984,10 @@ unsafe fn create_bunker_shoot_overlay(unit: Unit, sprite: SpriteId, directions: 
         return;
     }
     let bunker = unit.related().expect("Not in bunker");
-    let bunker_image = (*(**bunker).sprite).main_image;
+    let bunker_image = match bunker.sprite().and_then(|s| s.main_image()) {
+        Some(s) => s,
+        None => return,
+    };
     let unit_direction = (**unit).facing_direction as u16;
     let lo_direction = ((unit_direction + 16) / 32) as u8 & 0x7;
 
@@ -999,7 +1004,7 @@ unsafe fn create_bunker_shoot_overlay(unit: Unit, sprite: SpriteId, directions: 
         & (directions - 1);
     let sprite_direction = (a * (16 >> direction_shift_div)) * 16;
 
-    let (x, y) = match crate::lo::images_dat_attack_overlay(bunker_image, lo_direction) {
+    let (x, y) = match crate::lo::images_dat_attack_overlay(*bunker_image, lo_direction) {
         Some(s) => s,
         None => return,
     };
@@ -1011,15 +1016,16 @@ unsafe fn create_bunker_shoot_overlay(unit: Unit, sprite: SpriteId, directions: 
     if sprite.is_null() {
         return;
     }
-    set_sprite_direction((*sprite).sprite, sprite_direction);
+    if let Some(sprite) = Sprite::from_ptr((*sprite).sprite) {
+        set_sprite_direction(sprite, sprite_direction);
+    }
     bw::update_visibility_point(sprite);
 }
 
-unsafe fn set_sprite_direction(sprite: *mut bw::Sprite, direction: u8) {
-    let mut image = (*sprite).first_image;
-    while !image.is_null() {
-        assert!((*image).flags & 0x80 == 0, "unimplemented");
-        if (*image).flags & 0x8 != 0 {
+unsafe fn set_sprite_direction(sprite: Sprite, direction: u8) {
+    for image in sprite.images() {
+        assert!((**image).flags & 0x80 == 0, "unimplemented");
+        if (**image).flags & 0x8 != 0 {
             let index_32 = ((direction as u16 + 4) / 8) as u8;
             let flip;
             let index_16;
@@ -1030,19 +1036,18 @@ unsafe fn set_sprite_direction(sprite: *mut bw::Sprite, direction: u8) {
                 index_16 = index_32;
                 flip = false;
             }
-            let image_flipped = (*image).flags & 0x2 != 0;
-            if (*image).direction != index_16 || image_flipped != flip {
-                (*image).flags = ((*image).flags & !0x2) | ((flip as u16) << 1);
-                (*image).direction = index_16;
-                bw::set_image_drawfuncs(image, (*image).drawfunc);
-                (*image).flags |= 0x1;
-                let frame = (*image).frameset + index_16 as u16;
-                if (*image).frame != frame {
-                    (*image).frame = frame;
+            let image_flipped = (**image).flags & 0x2 != 0;
+            if (**image).direction != index_16 || image_flipped != flip {
+                (**image).flags = ((**image).flags & !0x2) | ((flip as u16) << 1);
+                (**image).direction = index_16;
+                bw::set_image_drawfuncs(*image, (**image).drawfunc);
+                (**image).flags |= 0x1;
+                let frame = (**image).frameset + index_16 as u16;
+                if (**image).frame != frame {
+                    (**image).frame = frame;
                 }
             }
         }
-        image = (*image).next;
     }
 }
 

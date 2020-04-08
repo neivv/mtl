@@ -246,10 +246,10 @@ pub unsafe extern fn frame_hook() {
 
         // Just unconditionally redraw anything which may have dynamic color changes
         if !crate::is_scr() && config.upgrades.may_have_color_upgrade(unit.id()) {
-            let mut image = (*(**unit).sprite).first_image;
-            while !image.is_null() {
-                (*image).flags |= 0x1;
-                image = (*image).next;
+            if let Some(sprite) = unit.sprite() {
+                for image in sprite.images() {
+                    image.redraw();
+                }
             }
         }
     }

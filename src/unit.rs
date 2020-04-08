@@ -127,7 +127,6 @@ pub fn clear_load_mapping() {
 
 pub trait UnitExt {
     fn set_unit_id(self, new: UnitId);
-    fn sprite(self) -> Option<*mut bw::Sprite>;
     fn set_resource_amount(self, value: u16);
     fn issue_order(self, order: OrderId, pos: bw::Point, unit: Option<Unit>);
     fn issue_order_ground(self, order: OrderId, target: bw::Point);
@@ -168,15 +167,6 @@ impl UnitExt for Unit {
             };
             if new.is_building() || buttons == 0xe4 {
                 (**self).buttons = buttons;
-            }
-        }
-    }
-
-    fn sprite(self) -> Option<*mut bw::Sprite> {
-        unsafe {
-            match (**self).sprite == null_mut() {
-                true => None,
-                false => Some((**self).sprite),
             }
         }
     }

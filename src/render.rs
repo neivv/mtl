@@ -9,7 +9,7 @@ use bw_dat::{Game, Unit};
 
 use crate::bw;
 use crate::render_scr;
-use crate::unit::{active_units, UnitExt};
+use crate::unit::{active_units};
 use crate::upgrades;
 
 ome2_thread_local! {
@@ -67,13 +67,13 @@ fn sprite_to_unit(sprite: *mut bw::Sprite) -> Option<Unit> {
         let mut last = 0;
         for unit in active_units() {
             if let Some(sprite) = unit.sprite() {
-                first = first.min(sprite as usize);
-                last = last.max(sprite as usize);
+                first = first.min(*sprite as usize);
+                last = last.max(*sprite as usize);
             }
             if let Some(subunit) = unit.subunit_linked() {
                 if let Some(sprite) = subunit.sprite() {
-                    first = first.min(sprite as usize);
-                    last = last.max(sprite as usize);
+                    first = first.min(*sprite as usize);
+                    last = last.max(*sprite as usize);
                 }
             }
         }
@@ -85,12 +85,12 @@ fn sprite_to_unit(sprite: *mut bw::Sprite) -> Option<Unit> {
         sprite_to_unit.map.resize(len, null_mut());
         for unit in active_units() {
             if let Some(sprite) = unit.sprite() {
-                let index = (sprite as usize - first) / mem::size_of::<bw::Sprite>();
+                let index = (*sprite as usize - first) / mem::size_of::<bw::Sprite>();
                 sprite_to_unit.map[index] = *unit;
             }
             if let Some(subunit) = unit.subunit_linked() {
                 if let Some(sprite) = subunit.sprite() {
-                    let index = (sprite as usize - first) / mem::size_of::<bw::Sprite>();
+                    let index = (*sprite as usize - first) / mem::size_of::<bw::Sprite>();
                     sprite_to_unit.map[index] = *unit;
                 }
             }
