@@ -90,9 +90,6 @@ unsafe fn show_command_response(game: Game, target: Option<Unit>, point: &bw::Po
 }
 
 unsafe fn show_cursor_marker(game: Game, sprite: Sprite, point: &bw::Point) {
-    if true {
-        return;
-    }
     if let Some(image) = sprite.main_image() {
         image.set_hidden(false);
     }

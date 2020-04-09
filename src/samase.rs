@@ -186,6 +186,21 @@ pub fn draw_cursor_marker(draw: u32) {
     unsafe { DRAW_CURSOR_MARKER.get()(draw) }
 }
 
+static mut GET_SPRITE_POS: GlobalFunc<fn(*mut bw::Sprite, *mut u16)> = GlobalFunc(None);
+pub unsafe fn get_sprite_pos(sprite: *mut bw::Sprite) -> bw::Point {
+    let mut ret = bw::Point {
+        x: 0,
+        y: 0,
+    };
+    GET_SPRITE_POS.get()(sprite, &mut ret as *mut bw::Point as *mut u16);
+    ret
+}
+
+static mut SET_SPRITE_POS: GlobalFunc<fn(*mut bw::Sprite, *const u16)> = GlobalFunc(None);
+pub unsafe fn set_sprite_pos(sprite: *mut bw::Sprite, val: &bw::Point) {
+    SET_SPRITE_POS.get()(sprite, val as *const bw::Point as *const u16);
+}
+
 static mut MISC_UI_STATE: GlobalFunc<fn(*mut u8)> = GlobalFunc(None);
 pub fn misc_ui_state(out: &mut [u8]) {
     assert_eq!(out.len(), 3);
@@ -291,7 +306,7 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_shim::PluginApi) {
     bw_dat::set_is_scr(crate::is_scr());
     crate::init();
 
-    let required_version = 21;
+    let required_version = 23;
     if (*api).version < required_version {
         fatal(&format!(
             "Newer samase is required. (Plugin API version {}, this plugin requires version {})",
@@ -379,6 +394,8 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_shim::PluginApi) {
     SELECTIONS.0 = Some(mem::transmute(((*api).selections)()));
     DRAW_CURSOR_MARKER.0 = Some(mem::transmute(((*api).draw_cursor_marker)()));
     MISC_UI_STATE.0 = Some(mem::transmute(((*api).misc_ui_state)(3)));
+    GET_SPRITE_POS.0 = Some(mem::transmute(((*api).get_sprite_position)()));
+    SET_SPRITE_POS.0 = Some(mem::transmute(((*api).set_sprite_position)()));
     if let Some(tunit) = read_file("game\\tunit.pcx") {
         if let Err(e) = crate::unit_pcolor_fix::init_unit_colors(&tunit) {
             fatal(&format!("Invalid game\\tunit.pcx: {}", e));
@@ -515,10 +532,10 @@ pub trait SpriteExt {
 
 impl SpriteExt for bw_dat::Sprite {
     fn position(self) -> bw::Point {
-        unimplemented!();
+        unsafe { get_sprite_pos(*self) }
     }
 
     fn set_position(self, pos: bw::Point) {
-        unimplemented!();
+        unsafe { set_sprite_pos(*self, &pos) }
     }
 }
