@@ -226,6 +226,11 @@ pub fn weapons_dat() -> *mut bw_dat::DatTable {
     unsafe { WEAPONS_DAT.get()() }
 }
 
+static mut FLINGY_DAT: GlobalFunc<unsafe extern fn() -> *mut DatTable> = GlobalFunc(None);
+pub fn flingy_dat() -> *mut DatTable {
+    unsafe { FLINGY_DAT.get()() }
+}
+
 static mut UPGRADES_DAT: GlobalFunc<fn() -> *mut bw_dat::DatTable> = GlobalFunc(None);
 pub fn upgrades_dat() -> *mut bw_dat::DatTable {
     unsafe { UPGRADES_DAT.get()() }
@@ -236,9 +241,25 @@ pub fn techdata_dat() -> *mut bw_dat::DatTable {
     unsafe { TECHDATA_DAT.get()() }
 }
 
+static mut SPRITES_DAT: GlobalFunc<unsafe extern fn() -> *mut DatTable> = GlobalFunc(None);
+pub fn sprites_dat() -> *mut DatTable {
+    unsafe { SPRITES_DAT.get()() }
+}
+
 static mut ORDERS_DAT: GlobalFunc<fn() -> *mut bw_dat::DatTable> = GlobalFunc(None);
 pub fn orders_dat() -> *mut bw_dat::DatTable {
     unsafe { ORDERS_DAT.get()() }
+}
+
+static mut PORTDATA_DAT: GlobalFunc<fn() -> *mut bw_dat::DatTable> = GlobalFunc(None);
+pub fn portdata_dat() -> *mut bw_dat::DatTable {
+    unsafe {
+        if let Some(x) = PORTDATA_DAT.0 {
+            x()
+        } else {
+            null_mut()
+        }
+    }
 }
 
 pub fn issue_order(
@@ -290,10 +311,15 @@ impl ops::Drop for SamaseBox {
 
 static mut READ_FILE: GlobalFunc<fn(*const u8, *mut usize) -> *mut u8> = GlobalFunc(None);
 pub fn read_file(name: &str) -> Option<SamaseBox> {
-    // Uh, should work fine
-    let cstring = format!("{}\0", name);
+    read_file_u8(name.as_bytes())
+}
+
+pub fn read_file_u8(name: &[u8]) -> Option<SamaseBox> {
+    let mut vec = Vec::with_capacity(name.len());
+    vec.extend_from_slice(name);
+    vec.push(0);
     let mut size = 0usize;
-    let result = unsafe { READ_FILE.get()(cstring.as_ptr(), &mut size) };
+    let result = unsafe { READ_FILE.get()(vec.as_ptr(), &mut size) };
     NonNull::new(result).map(|data| SamaseBox {
         data,
         len: size,
@@ -306,7 +332,7 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_shim::PluginApi) {
     bw_dat::set_is_scr(crate::is_scr());
     crate::init();
 
-    let required_version = 23;
+    let required_version = 24;
     if (*api).version < required_version {
         fatal(&format!(
             "Newer samase is required. (Plugin API version {}, this plugin requires version {})",
@@ -329,10 +355,14 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_shim::PluginApi) {
     bw_dat::init_units(units_dat());
     WEAPONS_DAT.init(((*api).dat)(1).map(|x| mem::transmute(x)), "weapons.dat");
     bw_dat::init_weapons(weapons_dat());
+    FLINGY_DAT.init(((*api).dat)(2).map(|x| mem::transmute(x)), "flingy.dat");
+    bw_dat::init_flingy(flingy_dat());
     UPGRADES_DAT.init(((*api).dat)(3).map(|x| mem::transmute(x)), "upgrades.dat");
     bw_dat::init_upgrades(upgrades_dat());
     TECHDATA_DAT.init(((*api).dat)(4).map(|x| mem::transmute(x)), "techdata.dat");
     bw_dat::init_techdata(techdata_dat());
+    SPRITES_DAT.init(((*api).dat)(5).map(|x| mem::transmute(x)), "sprites.dat");
+    bw_dat::init_sprites(sprites_dat());
     ORDERS_DAT.init(((*api).dat)(7).map(|x| mem::transmute(x)), "orders.dat");
     bw_dat::init_orders(orders_dat());
     init_config(true, None);
@@ -432,6 +462,13 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_shim::PluginApi) {
     if !config.dont_override_shaders {
         ((*api).hook_file_read)(b"ShadersGLSL\\\0".as_ptr(), render_scr::gl_shader_hook);
         ((*api).hook_file_read)(b"ShadersHLSL\\\0".as_ptr(), render_scr::d3d_shader_hook);
+    }
+    if config.enable_map_dat_files {
+        let ok = ((*api).hook_init_units)(crate::init_map_specific_dat);
+        PORTDATA_DAT.try_init(((*api).dat)(6).map(|x| mem::transmute(x)));
+        if ok == 0 {
+            ((*api).warn_unsupported_feature)(b"Map specific dat\0".as_ptr());
+        }
     }
 }
 

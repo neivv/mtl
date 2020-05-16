@@ -55,6 +55,7 @@ pub unsafe extern fn draw_hook(
                     0xb => true,
                     // Deferred rendering early shaders, they have lighting at blit shader
                     0x18 | 0x19 | 0x1a | 0x21 => false,
+                    // 0xc and 0x10 are also game shaders, but they are handled in set_multiply
                     _ => false,
                 };
                 let is_deferred_sprite = match cmd.shader_id {

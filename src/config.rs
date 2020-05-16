@@ -44,6 +44,7 @@ pub struct Config {
     pub bunker_units: Vec<(UnitId, SpriteId, u8)>,
     pub lighting: Option<Lighting>,
     pub dont_override_shaders: bool,
+    pub enable_map_dat_files: bool,
     rallies: Rallies,
 }
 
@@ -86,6 +87,7 @@ impl Config {
             ref rallies,
             upgrades: _,
             dont_override_shaders: _,
+            enable_map_dat_files: _,
             lighting: _,
         } = *self;
         !rallies.can_rally.is_empty()
@@ -231,6 +233,19 @@ impl Config {
                                 &mut self.dont_override_shaders,
                                 &val,
                                 "dont_override_shaders",
+                            )?
+                        }
+                        x => return Err(Context::new(format!("unknown key {}", x)).into()),
+                    }
+                }
+            } else if name == "map" {
+                for &(ref key, ref val) in &section.values {
+                    match &**key {
+                        "enable_map_dat_files" => {
+                            bool_field(
+                                &mut self.enable_map_dat_files,
+                                &val,
+                                "enable_map_dat_files",
                             )?
                         }
                         x => return Err(Context::new(format!("unknown key {}", x)).into()),
@@ -382,6 +397,7 @@ impl Default for Config {
             return_cargo_softcode: false,
             zerg_building_training: false,
             dont_override_shaders: false,
+            enable_map_dat_files: false,
             upgrades: Upgrades::new(),
             lighting: None,
             bunker_units: Vec::new(),
