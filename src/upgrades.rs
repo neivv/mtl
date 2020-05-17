@@ -304,6 +304,8 @@ pub enum Stat {
     ShieldRegen,
     EnergyRegen,
     Cooldown,
+    AirCooldown,
+    GroundCooldown,
     LarvaTimer,
     MineralHarvestTime,
     GasHarvestTime,
@@ -371,100 +373,66 @@ pub fn regens(config: &Config, game: Game, unit: Unit) -> Regens {
     }
 }
 
-pub fn cooldown(config: &Config, game: Game, unit: Unit) -> Option<u8> {
+fn upgrade_min_u8(config: &Config, game: Game, unit: Unit, match_stat: Stat) -> Option<u8> {
     let mut value = None;
-    config.upgrades.matches(game, unit, |stat, vals| match *stat {
-        Stat::Cooldown => {
+    config.upgrades.matches(game, unit, |stat, vals| {
+        if *stat == match_stat {
             let val = clamp_u8(vals[0].eval_with_unit(unit, game));
             value = Some(value.unwrap_or(!0).min(val));
         }
-        _ => (),
     });
     value
+}
+
+fn upgrade_max_u8(config: &Config, game: Game, unit: Unit, match_stat: Stat) -> Option<u8> {
+    let mut value = None;
+    config.upgrades.matches(game, unit, |stat, vals| {
+        if *stat == match_stat {
+            let val = clamp_u8(vals[0].eval_with_unit(unit, game));
+            value = Some(value.unwrap_or(0).max(val));
+        }
+    });
+    value
+}
+
+pub fn cooldown(config: &Config, game: Game, unit: Unit) -> Option<u8> {
+    upgrade_min_u8(config, game, unit, Stat::Cooldown)
+}
+
+pub fn ground_cooldown(config: &Config, game: Game, unit: Unit) -> Option<u8> {
+    upgrade_min_u8(config, game, unit, Stat::GroundCooldown)
+}
+
+pub fn air_cooldown(config: &Config, game: Game, unit: Unit) -> Option<u8> {
+    upgrade_min_u8(config, game, unit, Stat::AirCooldown)
 }
 
 pub fn mineral_harvest_time(config: &Config, game: Game, unit: Unit) -> Option<u8> {
-    let mut value = None;
-    config.upgrades.matches(game, unit, |stat, vals| match *stat {
-        Stat::MineralHarvestTime => {
-            let val = clamp_u8(vals[0].eval_with_unit(unit, game));
-            value = Some(value.unwrap_or(!0).min(val));
-        }
-        _ => (),
-    });
-    value
+    upgrade_min_u8(config, game, unit, Stat::MineralHarvestTime)
 }
 
 pub fn mineral_harvest_reduce(config: &Config, game: Game, unit: Unit) -> Option<u8> {
-    let mut value = None;
-    config.upgrades.matches(game, unit, |stat, vals| match *stat {
-        Stat::MineralHarvestReduce => {
-            let val = clamp_u8(vals[0].eval_with_unit(unit, game));
-            value = Some(value.unwrap_or(0).max(val));
-        }
-        _ => (),
-    });
-    value
+    upgrade_max_u8(config, game, unit, Stat::MineralHarvestReduce)
 }
 
 pub fn mineral_harvest_carry(config: &Config, game: Game, unit: Unit) -> Option<u8> {
-    let mut value = None;
-    config.upgrades.matches(game, unit, |stat, vals| match *stat {
-        Stat::MineralHarvestCarry => {
-            let val = clamp_u8(vals[0].eval_with_unit(unit, game));
-            value = Some(value.unwrap_or(0).max(val));
-        }
-        _ => (),
-    });
-    value
+    upgrade_max_u8(config, game, unit, Stat::MineralHarvestCarry)
 }
 
 pub fn gas_harvest_time(config: &Config, game: Game, unit: Unit) -> Option<u8> {
-    let mut value = None;
-    config.upgrades.matches(game, unit, |stat, vals| match *stat {
-        Stat::GasHarvestTime => {
-            let val = clamp_u8(vals[0].eval_with_unit(unit, game));
-            value = Some(value.unwrap_or(!0).min(val));
-        }
-        _ => (),
-    });
-    value
+    upgrade_min_u8(config, game, unit, Stat::GasHarvestTime)
 }
 
 pub fn gas_harvest_reduce(config: &Config, game: Game, unit: Unit) -> Option<u8> {
-    let mut value = None;
-    config.upgrades.matches(game, unit, |stat, vals| match *stat {
-        Stat::GasHarvestReduce => {
-            let val = clamp_u8(vals[0].eval_with_unit(unit, game));
-            value = Some(value.unwrap_or(0).max(val));
-        }
-        _ => (),
-    });
-    value
+    upgrade_max_u8(config, game, unit, Stat::GasHarvestReduce)
 }
 
 pub fn gas_harvest_carry(config: &Config, game: Game, unit: Unit) -> Option<u8> {
-    let mut value = None;
-    config.upgrades.matches(game, unit, |stat, vals| match *stat {
-        Stat::GasHarvestCarry => {
-            let val = clamp_u8(vals[0].eval_with_unit(unit, game));
-            value = Some(value.unwrap_or(0).max(val));
-        }
-        _ => (),
-    });
-    value
+    upgrade_max_u8(config, game, unit, Stat::GasHarvestCarry)
 }
 
 pub fn gas_harvest_carry_depleted(config: &Config, game: Game, unit: Unit) -> Option<u8> {
-    let mut value = None;
-    config.upgrades.matches(game, unit, |stat, vals| match *stat {
-        Stat::GasHarvestCarryDepleted => {
-            let val = clamp_u8(vals[0].eval_with_unit(unit, game));
-            value = Some(value.unwrap_or(0).max(val));
-        }
-        _ => (),
-    });
-    value
+    upgrade_max_u8(config, game, unit, Stat::GasHarvestCarryDepleted)
 }
 
 pub fn creep_spread_time(config: &Config, game: Game, unit: Unit) -> Option<i32> {
@@ -492,15 +460,7 @@ pub fn larva_spawn_time(config: &Config, game: Game, unit: Unit) -> Option<i32> 
 }
 
 pub fn unload_cooldown(config: &Config, game: Game, unit: Unit) -> Option<u8> {
-    let mut value = None;
-    config.upgrades.matches(game, unit, |stat, vals| match *stat {
-        Stat::UnloadCooldown => {
-            let val = clamp_u8(vals[0].eval_with_unit(unit, game));
-            value = Some(value.unwrap_or(!0).min(val));
-        }
-        _ => (),
-    });
-    value
+    upgrade_min_u8(config, game, unit, Stat::UnloadCooldown)
 }
 
 pub fn player_color(config: &Config, game: Game, unit: Unit) -> Option<(f32, f32, f32)> {

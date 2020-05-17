@@ -269,14 +269,18 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
     }
     if ground_cooldown_check {
         if (**unit).ground_cooldown > 0 {
-            if let Some(new_time) = upgrades::cooldown(&config, game, unit) {
+            if let Some(new_time) = upgrades::ground_cooldown(&config, game, unit) {
+                (**unit).ground_cooldown = new_time;
+            } else if let Some(new_time) = upgrades::cooldown(&config, game, unit) {
                 (**unit).ground_cooldown = new_time;
             }
         }
     }
     if air_cooldown_check {
         if (**unit).air_cooldown > 0 {
-            if let Some(new_time) = upgrades::cooldown(&config, game, unit) {
+            if let Some(new_time) = upgrades::air_cooldown(&config, game, unit) {
+                (**unit).air_cooldown = new_time;
+            } else if let Some(new_time) = upgrades::cooldown(&config, game, unit) {
                 (**unit).air_cooldown = new_time;
             }
         }

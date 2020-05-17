@@ -517,6 +517,8 @@ fn parse_stat(key: &str) -> Result<Stat, Error> {
         "shield_regen" => Stat::ShieldRegen,
         "energy_regen" => Stat::EnergyRegen,
         "cooldown" => Stat::Cooldown,
+        "air_cooldown" => Stat::AirCooldown,
+        "ground_cooldown" => Stat::GroundCooldown,
         "larva_timer" => Stat::LarvaTimer,
         "mineral_harvest_time" => Stat::MineralHarvestTime,
         "gas_harvest_time" => Stat::GasHarvestTime,
