@@ -954,7 +954,7 @@ fn angle_to(from: &bw::Point, to: &bw::Point) -> u8 {
 }
 
 fn degrees_to_bw_angle(value: f32) -> u8 {
-    (((value % 360.0) * 256.0 / -360.0) + 64.0) as u8
+    (((value % 360.0) * 256.0 / -360.0) + 64.0) as i32 as u8
 }
 
 #[test]
