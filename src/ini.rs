@@ -1,7 +1,7 @@
 use std::io::{BufRead, BufReader, Read};
 use std::mem;
 
-use failure::Error;
+use anyhow::{anyhow, Error};
 
 pub struct Ini {
     pub sections: Vec<Section>,
@@ -39,7 +39,7 @@ impl Ini {
                 } else {
                     let eq = match line.find("=") {
                         Some(s) => s,
-                        None => return Err(format_err!("Invalid line \"{}\"", line)),
+                        None => return Err(anyhow!("Invalid line \"{}\"", line)),
                     };
                     let key = (&line[..eq]).trim().into();
                     let value = (&line[eq + 1..]).trim().into();

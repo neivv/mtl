@@ -3,9 +3,9 @@ use std::sync::{Arc, Mutex};
 
 use smallvec::SmallVec;
 
+use anyhow::{anyhow, Context, Error};
 use bw_dat::{UnitId, OrderId, SpriteId};
 use bw_dat::expr::{IntExpr, BoolExpr};
-use failure::{Context, Error, ResultExt};
 
 use crate::bw;
 use crate::ini::Ini;
@@ -105,11 +105,11 @@ impl Config {
 
     pub fn update(&mut self, mut data: &[u8]) -> Result<(), Error> {
         let error_invalid_field = |name: &'static str, val: &str| {
-            format_err!("Invalid field {} = {}", name, val)
+            anyhow!("Invalid field {} = {}", name, val)
         };
 
         let ini = Ini::open(&mut data)
-            .map_err(|e| e.context("Unable to read ini"))?;
+            .context("Unable to read ini")?;
         let mut upgrades: BTreeMap<u8, BTreeMap<Vec<State>, Vec<UpgradeChanges>>> = BTreeMap::new();
 
         for section in &ini.sections {
@@ -154,7 +154,7 @@ impl Config {
                                 timers.unit_deaths.push((UnitId(unit_id), time));
                             }
                         }
-                        x => return Err(Context::new(format!("unknown key timers.{}", x)).into()),
+                        x => return Err(anyhow!("unknown key timers.{}", x)),
                     }
                 }
             } else if name == "supplies" {
@@ -166,11 +166,7 @@ impl Config {
                         "protoss_max" => {
                             u32_field(&mut supplies.protoss_max, &val, "protoss_max")?
                         }
-                        x => {
-                            return Err(
-                                Context::new(format!("unknown key supplies.{}", x)).into()
-                            )
-                        }
+                        x => return Err(anyhow!("unknown key supplies.{}", x)),
                     }
                 }
             } else if name == "orders" {
@@ -198,7 +194,7 @@ impl Config {
                                 (UnitId(unit_id), SpriteId(sprite_id), directions)
                             );
                         }
-                        x => return Err(Context::new(format!("unknown key {}", x)).into()),
+                        x => return Err(anyhow!("unknown key {}", x)),
                     }
                 }
             } else if name == "rally" {
@@ -216,13 +212,13 @@ impl Config {
                         }
                         x if x.starts_with("unit.") => {
                             let unit_id = parse_u16(&x[5..]).ok()
-                                .ok_or_else(|| format_err!("Invalid unit id in '{}'", x))? as usize;
+                                .ok_or_else(|| anyhow!("Invalid unit id in '{}'", x))? as usize;
                             if rallies.unit_orders.len() <= unit_id {
                                 rallies.unit_orders.resize(unit_id + 1, None);
                             }
                             rallies.unit_orders[unit_id] = Some(parse_rally_order(val)?);
                         }
-                        x => return Err(Context::new(format!("unknown key {}", x)).into()),
+                        x => return Err(anyhow!("unknown key {}", x)),
                     }
                 }
             } else if name == "render" {
@@ -235,7 +231,7 @@ impl Config {
                                 "dont_override_shaders",
                             )?
                         }
-                        x => return Err(Context::new(format!("unknown key {}", x)).into()),
+                        x => return Err(anyhow!("unknown key {}", x)),
                     }
                 }
             } else if name == "map" {
@@ -248,7 +244,7 @@ impl Config {
                                 "enable_map_dat_files",
                             )?
                         }
-                        x => return Err(Context::new(format!("unknown key {}", x)).into()),
+                        x => return Err(anyhow!("unknown key {}", x)),
                     }
                 }
             } else if name == "lighting" {
@@ -280,7 +276,7 @@ impl Config {
                                     .map(|x| Some((x[0] as u8, UnitId(x[1] as u16))))
                                     .context("lighting.death")?;
                             }
-                            x => return Err(Context::new(format!("unknown key {}", x)).into()),
+                            x => return Err(anyhow!("unknown key {}", x)),
                         }
                     }
                     Some(lighting)
@@ -288,7 +284,7 @@ impl Config {
             } else if name.starts_with("upgrade") {
                 let mut tokens = name.split(".").skip(1);
                 let generic_error = || {
-                    format_err!(
+                    anyhow!(
                         "Upgrade section {} isn't formatted as \"upgrade.<x>.level.<y>\"", name
                     )
                 };
@@ -299,9 +295,9 @@ impl Config {
                     return Err(generic_error());
                 }
                 let id = parse_u8(id)
-                    .map_err(|e| e.context(format!("Invalid upgrade id \"{}\"", id)))?;
+                    .with_context(|| format!("Invalid upgrade id \"{}\"", id))?;
                 let level = parse_u8(level)
-                    .map_err(|e| e.context(format!("Invalid upgrade level \"{}\"", level)))?;
+                    .with_context(|| format!("Invalid upgrade level \"{}\"", level))?;
 
                 let mut units = Vec::new();
                 let mut states = Vec::new();
@@ -312,38 +308,38 @@ impl Config {
                         "units" => {
                             for tok in val.split(",").map(|x| x.trim()) {
                                 let id = parse_u16(tok)
-                                    .map_err(|e| e.context(format!("{} units", name)))?;
+                                    .with_context(|| format!("{} units", name))?;
                                 units.push(UnitId(id));
                             }
                         }
                         "state" => {
                             for tok in brace_aware_split(val, ",").map(|x| x.trim()) {
                                 let state = parse_state(tok)
-                                    .map_err(|e| e.context(format!("{} state", name)))?;
+                                    .with_context(|| format!("{} state", name))?;
                                 states.push(state);
                             }
                         }
                         "condition" => {
                             if condition.is_some() {
-                                return Err(format_err!("Cannot have multiple conditions"));
+                                return Err(anyhow!("Cannot have multiple conditions"));
                             }
                             let cond = parse_upgrade_condition(val)
-                                .with_context(|_| format!("Condition of {}", name))?;
+                                .with_context(|| format!("Condition of {}", name))?;
                             condition = Some(cond);
                         }
                         x => {
                             let stat = parse_stat(x)
-                                .map_err(|e| e.context(format!("In {}:{}", name, x)))?;
+                                .with_context(|| format!("In {}:{}", name, x))?;
                             let value_count = stat.value_count();
                             let values = if value_count == 1 {
                                 let mut vec = SmallVec::new();
                                 let val = parse_int_expr(&val)
-                                    .map_err(|e| e.context(format!("In {}:{}", name, x)))?;
+                                    .with_context(|| format!("In {}:{}", name, x))?;
                                 vec.push(val);
                                 vec
                             } else {
                                 parse_int_expr_tuple(&val, value_count)
-                                    .map_err(|e| e.context(format!("In {}:{}", name, x)))?
+                                    .with_context(|| format!("In {}:{}", name, x))?
                                     .into()
                             };
                             stats.push((stat, values));
@@ -351,7 +347,7 @@ impl Config {
                     }
                 }
                 if units.is_empty() {
-                    return Err(format_err!("{} did not specify any units", name));
+                    return Err(anyhow!("{} did not specify any units", name));
                 }
                 let changes = UpgradeChanges {
                     units,
@@ -363,7 +359,7 @@ impl Config {
                     .entry(states).or_insert_with(|| Default::default())
                     .push(changes);
             } else {
-                return Err(format_err!("Unknown section name \"{}\"", name));
+                return Err(anyhow!("Unknown section name \"{}\"", name));
             }
         }
         let upgrades = upgrades.into_iter().map(|(id, mut changes)| {
@@ -428,8 +424,7 @@ fn bool_field(out: &mut bool, value: &str, field: &'static str) -> Result<(), Er
         "true" | "True" | "1" | "y" | "Y" => *out = true,
         "false" | "False" | "0" | "n" | "N" => *out = true,
         _ => {
-            let msg = format!("Invalid value `{}` for bool {}", value, field);
-            return Err(Context::new(msg).into());
+            return Err(anyhow!("Invalid value `{}` for bool {}", value, field));
         }
     }
     Ok(())
@@ -437,7 +432,7 @@ fn bool_field(out: &mut bool, value: &str, field: &'static str) -> Result<(), Er
 
 fn u32_field(out: &mut Option<u32>, value: &str, field_name: &'static str) -> Result<(), Error> {
     let value = parse_u32(value)
-        .map_err(|e| e.context(format!("{} is not u32", field_name)))?;
+        .with_context(|| format!("{} is not u32", field_name))?;
     *out = Some(value);
     Ok(())
 }
@@ -494,7 +489,7 @@ fn parse_state(value: &str) -> Result<State, Error> {
                     let ok = text.get(..1) == Some("(") &&
                         text.get(text.len() - 1..) == Some(")");
                     if !ok {
-                        Err(format_err!("Invalid syntax"))
+                        Err(anyhow!("Invalid syntax"))
                     } else {
                         Ok(Some(&text[1..text.len() - 1]))
                     }
@@ -510,7 +505,7 @@ fn parse_state(value: &str) -> Result<State, Error> {
                 let anims = parse_u8_list(text).collect::<Result<_, Error>>()?;
                 State::IscriptAnim(anims)
             } else {
-                return Err(format_err!("Unknown state {}", value));
+                return Err(anyhow!("Unknown state {}", value));
             }
         }
     })
@@ -537,7 +532,7 @@ fn parse_stat(key: &str) -> Result<Stat, Error> {
         "player_color_palette" => Stat::PlayerColorPalette,
         "show_energy" => Stat::ShowEnergy,
         "show_shields" => Stat::ShowShields,
-        _ => return Err(format_err!("Unknown stat {}", key)),
+        _ => return Err(anyhow!("Unknown stat {}", key)),
     })
 }
 
@@ -590,7 +585,7 @@ fn parse_int_expr(expr: &str) -> Result<IntExpr, Error> {
 fn parse_int_expr_tuple(expr: &str, count: u8) -> Result<Vec<IntExpr>, Error> {
     let expr = expr.trim();
     if !expr.starts_with("(") || !expr.ends_with(")") {
-        return Err(format_err!("Expected braced list"));
+        return Err(anyhow!("Expected braced list"));
     }
     let expr = &expr[1..expr.len() - 1];
     let result = brace_aware_split(expr, ",")
@@ -598,7 +593,7 @@ fn parse_int_expr_tuple(expr: &str, count: u8) -> Result<Vec<IntExpr>, Error> {
         .map(|x| parse_int_expr(x))
         .collect::<Result<Vec<_>, Error>>()?;
     if result.len() != count as usize {
-        return Err(format_err!("Expected {} items, got {}", count, result.len()));
+        return Err(anyhow!("Expected {} items, got {}", count, result.len()));
     }
     Ok(result)
 }
@@ -606,7 +601,7 @@ fn parse_int_expr_tuple(expr: &str, count: u8) -> Result<Vec<IntExpr>, Error> {
 fn parse_u32_tuple(expr: &str, count: u8) -> Result<Vec<u32>, Error> {
     let expr = expr.trim();
     if !expr.starts_with("(") || !expr.ends_with(")") {
-        return Err(format_err!("Expected braced list"));
+        return Err(anyhow!("Expected braced list"));
     }
     let expr = &expr[1..expr.len() - 1];
     let result = brace_aware_split(expr, ",")
@@ -614,7 +609,7 @@ fn parse_u32_tuple(expr: &str, count: u8) -> Result<Vec<u32>, Error> {
         .map(|x| parse_u32(x))
         .collect::<Result<Vec<_>, Error>>()?;
     if result.len() != count as usize {
-        return Err(format_err!("Expected {} items, got {}", count, result.len()));
+        return Err(anyhow!("Expected {} items, got {}", count, result.len()));
     }
     Ok(result)
 }
@@ -622,7 +617,7 @@ fn parse_u32_tuple(expr: &str, count: u8) -> Result<Vec<u32>, Error> {
 fn parse_f32_tuple(expr: &str, count: u8) -> Result<Vec<f32>, Error> {
     let expr = expr.trim();
     if !expr.starts_with("(") || !expr.ends_with(")") {
-        return Err(format_err!("Expected braced list"));
+        return Err(anyhow!("Expected braced list"));
     }
     let expr = &expr[1..expr.len() - 1];
     let result = brace_aware_split(expr, ",")
@@ -630,7 +625,7 @@ fn parse_f32_tuple(expr: &str, count: u8) -> Result<Vec<f32>, Error> {
         .map(|x| x.parse::<f32>().map_err(|x| x.into()))
         .collect::<Result<Vec<_>, Error>>()?;
     if result.len() != count as usize {
-        return Err(format_err!("Expected {} items, got {}", count, result.len()));
+        return Err(anyhow!("Expected {} items, got {}", count, result.len()));
     }
     Ok(result)
 }
@@ -639,7 +634,7 @@ fn parse_rally_order(val: &str) -> Result<RallyOrder, Error> {
     // Accept in form 'ground:{id}, unit:{id}', unit id can be also 'rclick'
     let val = val.trim();
     let error = || {
-        format_err!("Rally must be in format 'ground:<ID>, unit:<ID|rclick>', received '{}'", val)
+        anyhow!("Rally must be in format 'ground:<ID>, unit:<ID|rclick>', received '{}'", val)
     };
     let val = skip_str(val, "ground:")
         .ok_or_else(error)?;
@@ -678,7 +673,7 @@ pub fn read_campaign(mut data: &[u8]) -> Result<Campaign, Error> {
     // - hidden = name, mapid, race
     // - cinematic = name, mapid, cinematic
     let ini = Ini::open(&mut data)
-        .map_err(|e| e.context("Unable to read ini"))?;
+        .context("Unable to read ini")?;
     let mut result = (0..6).map(|_| {
         vec![bw::CampaignMission {
             name_index: 1,
@@ -703,13 +698,13 @@ pub fn read_campaign(mut data: &[u8]) -> Result<Campaign, Error> {
             "expzerg" => 3,
             "expterran" => 4,
             "expprotoss" => 5,
-            name => return Err(format_err!("Invalid campaign name {}", name)),
+            name => return Err(anyhow!("Invalid campaign name {}", name)),
         };
         let mut missions = Vec::with_capacity(10);
         for &(ref key, ref val) in &section.values {
             let mut tokens = val.split(",").map(|x| x.trim());
             let generic_error = || {
-                format_err!("Invalid setting format '{} = {}'", key, val)
+                anyhow!("Invalid setting format '{} = {}'", key, val)
             };
             match &**key {
                 "map" | "hidden" => {
@@ -742,7 +737,7 @@ pub fn read_campaign(mut data: &[u8]) -> Result<Campaign, Error> {
                         hidden: if key == "hidden_cinematic" { 1 } else { 0 },
                     });
                 }
-                x => return Err(Context::new(format!("unknown campaign setting {}", x)).into()),
+                x => return Err(anyhow!("unknown campaign setting {}", x)),
             }
         }
         missions.push(bw::CampaignMission {

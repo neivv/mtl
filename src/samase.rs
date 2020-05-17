@@ -534,7 +534,7 @@ fn read_config(game: Option<Game>) -> Result<config::Config, String> {
         Err(e) => {
             use std::fmt::Write;
             let mut msg = String::new();
-            for c in e.iter_chain() {
+            for c in e.chain() {
                 writeln!(msg, "{}", c).unwrap();
             }
             let msg = format!("Unable to read config:\n{}", msg);
@@ -553,7 +553,7 @@ fn read_campaign_ini() -> Result<Option<config::Campaign>, String> {
         Err(e) => {
             use std::fmt::Write;
             let mut msg = String::new();
-            for c in e.iter_chain() {
+            for c in e.chain() {
                 writeln!(msg, "{}", c).unwrap();
             }
             let msg = format!("Unable to read campaign ini:\n{}", msg);
