@@ -43,7 +43,7 @@ impl<T: Copy> GlobalFunc<T> {
     }
 }
 
-static mut RNG_SEED: GlobalFunc<fn() -> u32> = GlobalFunc(None);
+static mut RNG_SEED: GlobalFunc<extern fn() -> u32> = GlobalFunc(None);
 pub fn rng_seed() -> Option<u32> {
     unsafe {
         if let Some(rng) = RNG_SEED.0 {
@@ -61,44 +61,44 @@ fn fatal(text: &str) -> ! {
     unreachable!();
 }
 
-static mut GAME: GlobalFunc<fn() -> *mut bw::Game> = GlobalFunc(None);
+static mut GAME: GlobalFunc<extern fn() -> *mut bw::Game> = GlobalFunc(None);
 pub fn game() -> *mut bw::Game {
     unsafe { GAME.get()() }
 }
 
-static mut FIRST_ACTIVE_UNIT: GlobalFunc<fn() -> *mut bw::Unit> = GlobalFunc(None);
+static mut FIRST_ACTIVE_UNIT: GlobalFunc<extern fn() -> *mut bw::Unit> = GlobalFunc(None);
 pub fn first_active_unit() -> *mut bw::Unit {
     unsafe { FIRST_ACTIVE_UNIT.0.map(|x| x()).unwrap_or(null_mut()) }
 }
-static mut FIRST_HIDDEN_UNIT: GlobalFunc<fn() -> *mut bw::Unit> = GlobalFunc(None);
+static mut FIRST_HIDDEN_UNIT: GlobalFunc<extern fn() -> *mut bw::Unit> = GlobalFunc(None);
 pub fn first_hidden_unit() -> *mut bw::Unit {
     unsafe { FIRST_HIDDEN_UNIT.0.map(|x| x()).unwrap_or(null_mut()) }
 }
 
 static mut AI_UPDATE_ATTACK_TARGET:
-    GlobalFunc<fn(*mut bw::Unit, u32, u32, u32) -> u32> = GlobalFunc(None);
+    GlobalFunc<extern fn(*mut bw::Unit, u32, u32, u32) -> u32> = GlobalFunc(None);
 pub unsafe fn ai_update_attack_target(unit: *mut bw::Unit, a1: u32, a2: u32, a3: u32) -> u32 {
     AI_UPDATE_ATTACK_TARGET.get()(unit, a1, a2, a3)
 }
 
-static mut UPDATE_VISIBILITY_POINT: GlobalFunc<fn(*mut bw::LoneSprite)> = GlobalFunc(None);
+static mut UPDATE_VISIBILITY_POINT: GlobalFunc<extern fn(*mut bw::LoneSprite)> = GlobalFunc(None);
 pub unsafe fn update_visibility_point(sprite: *mut bw::LoneSprite) {
     UPDATE_VISIBILITY_POINT.get()(sprite)
 }
 
 static mut CREATE_LONE_SPRITE:
-    GlobalFunc<fn(u32, i32, i32, u32) -> *mut bw::LoneSprite> = GlobalFunc(None);
+    GlobalFunc<extern fn(u32, i32, i32, u32) -> *mut bw::LoneSprite> = GlobalFunc(None);
 pub unsafe fn create_lone_sprite(id: u32, x: i32, y: i32, player: u32) -> *mut bw::LoneSprite {
     CREATE_LONE_SPRITE.get()(id, x, y, player)
 }
 
-static mut GET_ISCRIPT_BIN: GlobalFunc<fn() -> *const u8> = GlobalFunc(None);
+static mut GET_ISCRIPT_BIN: GlobalFunc<extern fn() -> *const u8> = GlobalFunc(None);
 pub unsafe fn get_iscript_bin() -> *const u8 {
     GET_ISCRIPT_BIN.get()()
 }
 
 static mut STEP_ISCRIPT_FRAME:
-    GlobalFunc<fn(*mut bw::Image, *mut bw::Iscript, u32, *mut u32)> = GlobalFunc(None);
+    GlobalFunc<extern fn(*mut bw::Image, *mut bw::Iscript, u32, *mut u32)> = GlobalFunc(None);
 pub unsafe fn step_iscript_frame(
     image: *mut bw::Image,
     iscript: *mut bw::Iscript,
@@ -108,37 +108,37 @@ pub unsafe fn step_iscript_frame(
     STEP_ISCRIPT_FRAME.get()(image, iscript, dry_run, speed_out);
 }
 
-static mut SEND_COMMAND: GlobalFunc<fn(*const u8, u32)> = GlobalFunc(None);
+static mut SEND_COMMAND: GlobalFunc<extern fn(*const u8, u32)> = GlobalFunc(None);
 pub unsafe fn send_command(data: &[u8]) {
     SEND_COMMAND.get()(data.as_ptr(), data.len() as u32)
 }
 
-static mut PLAYERS: GlobalFunc<fn() -> *mut bw::Player> = GlobalFunc(None);
+static mut PLAYERS: GlobalFunc<extern fn() -> *mut bw::Player> = GlobalFunc(None);
 pub unsafe fn players() -> *mut bw::Player {
     PLAYERS.get()()
 }
 
-static mut PATHING: GlobalFunc<fn() -> *mut bw::Pathing> = GlobalFunc(None);
+static mut PATHING: GlobalFunc<extern fn() -> *mut bw::Pathing> = GlobalFunc(None);
 pub unsafe fn pathing() -> *mut bw::Pathing {
     PATHING.get()()
 }
 
-static mut IS_REPLAY: GlobalFunc<fn() -> u32> = GlobalFunc(None);
+static mut IS_REPLAY: GlobalFunc<extern fn() -> u32> = GlobalFunc(None);
 pub unsafe fn is_replay() -> u32 {
     IS_REPLAY.get()()
 }
 
-static mut IS_OUTSIDE_GAME_SCREEN: GlobalFunc<fn(i32, i32) -> u32> = GlobalFunc(None);
+static mut IS_OUTSIDE_GAME_SCREEN: GlobalFunc<extern fn(i32, i32) -> u32> = GlobalFunc(None);
 pub unsafe fn is_outside_game_screen(x: i32, y: i32) -> u32 {
     IS_OUTSIDE_GAME_SCREEN.get()(x, y)
 }
 
-static mut CLIENT_SELECTION: GlobalFunc<fn() -> *mut *mut bw::Unit> = GlobalFunc(None);
+static mut CLIENT_SELECTION: GlobalFunc<extern fn() -> *mut *mut bw::Unit> = GlobalFunc(None);
 pub unsafe fn client_selection() -> *mut *mut bw::Unit {
     CLIENT_SELECTION.get()()
 }
 
-static mut UNIT_ARRAY_LEN: GlobalFunc<fn(*mut *mut bw::Unit, *mut usize)> = GlobalFunc(None);
+static mut UNIT_ARRAY_LEN: GlobalFunc<extern fn(*mut *mut bw::Unit, *mut usize)> = GlobalFunc(None);
 pub unsafe fn unit_array() -> (*mut bw::Unit, usize) {
     let mut size = 0usize;
     let mut ptr = null_mut();
@@ -146,47 +146,47 @@ pub unsafe fn unit_array() -> (*mut bw::Unit, usize) {
     (ptr, size)
 }
 
-static mut LOCAL_PLAYER_ID: GlobalFunc<fn() -> u32> = GlobalFunc(None);
+static mut LOCAL_PLAYER_ID: GlobalFunc<extern fn() -> u32> = GlobalFunc(None);
 pub unsafe fn local_player_id() -> u32 {
     LOCAL_PLAYER_ID.get()()
 }
 
-static mut UI_SCALE: GlobalFunc<fn() -> f32> = GlobalFunc(None);
+static mut UI_SCALE: GlobalFunc<extern fn() -> f32> = GlobalFunc(None);
 pub unsafe fn ui_scale() -> f32 {
     UI_SCALE.get()()
 }
 
-static mut SCREEN_POS: GlobalFunc<fn(*mut i32, *mut i32)> = GlobalFunc(None);
+static mut SCREEN_POS: GlobalFunc<extern fn(*mut i32, *mut i32)> = GlobalFunc(None);
 pub unsafe fn screen_pos(x: *mut i32, y: *mut i32) {
     SCREEN_POS.get()(x, y)
 }
 
-static mut FIRST_LONE_SPRITE: GlobalFunc<fn() -> *mut bw::LoneSprite> = GlobalFunc(None);
+static mut FIRST_LONE_SPRITE: GlobalFunc<extern fn() -> *mut bw::LoneSprite> = GlobalFunc(None);
 pub unsafe fn first_lone_sprite() -> *mut bw::LoneSprite {
     FIRST_LONE_SPRITE.get()()
 }
 
-static mut SPRITE_HLINES: GlobalFunc<fn() -> *mut *mut bw::Sprite> = GlobalFunc(None);
+static mut SPRITE_HLINES: GlobalFunc<extern fn() -> *mut *mut bw::Sprite> = GlobalFunc(None);
 pub unsafe fn sprite_hlines() -> *mut *mut bw::Sprite {
     SPRITE_HLINES.get()()
 }
 
-static mut SPRITE_HLINES_END: GlobalFunc<fn() -> *mut *mut bw::Sprite> = GlobalFunc(None);
+static mut SPRITE_HLINES_END: GlobalFunc<extern fn() -> *mut *mut bw::Sprite> = GlobalFunc(None);
 pub unsafe fn sprite_hlines_end() -> *mut *mut bw::Sprite {
     SPRITE_HLINES_END.get()()
 }
 
-static mut SELECTIONS: GlobalFunc<fn() -> *mut *mut bw::Unit> = GlobalFunc(None);
+static mut SELECTIONS: GlobalFunc<extern fn() -> *mut *mut bw::Unit> = GlobalFunc(None);
 pub unsafe fn selections() -> *mut *mut bw::Unit {
     SELECTIONS.get()()
 }
 
-static mut DRAW_CURSOR_MARKER: GlobalFunc<fn(u32)> = GlobalFunc(None);
+static mut DRAW_CURSOR_MARKER: GlobalFunc<extern fn(u32)> = GlobalFunc(None);
 pub fn draw_cursor_marker(draw: u32) {
     unsafe { DRAW_CURSOR_MARKER.get()(draw) }
 }
 
-static mut GET_SPRITE_POS: GlobalFunc<fn(*mut bw::Sprite, *mut u16)> = GlobalFunc(None);
+static mut GET_SPRITE_POS: GlobalFunc<extern fn(*mut bw::Sprite, *mut u16)> = GlobalFunc(None);
 pub unsafe fn get_sprite_pos(sprite: *mut bw::Sprite) -> bw::Point {
     let mut ret = bw::Point {
         x: 0,
@@ -196,7 +196,7 @@ pub unsafe fn get_sprite_pos(sprite: *mut bw::Sprite) -> bw::Point {
     ret
 }
 
-static mut SET_SPRITE_POS: GlobalFunc<fn(*mut bw::Sprite, *const u16)> = GlobalFunc(None);
+static mut SET_SPRITE_POS: GlobalFunc<extern fn(*mut bw::Sprite, *const u16)> = GlobalFunc(None);
 pub unsafe fn set_sprite_pos(sprite: *mut bw::Sprite, val: &bw::Point) {
     SET_SPRITE_POS.get()(sprite, val as *const bw::Point as *const u16);
 }
@@ -223,13 +223,13 @@ pub fn set_tooltip_draw_func(new: Option<unsafe extern fn(*mut bw::Control)>) {
     }
 }
 
-static mut MISC_UI_STATE: GlobalFunc<fn(*mut u8)> = GlobalFunc(None);
+static mut MISC_UI_STATE: GlobalFunc<extern fn(*mut u8)> = GlobalFunc(None);
 pub fn misc_ui_state(out: &mut [u8]) {
     assert_eq!(out.len(), 3);
     unsafe { MISC_UI_STATE.get()(out.as_mut_ptr()) }
 }
 
-static mut GET_REGION: GlobalFunc<fn(u32, u32) -> u32> = GlobalFunc(None);
+static mut GET_REGION: GlobalFunc<extern fn(u32, u32) -> u32> = GlobalFunc(None);
 pub fn get_region(x: u32, y: u32) -> u32 {
     unsafe { GET_REGION.get()(x, y) }
 }
@@ -243,7 +243,7 @@ pub fn units_dat() -> *mut DatTable {
     unsafe { UNITS_DAT.get()() }
 }
 
-static mut WEAPONS_DAT: GlobalFunc<fn() -> *mut bw_dat::DatTable> = GlobalFunc(None);
+static mut WEAPONS_DAT: GlobalFunc<extern fn() -> *mut bw_dat::DatTable> = GlobalFunc(None);
 pub fn weapons_dat() -> *mut bw_dat::DatTable {
     unsafe { WEAPONS_DAT.get()() }
 }
@@ -253,12 +253,12 @@ pub fn flingy_dat() -> *mut DatTable {
     unsafe { FLINGY_DAT.get()() }
 }
 
-static mut UPGRADES_DAT: GlobalFunc<fn() -> *mut bw_dat::DatTable> = GlobalFunc(None);
+static mut UPGRADES_DAT: GlobalFunc<extern fn() -> *mut bw_dat::DatTable> = GlobalFunc(None);
 pub fn upgrades_dat() -> *mut bw_dat::DatTable {
     unsafe { UPGRADES_DAT.get()() }
 }
 
-static mut TECHDATA_DAT: GlobalFunc<fn() -> *mut bw_dat::DatTable> = GlobalFunc(None);
+static mut TECHDATA_DAT: GlobalFunc<extern fn() -> *mut bw_dat::DatTable> = GlobalFunc(None);
 pub fn techdata_dat() -> *mut bw_dat::DatTable {
     unsafe { TECHDATA_DAT.get()() }
 }
@@ -268,12 +268,12 @@ pub fn sprites_dat() -> *mut DatTable {
     unsafe { SPRITES_DAT.get()() }
 }
 
-static mut ORDERS_DAT: GlobalFunc<fn() -> *mut bw_dat::DatTable> = GlobalFunc(None);
+static mut ORDERS_DAT: GlobalFunc<extern fn() -> *mut bw_dat::DatTable> = GlobalFunc(None);
 pub fn orders_dat() -> *mut bw_dat::DatTable {
     unsafe { ORDERS_DAT.get()() }
 }
 
-static mut PORTDATA_DAT: GlobalFunc<fn() -> *mut bw_dat::DatTable> = GlobalFunc(None);
+static mut PORTDATA_DAT: GlobalFunc<extern fn() -> *mut bw_dat::DatTable> = GlobalFunc(None);
 pub fn portdata_dat() -> *mut bw_dat::DatTable {
     unsafe {
         if let Some(x) = PORTDATA_DAT.0 {
@@ -298,7 +298,7 @@ pub fn issue_order(
     unsafe { ISSUE_ORDER.get()(unit, order.0 as u32, x, y, target, fow_unit.0 as u32) }
 }
 
-static mut PRINT_TEXT: GlobalFunc<fn(*const u8)> = GlobalFunc(None);
+static mut PRINT_TEXT: GlobalFunc<extern fn(*const u8)> = GlobalFunc(None);
 pub fn print_text(msg: *const u8) {
     unsafe {
         if let Some(print) = PRINT_TEXT.0 {
@@ -331,7 +331,7 @@ impl ops::Drop for SamaseBox {
     }
 }
 
-static mut READ_FILE: GlobalFunc<fn(*const u8, *mut usize) -> *mut u8> = GlobalFunc(None);
+static mut READ_FILE: GlobalFunc<extern fn(*const u8, *mut usize) -> *mut u8> = GlobalFunc(None);
 pub fn read_file(name: &str) -> Option<SamaseBox> {
     read_file_u8(name.as_bytes())
 }
