@@ -29,6 +29,7 @@ bincode = "1.0"
 byteorder = "1.1"
 chrono = "0.4"
 fern = "=0.5.8"
+json = "0.12"
 lazy_static = "1.0"
 libc = "0.2"
 log = "0.4"
@@ -48,11 +49,11 @@ features = ["heapapi", "libloaderapi", "processthreadsapi", "winuser"]
 
 [dependencies.samase_shim]
 git = "https://github.com/neivv/samase_plugin"
-rev = "6494e5354e2bdc8a494a32ce544ce3777b4bd8ac"
+rev = "5de02579fa63705fb0b0d2a41790f3b3309b3ccd"
 
 [dependencies.bw_dat]
 git = "https://github.com/neivv/aise"
-rev = "923202ccd1f25f1b660b07a7448d25816d6894a5"
+rev = "8be310b9063b3f1ff5cc9f2761c4dd869d6f9466"
 
 [dependencies.whack]
 git = "https://github.com/neivv/whack/"

@@ -201,6 +201,28 @@ pub unsafe fn set_sprite_pos(sprite: *mut bw::Sprite, val: &bw::Point) {
     SET_SPRITE_POS.get()(sprite, val as *const bw::Point as *const u16);
 }
 
+static mut GET_TOOLTIP_DRAW_FUNC:
+    GlobalFunc<unsafe extern fn() -> Option<unsafe extern fn(*mut bw::Control)>> = GlobalFunc(None);
+pub fn get_tooltip_draw_func() -> Option<unsafe extern fn(*mut bw::Control)> {
+    unsafe {
+        if let Some(func) = GET_TOOLTIP_DRAW_FUNC.0 {
+            func()
+        } else {
+            None
+        }
+    }
+}
+
+static mut SET_TOOLTIP_DRAW_FUNC:
+    GlobalFunc<unsafe extern fn(Option<unsafe extern fn(*mut bw::Control)>)> = GlobalFunc(None);
+pub fn set_tooltip_draw_func(new: Option<unsafe extern fn(*mut bw::Control)>) {
+    unsafe {
+        if let Some(func) = SET_TOOLTIP_DRAW_FUNC.0 {
+            func(new)
+        }
+    }
+}
+
 static mut MISC_UI_STATE: GlobalFunc<fn(*mut u8)> = GlobalFunc(None);
 pub fn misc_ui_state(out: &mut [u8]) {
     assert_eq!(out.len(), 3);
@@ -332,7 +354,7 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_shim::PluginApi) {
     bw_dat::set_is_scr(crate::is_scr());
     crate::init();
 
-    let required_version = 24;
+    let required_version = 25;
     if (*api).version < required_version {
         fatal(&format!(
             "Newer samase is required. (Plugin API version {}, this plugin requires version {})",
@@ -444,7 +466,7 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_shim::PluginApi) {
     );
     let _ = ((*api).hook_ingame_command)(0x14, crate::rally::targeted_command_old_hook, None);
     let _ = ((*api).hook_ingame_command)(0x61, crate::rally::targeted_command_new_hook, None);
-    ((*api).hook_spawn_dialog)(crate::rally::spawn_dialog_hook);
+    ((*api).hook_spawn_dialog)(crate::spawn_dialog_hook);
 
     ((*api).hook_draw_image)(render::draw_image_hook);
     if crate::is_scr() {
@@ -468,6 +490,14 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_shim::PluginApi) {
         PORTDATA_DAT.try_init(((*api).dat)(6).map(|x| mem::transmute(x)));
         if ok == 0 {
             ((*api).warn_unsupported_feature)(b"Map specific dat\0".as_ptr());
+        }
+    }
+    if config.cmdbtn_tooltip_half_supply {
+        let ok = ((*api).hook_layout_draw_text)(crate::buttons::layout_draw_text_hook);
+        if ok != 0 {
+            ((*api).hook_draw_graphic_layers)(crate::buttons::draw_graphic_layers_hook);
+            GET_TOOLTIP_DRAW_FUNC.0 = Some(mem::transmute(((*api).get_tooltip_draw_func)()));
+            SET_TOOLTIP_DRAW_FUNC.0 = Some(mem::transmute(((*api).set_tooltip_draw_func)()));
         }
     }
 }

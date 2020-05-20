@@ -45,6 +45,7 @@ pub struct Config {
     pub lighting: Option<Lighting>,
     pub dont_override_shaders: bool,
     pub enable_map_dat_files: bool,
+    pub cmdbtn_tooltip_half_supply: bool,
     rallies: Rallies,
 }
 
@@ -78,19 +79,7 @@ pub enum OrderOrRclick {
 
 impl Config {
     pub fn requires_rclick_hook(&self) -> bool {
-        let Config {
-            timers: _,
-            supplies: _,
-            return_cargo_softcode: _,
-            zerg_building_training: _,
-            bunker_units: _,
-            ref rallies,
-            upgrades: _,
-            dont_override_shaders: _,
-            enable_map_dat_files: _,
-            lighting: _,
-        } = *self;
-        !rallies.can_rally.is_empty()
+        !self.rallies.can_rally.is_empty()
     }
 
     pub fn has_rally(&self, unit: UnitId) -> bool {
@@ -247,6 +236,19 @@ impl Config {
                         x => return Err(anyhow!("unknown key {}", x)),
                     }
                 }
+            } else if name == "buttons" {
+                for &(ref key, ref val) in &section.values {
+                    match &**key {
+                        "tooltip_half_supply" => {
+                            bool_field(
+                                &mut self.cmdbtn_tooltip_half_supply,
+                                &val,
+                                "tooltip_half_supply",
+                            )?
+                        }
+                        x => return Err(anyhow!("unknown key {}", x)),
+                    }
+                }
             } else if name == "lighting" {
                 self.lighting = {
                     let mut lighting = Lighting {
@@ -394,6 +396,7 @@ impl Default for Config {
             zerg_building_training: false,
             dont_override_shaders: false,
             enable_map_dat_files: false,
+            cmdbtn_tooltip_half_supply: false,
             upgrades: Upgrades::new(),
             lighting: None,
             bunker_units: Vec::new(),

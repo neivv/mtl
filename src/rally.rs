@@ -425,22 +425,12 @@ unsafe fn set_rally_command(player: u8, uniq_player: u8, pos: &bw::Point, target
 
 static MINIMAP_IMG_EVENT_HANDLER: EventHandler = EventHandler::new();
 
-pub unsafe extern fn spawn_dialog_hook(
-    raw: *mut c_void,
-    unk: usize,
-    event_handler: *mut c_void,
-    orig: unsafe extern fn(*mut c_void, usize, *mut c_void) -> u32,
-) -> u32 {
-    let result = orig(raw, unk, event_handler);
-    let dialog = Dialog::new(raw as *mut bw::Dialog);
-    if dialog.as_control().string() == "Minimap" {
-        if let Some(image) = dialog.child_by_id(1) {
-            image.set_event_handler(MINIMAP_IMG_EVENT_HANDLER.init(minimap_image_event_handler));
-        } else {
-            warn!("Couldn't find minimap dialog's image control")
-        }
+pub fn minimap_dialog_created(dialog: Dialog) {
+    if let Some(image) = dialog.child_by_id(1) {
+        image.set_event_handler(MINIMAP_IMG_EVENT_HANDLER.init(minimap_image_event_handler));
+    } else {
+        warn!("Couldn't find minimap dialog's image control")
     }
-    result
 }
 
 unsafe extern fn minimap_image_event_handler(

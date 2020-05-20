@@ -13,6 +13,7 @@ pub mod samase;
 
 #[macro_use] mod macros;
 
+mod buttons;
 mod bw;
 mod campaign_hook;
 mod config;
@@ -27,6 +28,7 @@ mod render;
 mod render_scr;
 mod rng;
 mod selection;
+mod string_tables;
 mod unit;
 mod unit_search;
 mod unit_pcolor_fix;
@@ -35,6 +37,8 @@ mod windows;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+
+use libc::c_void;
 use winapi::um::processthreadsapi::{GetCurrentProcess, TerminateProcess};
 
 use bw_dat::Game;
@@ -224,6 +228,8 @@ unsafe extern fn load(ptr: *const u8, len: usize) -> u32 {
 
 unsafe extern fn init_game() {
     // NOTE: Config cannot be updated at this point to have map-specific data
+    // Earliest is init_units_hook
+    string_tables::init();
     let game = crate::game::get();
     order_hook::invalidate_cached_unit_search();
     *render::lighting_state() = render::LightingState::new();
@@ -362,4 +368,22 @@ unsafe fn update_dat_file(index: usize, mut file: &[u8]) {
         file = &file[copy_len..];
         table = table.add(1);
     }
+}
+
+unsafe extern fn spawn_dialog_hook(
+    raw: *mut c_void,
+    unk: usize,
+    event_handler: *mut c_void,
+    orig: unsafe extern fn(*mut c_void, usize, *mut c_void) -> u32,
+) -> u32 {
+    let result = orig(raw, unk, event_handler);
+    let dialog = bw_dat::dialog::Dialog::new(raw as *mut bw::Dialog);
+    let ctrl = dialog.as_control();
+    let name = ctrl.string();
+    if name == "Minimap" {
+        rally::minimap_dialog_created(dialog);
+    } else if name == "StatBtn" {
+        buttons::cmdbtn_dialog_created(dialog);
+    }
+    result
 }
