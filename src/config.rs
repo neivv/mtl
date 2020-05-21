@@ -4,11 +4,12 @@ use std::sync::{Arc, Mutex};
 use smallvec::SmallVec;
 
 use anyhow::{anyhow, Context, Error};
-use bw_dat::{UnitId, OrderId, SpriteId};
+use bw_dat::{UnitId, OrderId, SpriteId, WeaponId};
 use bw_dat::expr::{IntExpr, BoolExpr};
 
 use crate::bw;
 use crate::ini::Ini;
+use crate::status_screen;
 use crate::upgrades::{Upgrades, Upgrade, UpgradeChanges, State, Stat};
 
 /// Various timers, in frames, unlike bw's 8-frame chunks.
@@ -39,6 +40,7 @@ pub struct Config {
     pub timers: Timers,
     pub supplies: Supplies,
     pub upgrades: Upgrades,
+    pub status_screen_tooltips: status_screen::Tooltips,
     pub return_cargo_softcode: bool,
     pub zerg_building_training: bool,
     pub bunker_units: Vec<(UnitId, SpriteId, u8)>,
@@ -90,6 +92,10 @@ impl Config {
         self.rallies.unit_orders.get(unit.0 as usize).cloned()
             .flatten()
             .or_else(|| self.rallies.default_order)
+    }
+
+    pub fn has_status_screen_tooltips(&self) -> bool {
+        self.status_screen_tooltips.has_any()
     }
 
     pub fn update(&mut self, mut data: &[u8]) -> Result<(), Error> {
@@ -308,11 +314,7 @@ impl Config {
                 for &(ref key, ref val) in &section.values {
                     match &**key {
                         "units" => {
-                            for tok in val.split(",").map(|x| x.trim()) {
-                                let id = parse_u16(tok)
-                                    .with_context(|| format!("{} units", name))?;
-                                units.push(UnitId(id));
-                            }
+                            units = parse_unit_list(val)?;
                         }
                         "state" => {
                             for tok in brace_aware_split(val, ",").map(|x| x.trim()) {
@@ -325,7 +327,7 @@ impl Config {
                             if condition.is_some() {
                                 return Err(anyhow!("Cannot have multiple conditions"));
                             }
-                            let cond = parse_upgrade_condition(val)
+                            let cond = parse_bool_expr(val)
                                 .with_context(|| format!("Condition of {}", name))?;
                             condition = Some(cond);
                         }
@@ -360,6 +362,23 @@ impl Config {
                 upgrades.entry(id).or_insert_with(|| Default::default())
                     .entry(states).or_insert_with(|| Default::default())
                     .push(changes);
+            } else if name.starts_with("status_screen") {
+                let mut tokens = name.split(".").skip(1);
+                let ty = tokens.next().ok_or_else(|| {
+                    anyhow!(r#"status_screen requires either "weapon" "armor" "shields" or "special""#)
+                })?;
+                match ty {
+                    "weapon" => self.status_screen_tooltips.add_weapon(&section.values),
+                    "armor" => self.status_screen_tooltips.add_armor(&section.values),
+                    "shields" => self.status_screen_tooltips.add_shields(&section.values),
+                    "special" => self.status_screen_tooltips.add_special(&section.values),
+                    _ => {
+                        return Err(anyhow!(
+                            r#"status_screen requires either "weapon" "armor" "shields" or "special", got "{}""#,
+                            ty
+                        ));
+                    }
+                }?
             } else {
                 return Err(anyhow!("Unknown section name \"{}\"", name));
             }
@@ -398,6 +417,7 @@ impl Default for Config {
             enable_map_dat_files: false,
             cmdbtn_tooltip_half_supply: false,
             upgrades: Upgrades::new(),
+            status_screen_tooltips: status_screen::Tooltips::new(),
             lighting: None,
             bunker_units: Vec::new(),
             rallies: Rallies {
@@ -448,7 +468,7 @@ fn parse_u32(value: &str) -> Result<u32, Error> {
     })
 }
 
-fn parse_u16(value: &str) -> Result<u16, Error> {
+pub fn parse_u16(value: &str) -> Result<u16, Error> {
     Ok(if value.starts_with("0x") {
         u16::from_str_radix(&value[2..], 16)?
     } else {
@@ -456,7 +476,7 @@ fn parse_u16(value: &str) -> Result<u16, Error> {
     })
 }
 
-fn parse_u8(value: &str) -> Result<u8, Error> {
+pub fn parse_u8(value: &str) -> Result<u8, Error> {
     Ok(if value.starts_with("0x") {
         u8::from_str_radix(&value[2..], 16)?
     } else {
@@ -475,6 +495,28 @@ fn parse_race(value: &str) -> Result<u8, Error> {
 
 fn parse_u8_list<'a>(values: &'a str) -> impl Iterator<Item=Result<u8, Error>> + 'a {
     values.split(",").map(|x| parse_u8(x.trim()))
+}
+
+pub fn parse_unit_list(values: &str) -> Result<Vec<UnitId>, Error> {
+    let count = values.split(",").count();
+    let mut out = Vec::with_capacity(count);
+    for tok in values.split(",").map(|x| x.trim()) {
+        let id = parse_u16(tok)
+            .with_context(|| format!("{} is not an unit id", tok))?;
+        out.push(UnitId(id));
+    }
+    Ok(out)
+}
+
+pub fn parse_weapon_list(values: &str) -> Result<Vec<WeaponId>, Error> {
+    let count = values.split(",").count();
+    let mut out = Vec::with_capacity(count);
+    for tok in values.split(",").map(|x| x.trim()) {
+        let id = parse_u16(tok)
+            .with_context(|| format!("{} is not a weapon id", tok))?;
+        out.push(WeaponId(id));
+    }
+    Ok(out)
 }
 
 fn parse_state(value: &str) -> Result<State, Error> {
@@ -577,7 +619,7 @@ impl<'a> Iterator for BraceSplit<'a> {
     }
 }
 
-fn parse_upgrade_condition(condition: &str) -> Result<BoolExpr, Error> {
+pub fn parse_bool_expr(condition: &str) -> Result<BoolExpr, Error> {
     BoolExpr::parse(condition.as_bytes())
         .map_err(|e| e.into())
 }

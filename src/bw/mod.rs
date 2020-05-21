@@ -34,6 +34,15 @@ pub struct Button {
     pub disabled_string_id: u16,
 }
 
+#[repr(C)]
+pub struct StatusScreenStat {
+    pub grp: *mut c_void,
+    pub frame: u16,
+    pub stat_type: u8,
+    pub unk: u8,
+    pub id: u16,
+}
+
 pub fn game() -> *mut Game {
     samase::game()
 }

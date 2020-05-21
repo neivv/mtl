@@ -1,12 +1,12 @@
-use std::mem;
 use std::sync::atomic::{AtomicUsize, AtomicU32, AtomicU8, Ordering};
 
 use bw_dat::dialog::{Control, Dialog};
 use bw_dat::UnitId;
 
 use crate::bw;
-use crate::samase;
+use crate::config::Config;
 use crate::string_tables::stat_txt;
+use crate::tooltip::{self, TooltipDrawFunc};
 
 static CMDBTN_DIALOG: AtomicUsize = AtomicUsize::new(0);
 
@@ -14,17 +14,10 @@ pub fn cmdbtn_dialog_created(dialog: Dialog) {
     CMDBTN_DIALOG.store(*dialog as usize, Ordering::Relaxed);
 }
 
-static ORIG_TOOLTIP_DRAW_FUNC: AtomicUsize = AtomicUsize::new(0);
-
-type TooltipDrawFunc = unsafe extern fn(*mut bw::Control);
-
-unsafe extern fn draw_tooltip(raw_ctrl: *mut bw::Control) {
-    let orig: TooltipDrawFunc = mem::transmute(ORIG_TOOLTIP_DRAW_FUNC.load(Ordering::Relaxed));
-    let ctrl = Control::new(raw_ctrl);
+pub unsafe fn draw_tooltip_hook(config: &Config, ctrl: Control, orig: TooltipDrawFunc) -> bool {
     let cmdbtn_dialog = CMDBTN_DIALOG.load(Ordering::Relaxed) as *mut bw::Dialog;
-    if *ctrl.dialog() != cmdbtn_dialog {
-        orig(raw_ctrl);
-        return;
+    if *ctrl.dialog() != cmdbtn_dialog || !config.cmdbtn_tooltip_half_supply {
+        return false;
     }
     let id = ctrl.id();
     // I don't think it's possible to have tooltip func called on anything but the
@@ -49,6 +42,7 @@ unsafe extern fn draw_tooltip(raw_ctrl: *mut bw::Control) {
                         if train_unit.gas_cost() != 0 {
                             index += 1;
                         }
+                        tooltip::set_text_hook_mode(1);
                         HALF_SUPPLY_INDEX.store(index, Ordering::Relaxed);
                         HALF_SUPPLY_POS.store(index, Ordering::Relaxed);
                         HALF_SUPPLY_VALUE.store(train_unit.supply_cost() / 2, Ordering::Relaxed);
@@ -57,25 +51,17 @@ unsafe extern fn draw_tooltip(raw_ctrl: *mut bw::Control) {
             }
         }
     }
-    orig(raw_ctrl);
+    orig(*ctrl);
+    tooltip::set_text_hook_mode(0);
     HALF_SUPPLY_POS.store(0, Ordering::Relaxed);
+    true
 }
 
 static HALF_SUPPLY_INDEX: AtomicU8 = AtomicU8::new(0);
 static HALF_SUPPLY_POS: AtomicU8 = AtomicU8::new(0);
 static HALF_SUPPLY_VALUE: AtomicU32 = AtomicU32::new(0);
 
-pub unsafe extern fn layout_draw_text_hook(
-    a: u32,
-    b: u32,
-    text: *const u8,
-    d: *mut u32,
-    draw: u32,
-    f: *mut u32,
-    g: u32,
-    h: u32,
-    orig: unsafe extern fn(u32, u32, *const u8, *mut u32, u32, *mut u32, u32, u32) -> *const u8,
-) -> *const u8 {
+pub fn tooltip_text_hook(buffer: &mut [u8], draw: u32) -> bool {
     use std::io::Write;
     let pos = HALF_SUPPLY_POS.load(Ordering::Relaxed);
     if pos != 0 {
@@ -83,34 +69,18 @@ pub unsafe extern fn layout_draw_text_hook(
             // The func is called twice for the relevant text pieces, once to layout,
             // second time to actually draw, if not drawing yet reset value back to
             // original value
-            let mut buffer = [0u8; 32];
             let _ = write!(&mut buffer[..], "{}.5", HALF_SUPPLY_VALUE.load(Ordering::Relaxed));
             buffer[buffer.len() - 1] = 0;
-            let result = orig(a, b, buffer.as_ptr(), d, draw, f, g, h);
             if draw == 0 {
                 let start_index = HALF_SUPPLY_INDEX.load(Ordering::Relaxed);
                 HALF_SUPPLY_POS.store(start_index, Ordering::Relaxed);
             } else {
                 HALF_SUPPLY_POS.store(0, Ordering::Relaxed);
             }
-            return result;
+            return true;
         } else {
             HALF_SUPPLY_POS.store(pos - 1, Ordering::Relaxed);
         }
     }
-    return orig(a, b, text, d, draw, f, g, h);
-}
-
-pub unsafe extern fn draw_graphic_layers_hook(param: u32, orig: unsafe extern fn(u32)) {
-    // Always hook tooltip func, then have the hook check if it is being called on a
-    // cmdbtn
-    let old_draw_tooltip = samase::get_tooltip_draw_func();
-    if let Some(old) = old_draw_tooltip {
-        ORIG_TOOLTIP_DRAW_FUNC.store(old as usize, Ordering::Relaxed);
-        samase::set_tooltip_draw_func(Some(draw_tooltip));
-    }
-    orig(param);
-    if old_draw_tooltip.is_some() {
-        samase::set_tooltip_draw_func(old_draw_tooltip);
-    }
+    false
 }

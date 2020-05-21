@@ -492,10 +492,10 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_shim::PluginApi) {
             ((*api).warn_unsupported_feature)(b"Map specific dat\0".as_ptr());
         }
     }
-    if config.cmdbtn_tooltip_half_supply {
-        let ok = ((*api).hook_layout_draw_text)(crate::buttons::layout_draw_text_hook);
+    if config.cmdbtn_tooltip_half_supply || config.has_status_screen_tooltips() {
+        let ok = ((*api).hook_layout_draw_text)(crate::tooltip::layout_draw_text_hook);
         if ok != 0 {
-            ((*api).hook_draw_graphic_layers)(crate::buttons::draw_graphic_layers_hook);
+            ((*api).hook_draw_graphic_layers)(crate::tooltip::draw_graphic_layers_hook);
             GET_TOOLTIP_DRAW_FUNC.0 = Some(mem::transmute(((*api).get_tooltip_draw_func)()));
             SET_TOOLTIP_DRAW_FUNC.0 = Some(mem::transmute(((*api).set_tooltip_draw_func)()));
         }

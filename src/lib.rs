@@ -28,7 +28,9 @@ mod render;
 mod render_scr;
 mod rng;
 mod selection;
+mod status_screen;
 mod string_tables;
+mod tooltip;
 mod unit;
 mod unit_search;
 mod unit_pcolor_fix;
@@ -384,6 +386,8 @@ unsafe extern fn spawn_dialog_hook(
         rally::minimap_dialog_created(dialog);
     } else if name == "StatBtn" {
         buttons::cmdbtn_dialog_created(dialog);
+    } else if name == "StatData" {
+        status_screen::status_screen_dialog_created(dialog);
     }
     result
 }
