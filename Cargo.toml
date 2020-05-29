@@ -1,6 +1,6 @@
 [package]
 name = "mtl"
-version = "0.3.33"
+version = "0.3.34"
 authors = ["Markus Heikkinen <ittevien@gmail.com>"]
 edition = "2018"
 
@@ -35,7 +35,7 @@ log = "0.4"
 mpq = "=0.7.0"
 pcx = "0.2"
 rand = "0.7"
-scopeguard = "1.0"
+scopeguard = "1.1"
 serde = "1.0.15"
 serde_derive = "1.0.15"
 smallvec = "1.0"
@@ -48,7 +48,7 @@ features = ["heapapi", "libloaderapi", "processthreadsapi", "winuser"]
 
 [dependencies.samase_shim]
 git = "https://github.com/neivv/samase_plugin"
-rev = "b41de51edf79b11fc2224cbcc98f803b99f566cd"
+rev = "3684a9e9dacee5876a28e663be47dc454ba8b336"
 
 [dependencies.bw_dat]
 git = "https://github.com/neivv/aise"
@@ -61,3 +61,10 @@ rev = "e8e847864c2938735040ca3c68ef1cf9e03b692f"
 [dependencies.rand_xorshift]
 version = "0.2.0"
 features = ["serde1"]
+
+[build-dependencies]
+scopeguard = "1.1"
+
+[build-dependencies.winapi]
+version = "0.3"
+features = ["d3dcompiler"]

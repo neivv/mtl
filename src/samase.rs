@@ -491,6 +491,7 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_shim::PluginApi) {
     if !config.dont_override_shaders {
         ((*api).hook_file_read)(b"ShadersGLSL\\\0".as_ptr(), render_scr::gl_shader_hook);
         ((*api).hook_file_read)(b"ShadersHLSL\\\0".as_ptr(), render_scr::d3d_shader_hook);
+        prism::override_shaders(api);
     }
     if config.enable_map_dat_files {
         let ok = ((*api).hook_init_units)(crate::init_map_specific_dat);
@@ -506,6 +507,68 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_shim::PluginApi) {
             GET_TOOLTIP_DRAW_FUNC.0 = Some(mem::transmute(((*api).get_tooltip_draw_func)()));
             SET_TOOLTIP_DRAW_FUNC.0 = Some(mem::transmute(((*api).set_tooltip_draw_func)()));
         }
+    }
+}
+
+mod prism {
+    #[repr(C)]
+    struct ShaderSetEntry {
+        format: u8,
+        shader_type: u8,
+        unk1: u16,
+        unk2: u32,
+        pointer: *const u8,
+        len: u32,
+    }
+
+    impl ShaderSetEntry {
+        const fn pixel_sm5(wrapper: &[u8]) -> ShaderSetEntry {
+            ShaderSetEntry {
+                format: 0x4,
+                shader_type: 0x6,
+                unk1: 0,
+                unk2: 0,
+                pointer: wrapper.as_ptr(),
+                len: wrapper.len() as u32,
+            }
+        }
+    }
+
+    unsafe impl Sync for ShaderSetEntry {}
+    unsafe impl Send for ShaderSetEntry {}
+
+    static WATER_BIN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/water.bin"));
+    static WATER_SET: &[ShaderSetEntry] = &[ShaderSetEntry::pixel_sm5(WATER_BIN)];
+    static SPRITE_TILE_BIN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sprite_tile.bin"));
+    static SPRITE_TILE_SET: &[ShaderSetEntry] = &[ShaderSetEntry::pixel_sm5(SPRITE_TILE_BIN)];
+    static SPRITE_TILE_EFFECT_BIN: &[u8] =
+        include_bytes!(concat!(env!("OUT_DIR"), "/sprite_tile_effect.bin"));
+    static SPRITE_TILE_EFFECT_SET: &[ShaderSetEntry] =
+        &[ShaderSetEntry::pixel_sm5(SPRITE_TILE_EFFECT_BIN)];
+    static SPRITE_TILE_FISH_COLOR_BIN: &[u8] =
+        include_bytes!(concat!(env!("OUT_DIR"), "/sprite_tile_fish_color.bin"));
+    static SPRITE_TILE_FISH_COLOR_SET: &[ShaderSetEntry] =
+        &[ShaderSetEntry::pixel_sm5(SPRITE_TILE_FISH_COLOR_BIN)];
+    static SPRITE_TILE_FISH_ALPHA_BIN: &[u8] =
+        include_bytes!(concat!(env!("OUT_DIR"), "/sprite_tile_fish_alpha.bin"));
+    static SPRITE_TILE_FISH_ALPHA_SET: &[ShaderSetEntry] =
+        &[ShaderSetEntry::pixel_sm5(SPRITE_TILE_FISH_ALPHA_BIN)];
+    static SPRITE_PART_SOLID_FRAG_BIN: &[u8] =
+        include_bytes!(concat!(env!("OUT_DIR"), "/sprite_part_solid_frag.bin"));
+    static SPRITE_PART_SOLID_FRAG_SET: &[ShaderSetEntry] =
+        &[ShaderSetEntry::pixel_sm5(SPRITE_PART_SOLID_FRAG_BIN)];
+    static DEFERRED_BLIT_BIN: &[u8] =
+        include_bytes!(concat!(env!("OUT_DIR"), "/deferred_blit.bin"));
+    static DEFERRED_BLIT_SET: &[ShaderSetEntry] = &[ShaderSetEntry::pixel_sm5(DEFERRED_BLIT_BIN)];
+
+    pub unsafe fn override_shaders(api: *const samase_shim::PluginApi) {
+        ((*api).set_prism_shaders)(1, 0xb, DEFERRED_BLIT_SET.as_ptr() as *const u8, 1);
+        ((*api).set_prism_shaders)(1, 0xe, SPRITE_TILE_SET.as_ptr() as *const u8, 1);
+        ((*api).set_prism_shaders)(1, 0xf, SPRITE_TILE_EFFECT_SET.as_ptr() as *const u8, 1);
+        ((*api).set_prism_shaders)(1, 0x17, SPRITE_PART_SOLID_FRAG_SET.as_ptr() as *const u8, 1);
+        ((*api).set_prism_shaders)(1, 0x20, WATER_SET.as_ptr() as *const u8, 1);
+        ((*api).set_prism_shaders)(1, 0x28, SPRITE_TILE_FISH_COLOR_SET.as_ptr() as *const u8, 1);
+        ((*api).set_prism_shaders)(1, 0x29, SPRITE_TILE_FISH_ALPHA_SET.as_ptr() as *const u8, 1);
     }
 }
 
