@@ -43,7 +43,7 @@ use std::sync::Mutex;
 use libc::c_void;
 use winapi::um::processthreadsapi::{GetCurrentProcess, TerminateProcess};
 
-use bw_dat::Game;
+use bw_dat::{Game, UnitId};
 
 fn init() {
     if cfg!(debug_assertions) {
@@ -345,6 +345,26 @@ unsafe extern fn init_map_specific_dat(init_units: unsafe extern fn()) {
                 }
             }
         }
+    }
+
+    // Patch units.dat target acquisition range values
+    let units_dat = samase::units_dat();
+    let target_acquisition_range = units_dat.add(23);
+    assert_eq!((*target_acquisition_range).entry_size, 1);
+    let acq_range_data = (*target_acquisition_range).data as *mut u8;
+    for i in 0..(*target_acquisition_range).entries {
+        let turret_id = match UnitId(i as u16).subunit() {
+            Some(s) => s,
+            None => UnitId(i as u16),
+        };
+        let mut range = turret_id.target_acquisition_range() as u32;
+        if let Some(weapon) = turret_id.ground_weapon() {
+            range = range.max(weapon.max_range() / 32);
+        }
+        if let Some(weapon) = turret_id.air_weapon() {
+            range = range.max(weapon.max_range() / 32);
+        }
+        *acq_range_data.add(i as usize) = range as u8;
     }
 }
 
