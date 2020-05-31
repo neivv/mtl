@@ -21,26 +21,6 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
-name = "backtrace"
-version = "0.3.42"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "backtrace-sys 0.1.32 (registry+https://github.com/rust-lang/crates.io-index)",
- "cfg-if 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "libc 0.2.66 (registry+https://github.com/rust-lang/crates.io-index)",
- "rustc-demangle 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "backtrace-sys"
-version = "0.1.32"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "cc 1.0.50 (registry+https://github.com/rust-lang/crates.io-index)",
- "libc 0.2.66 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "bincode"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -263,11 +243,10 @@ dependencies = [
 
 [[package]]
 name = "mtl"
-version = "0.3.31"
+version = "0.3.32"
 dependencies = [
  "anyhow 1.0.31 (registry+https://github.com/rust-lang/crates.io-index)",
  "arrayvec 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "backtrace 0.3.42 (registry+https://github.com/rust-lang/crates.io-index)",
  "bincode 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "bw_dat 0.1.0 (git+https://github.com/neivv/aise?rev=6134231f5cae07e0d8c1614f64ae277b0a6affd8)",
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -281,7 +260,7 @@ dependencies = [
  "pcx 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand_xorshift 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "samase_shim 0.5.0 (git+https://github.com/neivv/samase_plugin?rev=5de02579fa63705fb0b0d2a41790f3b3309b3ccd)",
+ "samase_shim 0.5.0 (git+https://github.com/neivv/samase_plugin?rev=b41de51edf79b11fc2224cbcc98f803b99f566cd)",
  "scopeguard 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -417,14 +396,9 @@ version = "0.1.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
-name = "rustc-demangle"
-version = "0.1.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
 name = "samase_plugin"
 version = "0.5.0"
-source = "git+https://github.com/neivv/samase_plugin?rev=5de02579fa63705fb0b0d2a41790f3b3309b3ccd#5de02579fa63705fb0b0d2a41790f3b3309b3ccd"
+source = "git+https://github.com/neivv/samase_plugin?rev=b41de51edf79b11fc2224cbcc98f803b99f566cd#b41de51edf79b11fc2224cbcc98f803b99f566cd"
 dependencies = [
  "bincode 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -442,13 +416,13 @@ dependencies = [
 [[package]]
 name = "samase_shim"
 version = "0.5.0"
-source = "git+https://github.com/neivv/samase_plugin?rev=5de02579fa63705fb0b0d2a41790f3b3309b3ccd#5de02579fa63705fb0b0d2a41790f3b3309b3ccd"
+source = "git+https://github.com/neivv/samase_plugin?rev=b41de51edf79b11fc2224cbcc98f803b99f566cd#b41de51edf79b11fc2224cbcc98f803b99f566cd"
 dependencies = [
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.66 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "samase_plugin 0.5.0 (git+https://github.com/neivv/samase_plugin?rev=5de02579fa63705fb0b0d2a41790f3b3309b3ccd)",
+ "samase_plugin 0.5.0 (git+https://github.com/neivv/samase_plugin?rev=b41de51edf79b11fc2224cbcc98f803b99f566cd)",
  "thread_local 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "whack 0.2.0 (git+https://github.com/neivv/whack/?rev=e8e847864c2938735040ca3c68ef1cf9e03b692f)",
  "winapi 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -573,8 +547,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum anyhow 1.0.31 (registry+https://github.com/rust-lang/crates.io-index)" = "85bb70cc08ec97ca5450e6eba421deeea5f172c0fc61f78b5357b2a8e8be195f"
 "checksum arrayvec 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)" = "cff77d8686867eceff3105329d4698d96c2391c176d5d03adc90c7389162b5b8"
 "checksum autocfg 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "f8aac770f1885fd7e387acedd76065302551364496e46b3dd00860b2f8359b9d"
-"checksum backtrace 0.3.42 (registry+https://github.com/rust-lang/crates.io-index)" = "b4b1549d804b6c73f4817df2ba073709e96e426f12987127c48e6745568c350b"
-"checksum backtrace-sys 0.1.32 (registry+https://github.com/rust-lang/crates.io-index)" = "5d6575f128516de27e3ce99689419835fce9643a9b215a14d2b5b685be018491"
 "checksum bincode 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "5753e2a71534719bf3f4e57006c3a4f0d2c672a4b676eec84161f763eca87dbf"
 "checksum bitflags 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "cf1de2fe8c75bc145a2f577add951f8134889b4795d47466a54a5c846d691693"
 "checksum bw_dat 0.1.0 (git+https://github.com/neivv/aise?rev=6134231f5cae07e0d8c1614f64ae277b0a6affd8)" = "<none>"
@@ -618,9 +590,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum rand_hc 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ca3129af7b92a17112d59ad498c6f81eaf463253766b90396d39ea7a39d6613c"
 "checksum rand_xorshift 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "77d416b86801d23dde1aa643023b775c3a462efc0ed96443add11546cdf1dca8"
 "checksum redox_syscall 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)" = "2439c63f3f6139d1b57529d16bc3b8bb855230c8efcc5d3a896c8bea7c3b1e84"
-"checksum rustc-demangle 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)" = "4c691c0e608126e00913e33f0ccf3727d5fc84573623b8d65b2df340b5201783"
-"checksum samase_plugin 0.5.0 (git+https://github.com/neivv/samase_plugin?rev=5de02579fa63705fb0b0d2a41790f3b3309b3ccd)" = "<none>"
-"checksum samase_shim 0.5.0 (git+https://github.com/neivv/samase_plugin?rev=5de02579fa63705fb0b0d2a41790f3b3309b3ccd)" = "<none>"
+"checksum samase_plugin 0.5.0 (git+https://github.com/neivv/samase_plugin?rev=b41de51edf79b11fc2224cbcc98f803b99f566cd)" = "<none>"
+"checksum samase_shim 0.5.0 (git+https://github.com/neivv/samase_plugin?rev=b41de51edf79b11fc2224cbcc98f803b99f566cd)" = "<none>"
 "checksum scopeguard 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "b42e15e59b18a828bbf5c58ea01debb36b9b096346de35d941dcb89009f24a0d"
 "checksum serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)" = "414115f25f818d7dfccec8ee535d76949ae78584fc4f79a6f45a904bf8ab4449"
 "checksum serde_derive 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)" = "128f9e303a5a29922045a830221b8f78ec74a5f544944f3d5984f8ec3895ef64"
