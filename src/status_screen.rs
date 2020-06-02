@@ -21,7 +21,12 @@ pub fn status_screen_dialog_created(dialog: Dialog) {
     STATUS_SCREEN_DIALOG.store(*dialog as usize, Ordering::Relaxed);
 }
 
-pub unsafe fn draw_tooltip_hook(config: &Config, ctrl: Control, orig: TooltipDrawFunc) -> bool {
+pub unsafe fn draw_tooltip_hook(
+    game: Game,
+    config: &Config,
+    ctrl: Control,
+    orig: TooltipDrawFunc,
+) -> bool {
     let status_screen_dialog = STATUS_SCREEN_DIALOG.load(Ordering::Relaxed) as *mut bw::Dialog;
     if *ctrl.dialog() != status_screen_dialog {
         return false;
@@ -39,7 +44,6 @@ pub unsafe fn draw_tooltip_hook(config: &Config, ctrl: Control, orig: TooltipDra
         None => return false,
     };
     let mut weapon = None;
-    let game = crate::game::get();
     let stat_txt = string_tables::stat_txt();
     let tooltip = match (*ptr).stat_type {
         0 => {

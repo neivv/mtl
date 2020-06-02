@@ -48,6 +48,7 @@ pub struct Config {
     pub dont_override_shaders: bool,
     pub enable_map_dat_files: bool,
     pub cmdbtn_tooltip_half_supply: bool,
+    pub cmdbtn_force_stat_txt_tooltips: bool,
     rallies: Rallies,
 }
 
@@ -92,6 +93,10 @@ impl Config {
         self.rallies.unit_orders.get(unit.0 as usize).cloned()
             .flatten()
             .or_else(|| self.rallies.default_order)
+    }
+
+    pub fn has_cmdbtn_tooltips(&self) -> bool {
+        self.cmdbtn_tooltip_half_supply || self.cmdbtn_force_stat_txt_tooltips
     }
 
     pub fn has_status_screen_tooltips(&self) -> bool {
@@ -250,6 +255,13 @@ impl Config {
                                 &mut self.cmdbtn_tooltip_half_supply,
                                 &val,
                                 "tooltip_half_supply",
+                            )?
+                        }
+                        "force_stat_txt_tooltips" => {
+                            bool_field(
+                                &mut self.cmdbtn_force_stat_txt_tooltips,
+                                &val,
+                                "force_stat_txt_tooltips",
                             )?
                         }
                         x => return Err(anyhow!("unknown key {}", x)),
@@ -416,6 +428,7 @@ impl Default for Config {
             dont_override_shaders: false,
             enable_map_dat_files: false,
             cmdbtn_tooltip_half_supply: false,
+            cmdbtn_force_stat_txt_tooltips: false,
             upgrades: Upgrades::new(),
             status_screen_tooltips: status_screen::Tooltips::new(),
             lighting: None,

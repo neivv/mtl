@@ -499,7 +499,7 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_shim::PluginApi) {
             ((*api).warn_unsupported_feature)(b"Map specific dat\0".as_ptr());
         }
     }
-    if config.cmdbtn_tooltip_half_supply || config.has_status_screen_tooltips() {
+    if config.has_cmdbtn_tooltips() || config.has_status_screen_tooltips() {
         let ok = ((*api).hook_layout_draw_text)(crate::tooltip::layout_draw_text_hook);
         if ok != 0 {
             ((*api).hook_draw_graphic_layers)(crate::tooltip::draw_graphic_layers_hook);

@@ -1,6 +1,7 @@
 use std::mem;
 use std::sync::atomic::{AtomicUsize, AtomicU8, Ordering};
 
+use arrayvec::ArrayVec;
 use bw_dat::dialog::{Control};
 
 use crate::bw;
@@ -15,10 +16,11 @@ unsafe extern fn draw_tooltip(raw_ctrl: *mut bw::Control) {
     let orig: TooltipDrawFunc = mem::transmute(ORIG_TOOLTIP_DRAW_FUNC.load(Ordering::Relaxed));
     let ctrl = Control::new(raw_ctrl);
     let config = crate::config::config();
-    if crate::buttons::draw_tooltip_hook(&config, ctrl, orig) {
+    let game = crate::game::get();
+    if crate::buttons::draw_tooltip_hook(game, &config, ctrl, orig) {
         return;
     }
-    if crate::status_screen::draw_tooltip_hook(&config, ctrl, orig) {
+    if crate::status_screen::draw_tooltip_hook(game, &config, ctrl, orig) {
         return;
     }
     orig(raw_ctrl);
@@ -58,8 +60,11 @@ pub unsafe extern fn layout_draw_text_hook(
     match mode {
         // Cmdbtn
         1 => {
-            let mut buffer = [0u8; 32];
-            if crate::buttons::tooltip_text_hook(&mut buffer[..], draw) == true {
+            let mut buffer: ArrayVec<[u8; 512]> = ArrayVec::new();
+            if crate::buttons::tooltip_text_hook(&mut buffer, draw) == true {
+                let _ = buffer.push(0);
+                let len = buffer.len();
+                buffer[len - 1] = 0;
                 return orig(a, b, buffer.as_ptr(), d, draw, f, g, h);
             }
         }
