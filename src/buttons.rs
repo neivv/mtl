@@ -35,7 +35,7 @@ pub unsafe fn draw_tooltip_hook(
             let string_id = (*button).enabled_string_id;
             if let Some(string) = stat_txt().by_index(string_id) {
                 let is_train_string = string.as_bytes().get(1).filter(|&&c| c == 1).is_some();
-                if is_train_string {
+                if is_train_string && config.cmdbtn_tooltip_half_supply {
                     let train_unit = UnitId((*button).act_var);
                     let dual_birth = train_unit.flags() & 0x400 != 0;
                     if train_unit.supply_cost() & 1 != 0 && !dual_birth {
@@ -125,6 +125,7 @@ static MAIN_TEXT_STRING: AtomicU16 = AtomicU16::new(0);
 pub fn tooltip_text_hook(buffer: &mut ArrayVec<[u8; 512]>, draw: u32) -> bool {
     use std::io::Write;
     let pos = HALF_SUPPLY_POS.load(Ordering::Relaxed);
+    let mut hooked = false;
     if pos != 0 {
         if pos == 1 {
             // The func is called twice for the relevant text pieces, once to layout,
@@ -137,7 +138,7 @@ pub fn tooltip_text_hook(buffer: &mut ArrayVec<[u8; 512]>, draw: u32) -> bool {
             } else {
                 HALF_SUPPLY_POS.store(0, Ordering::Relaxed);
             }
-            return true;
+            hooked = true;
         } else {
             HALF_SUPPLY_POS.store(pos - 1, Ordering::Relaxed);
         }
@@ -157,10 +158,10 @@ pub fn tooltip_text_hook(buffer: &mut ArrayVec<[u8; 512]>, draw: u32) -> bool {
             } else {
                 MAIN_TEXT_POS.store(0, Ordering::Relaxed);
             }
-            return true;
+            hooked = true;
         } else {
             MAIN_TEXT_POS.store(pos - 1, Ordering::Relaxed);
         }
     }
-    false
+    hooked
 }
