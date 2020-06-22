@@ -6,11 +6,13 @@ use libc::c_void;
 
 use bw_dat::{self, Game, Unit, UnitId, order};
 
+use crate::auras;
 use crate::bw;
 use crate::config::config;
 use crate::render;
 use crate::unit::{self, SerializableUnit};
-use crate::upgrades;
+use crate::unit_search::UnitSearch;
+use crate::upgrades::{self, Stat};
 
 /// Set to true at game init so that frame hook knows
 /// to do init things that were too early to do at game init hook.
@@ -118,6 +120,9 @@ pub fn set_tracked_spells(spells: TrackedSpells) {
 
 pub unsafe extern fn frame_hook() {
     let game = Game::from_ptr(bw::game());
+    let unit_array = bw::unit_array();
+    let unit_search = UnitSearch::from_bw();
+    let mut aura_state = auras::aura_state();
     // Not doing frame_count == 0 as there are actually 2 frame 0s
     let first_frame = FIRST_FRAME.load(Ordering::Relaxed);
     if first_frame {
@@ -136,6 +141,7 @@ pub unsafe extern fn frame_hook() {
                 lighting_state.frame = lighting_state.frame.wrapping_add(step);
             }
         }
+        auras::step_auras(&config.auras, &mut aura_state, game, &unit_search, &unit_array);
     }
     render::reset_sprite_to_unit();
     let timers = &config.timers;
@@ -210,7 +216,22 @@ pub unsafe extern fn frame_hook() {
             }
         }
         let regen = upgrades::regens(&config, game, unit);
-        if let Some(hp_regen) = regen.hp {
+        let aura_hp = aura_state.unit_stat(unit, Stat::HpRegen, &unit_array);
+        let hp_regen = match regen.hp {
+            Some(s) => s.saturating_add(aura_hp),
+            None => aura_hp,
+        };
+        let aura_shields = aura_state.unit_stat(unit, Stat::ShieldRegen, &unit_array);
+        let shield_regen = match regen.shield {
+            Some(s) => s.saturating_add(aura_shields),
+            None => aura_shields,
+        };
+        let aura_energy = aura_state.unit_stat(unit, Stat::EnergyRegen, &unit_array);
+        let energy_regen = match regen.energy {
+            Some(s) => s.saturating_add(aura_energy),
+            None => aura_energy,
+        };
+        if hp_regen != 0 {
             (**unit).hitpoints = (**unit).hitpoints.saturating_add(hp_regen);
             if (**unit).hitpoints <= 0 {
                 // No code for killing units yet
@@ -221,8 +242,8 @@ pub unsafe extern fn frame_hook() {
                 (**unit).hitpoints = max_hp;
             }
         }
-        if let Some(regen) = regen.shield {
-            (**unit).shields = (**unit).shields.saturating_add(regen);
+        if shield_regen != 0 {
+            (**unit).shields = (**unit).shields.saturating_add(shield_regen);
             if (**unit).shields < 0 {
                 (**unit).shields = 0;
             }
@@ -231,11 +252,11 @@ pub unsafe extern fn frame_hook() {
                 (**unit).shields = max_shields;
             }
         }
-        if let Some(regen) = regen.energy {
-            if regen > 0 {
-                (**unit).energy = (**unit).energy.saturating_add(regen as u16);
+        if energy_regen != 0 {
+            if energy_regen > 0 {
+                (**unit).energy = (**unit).energy.saturating_add(energy_regen as u16);
             } else {
-                let neg = regen.checked_abs().unwrap_or(0);
+                let neg = energy_regen.checked_abs().unwrap_or(0);
                 (**unit).energy = (**unit).energy.saturating_sub(neg as u16);
             }
             // Not handling past-the-max, bw hopefully handles that.

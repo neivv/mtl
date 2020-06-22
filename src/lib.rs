@@ -12,6 +12,7 @@ pub mod samase;
 
 #[macro_use] mod macros;
 
+mod auras;
 mod buttons;
 mod bw;
 mod campaign_hook;
@@ -138,6 +139,9 @@ struct SaveData {
     upgrade_state_changes: upgrades::UpgradeStateChanges,
     rng: rng::Rng,
     lighting: render::LightingState,
+    // Probably not necessary to save, but jsut to take away one potential corner
+    // case where saving causes sync to go off
+    auras: auras::AuraState,
 }
 
 unsafe extern fn save(set_data: unsafe extern fn(*const u8, usize)) {
@@ -148,6 +152,7 @@ unsafe extern fn save(set_data: unsafe extern fn(*const u8, usize)) {
         upgrade_state_changes: upgrades::global_state_changes().clone(),
         rng: rng::get().clone(),
         lighting: render::lighting_state().clone(),
+        auras: auras::aura_state().clone(),
     };
     match bincode::serialize(&save) {
         Ok(o) => {
@@ -176,6 +181,7 @@ unsafe extern fn load(ptr: *const u8, len: usize) -> u32 {
     upgrades::set_state_changes(data.upgrade_state_changes);
     rng::set_rng(data.rng);
     *render::lighting_state() = data.lighting;
+    *auras::aura_state() = data.auras;
     1
 }
 
@@ -191,6 +197,7 @@ unsafe extern fn init_game() {
     fix_campaign_music(game);
     frame_hook::init_tracked_spells();
     upgrades::init_state_changes();
+    *auras::aura_state() = auras::AuraState::new();
     frame_hook::enable_first_frame_hook();
 }
 

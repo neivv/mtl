@@ -8,9 +8,11 @@ use bw_dat::unit as unit_id;
 use bw_dat::{
     Game, Unit, UnitId, UpgradeId, Sprite, SpriteId, order, upgrade, WeaponId, UnitArray,
 };
+
+use crate::auras::{self, AuraState};
 use crate::bw;
 use crate::config::{config, Config, RallyOrder, OrderOrRclick};
-use crate::upgrades;
+use crate::upgrades::{self, Stat};
 use crate::unit_search::UnitSearch;
 use crate::unit::{self, UnitExt};
 
@@ -58,10 +60,31 @@ impl LazyInitUnitSearch {
     }
 }
 
+fn apply_aura_u8(
+    state: &AuraState,
+    unit: Unit,
+    stat: Stat,
+    base: u8,
+    unit_array: &UnitArray,
+) -> u8 {
+    let diff = state.unit_stat(unit, stat, unit_array);
+    let result = (base as i32).saturating_add(diff);
+    if result < 0 {
+        0
+    } else if result > 255 {
+        255
+    } else {
+        result as u8
+    }
+}
+
 pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_void)) {
     use bw_dat::order::*;
 
     let config = config();
+    let unit_array = &bw::unit_array();
+    let aura_state_guard = auras::aura_state();
+    let aura_state = &aura_state_guard;
     let game = crate::game::get();
     let unit = Unit::from_ptr(u as *mut bw::Unit).unwrap();
     let order = unit.order();
@@ -84,13 +107,29 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
             harvest_gas_check = unit.order_state() == 0;
             if unit.order_state() == 5 && (**unit).order_timer == 0 {
                 if let Some(target) = unit.target() {
-                    let reduce = upgrades::gas_harvest_reduce(&config, game, unit);
-                    let carry = upgrades::gas_harvest_carry(&config, game, unit);
-                    let depleted = upgrades::gas_harvest_carry_depleted(&config, game, unit);
-                    if reduce.is_some() || carry.is_some() || depleted.is_some() {
-                        let reduce = u16::from(reduce.unwrap_or(8));
-                        let carry = carry.unwrap_or(8);
-                        let depleted = depleted.unwrap_or(2);
+                    let reduce = apply_aura_u8(
+                        aura_state,
+                        unit,
+                        Stat::GasHarvestReduce,
+                        upgrades::gas_harvest_reduce(&config, game, unit).unwrap_or(8),
+                        unit_array,
+                    );
+                    let carry = apply_aura_u8(
+                        aura_state,
+                        unit,
+                        Stat::GasHarvestCarry,
+                        upgrades::gas_harvest_carry(&config, game, unit).unwrap_or(8),
+                        unit_array,
+                    );
+                    let depleted = apply_aura_u8(
+                        aura_state,
+                        unit,
+                        Stat::GasHarvestCarryDepleted,
+                        upgrades::gas_harvest_carry_depleted(&config, game, unit).unwrap_or(2),
+                        unit_array,
+                    );
+                    if reduce != 8 || carry != 8 || depleted != 2 {
+                        let reduce = u16::from(reduce);
                         let current_resources = target.resource_amount();
                         // Can't mine less than 8 gas at once without it being depleted mining.
                         let (amount, carry) = if current_resources < 8 {
@@ -116,11 +155,22 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
             harvest_minerals_check = unit.order_state() == 0 || unit.order_state() == 4;
             if unit.order_state() == 5 && (**unit).order_timer == 0 {
                 if let Some(target) = unit.target() {
-                    let reduce = upgrades::mineral_harvest_reduce(&config, game, unit);
-                    let carry = upgrades::mineral_harvest_carry(&config, game, unit);
-                    if reduce.is_some() || carry.is_some() {
-                        let reduce = u16::from(reduce.unwrap_or(8));
-                        let carry = carry.unwrap_or(8);
+                    let reduce = apply_aura_u8(
+                        aura_state,
+                        unit,
+                        Stat::MineralHarvestReduce,
+                        upgrades::mineral_harvest_reduce(&config, game, unit).unwrap_or(8),
+                        unit_array,
+                    );
+                    let carry = apply_aura_u8(
+                        aura_state,
+                        unit,
+                        Stat::MineralHarvestCarry,
+                        upgrades::mineral_harvest_carry(&config, game, unit).unwrap_or(8),
+                        unit_array,
+                    );
+                    if reduce != 8 || carry != 8 {
+                        let reduce = u16::from(reduce);
                         let current_resources = target.resource_amount();
                         let (amount, carry) = if current_resources <= reduce {
                             (1, current_resources as u8)
@@ -216,7 +266,10 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
             (**game).completed_units_count[unit_id::COMMAND_CENTER.0 as usize][player] += 1;
         }
     }
+    drop(aura_state_guard);
     orig(u);
+    let aura_state_guard = auras::aura_state();
+    let aura_state = &aura_state_guard;
     match order {
         DRONE_BUILD2 => {
             if (**unit).buttons != old_buttons {
@@ -248,41 +301,83 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
     }
     if harvest_gas_check {
         if unit.order_state() == 5 {
-            if let Some(new_timer) = upgrades::gas_harvest_time(&config, game, unit) {
-                (**unit).order_timer = new_timer;
-            }
+            let new_timer = apply_aura_u8(
+                aura_state,
+                unit,
+                Stat::GasHarvestTime,
+                upgrades::gas_harvest_time(&config, game, unit)
+                    .unwrap_or((**unit).order_timer),
+                unit_array,
+            );
+            (**unit).order_timer = new_timer;
         }
     }
     if harvest_minerals_check {
         if unit.order_state() == 5 {
-            if let Some(new_timer) = upgrades::mineral_harvest_time(&config, game, unit) {
-                (**unit).order_timer = new_timer;
-            }
+            let new_timer = apply_aura_u8(
+                aura_state,
+                unit,
+                Stat::MineralHarvestTime,
+                upgrades::mineral_harvest_time(&config, game, unit)
+                    .unwrap_or((**unit).order_timer),
+                unit_array,
+            );
+            (**unit).order_timer = new_timer;
         }
     }
     if unload_check {
         if (**unit).order_timer > 0 {
-            if let Some(new_time) = upgrades::unload_cooldown(&config, game, unit) {
-                (**unit).order_timer = new_time;
-            }
+            let new_timer = apply_aura_u8(
+                aura_state,
+                unit,
+                Stat::UnloadCooldown,
+                upgrades::unload_cooldown(&config, game, unit)
+                    .unwrap_or((**unit).order_timer),
+                unit_array,
+            );
+            (**unit).order_timer = new_timer;
         }
     }
     if ground_cooldown_check {
         if (**unit).ground_cooldown > 0 {
-            if let Some(new_time) = upgrades::ground_cooldown(&config, game, unit) {
-                (**unit).ground_cooldown = new_time;
-            } else if let Some(new_time) = upgrades::cooldown(&config, game, unit) {
-                (**unit).ground_cooldown = new_time;
-            }
+            let upgrade_cooldown = upgrades::ground_cooldown(&config, game, unit)
+                .or_else(|| upgrades::cooldown(&config, game, unit));
+            let new_cooldown = apply_aura_u8(
+                aura_state,
+                unit,
+                Stat::GroundCooldown,
+                upgrade_cooldown.unwrap_or((**unit).ground_cooldown),
+                unit_array,
+            );
+            let new_cooldown = apply_aura_u8(
+                aura_state,
+                unit,
+                Stat::Cooldown,
+                new_cooldown,
+                unit_array,
+            );
+            (**unit).ground_cooldown = new_cooldown;
         }
     }
     if air_cooldown_check {
         if (**unit).air_cooldown > 0 {
-            if let Some(new_time) = upgrades::air_cooldown(&config, game, unit) {
-                (**unit).air_cooldown = new_time;
-            } else if let Some(new_time) = upgrades::cooldown(&config, game, unit) {
-                (**unit).air_cooldown = new_time;
-            }
+            let upgrade_cooldown = upgrades::air_cooldown(&config, game, unit)
+                .or_else(|| upgrades::cooldown(&config, game, unit));
+            let new_cooldown = apply_aura_u8(
+                aura_state,
+                unit,
+                Stat::AirCooldown,
+                upgrade_cooldown.unwrap_or((**unit).air_cooldown),
+                unit_array,
+            );
+            let new_cooldown = apply_aura_u8(
+                aura_state,
+                unit,
+                Stat::Cooldown,
+                new_cooldown,
+                unit_array,
+            );
+            (**unit).air_cooldown = new_cooldown;
         }
     }
     if let Some(vars) = mining_override {
@@ -299,8 +394,7 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
         }
     }
     if let Some(rally) = rally_check {
-        let units = &bw::unit_array();
-        rally.rally_if_completed(game, units, &config);
+        rally.rally_if_completed(game, unit_array, &config);
     }
 }
 
@@ -313,6 +407,7 @@ pub unsafe extern fn secondary_order_hook(u: *mut c_void, orig: unsafe extern fn
 
     let unit = Unit::from_ptr(u as *mut bw::Unit).unwrap();
     let config = config();
+
     let mut spread_creep_check = false;
     let mut larva_spawn_check = false;
     let mut creep_spread_time = None;
@@ -366,15 +461,33 @@ pub unsafe extern fn secondary_order_hook(u: *mut c_void, orig: unsafe extern fn
     }
     orig(u);
     if spread_creep_check {
+        let unit_array = &bw::unit_array();
+        let aura_state = &auras::aura_state();
         if (**unit).unit_specific[0xc] != 0 {
             if let Some(new_timer) = creep_spread_time {
+                let new_timer = apply_aura_u8(
+                    aura_state,
+                    unit,
+                    Stat::CreepSpreadTimer,
+                    new_timer,
+                    unit_array,
+                );
                 (**unit).unit_specific[0xc] = new_timer;
             }
         }
     }
     if larva_spawn_check {
+        let unit_array = &bw::unit_array();
+        let aura_state = &auras::aura_state();
         if (**unit).unit_specific[0xa] != 0 {
             if let Some(new_timer) = larva_spawn_time {
+                let new_timer = apply_aura_u8(
+                    aura_state,
+                    unit,
+                    Stat::LarvaTimer,
+                    new_timer,
+                    unit_array,
+                );
                 (**unit).unit_specific[0xa] = new_timer;
             }
         }
@@ -502,6 +615,10 @@ unsafe fn attack_at_point(
     attack_sprite: SpriteId,
     directions: u8,
 ) -> bool {
+    // Fixme: cooldown aura effects aren't applied below,
+    // so this doesn't work properly for other orders if that isn't done
+    assert!(unit.is_hidden());
+
     let target = match unit.target().is_some() {
         true => {
             pick_new_attack_target_if_needed(globals, search, unit);
@@ -574,6 +691,8 @@ unsafe fn attack_at_point(
     // gotorepeatattk flag
     (**unit).flingy_flags |= 0x8;
     let mut rng = crate::rng::get();
+    // Note: Should probably be refactored to check auras, but at the same time
+    // auras won't apply to hidden units
     let cooldown = match upgrades::cooldown(&config, globals.game, unit) {
         Some(s) => s,
         None => default_cooldown(unit, weapon),

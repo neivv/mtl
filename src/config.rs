@@ -7,6 +7,7 @@ use anyhow::{anyhow, Context, Error};
 use bw_dat::{UnitId, OrderId, SpriteId, WeaponId};
 use bw_dat::expr::{IntExpr, BoolExpr};
 
+use crate::auras::Auras;
 use crate::bw;
 use crate::ini::Ini;
 use crate::status_screen;
@@ -45,6 +46,7 @@ pub struct Config {
     pub zerg_building_training: bool,
     pub bunker_units: Vec<(UnitId, SpriteId, u8)>,
     pub lighting: Option<Lighting>,
+    pub auras: Auras,
     pub dont_override_shaders: bool,
     pub enable_map_dat_files: bool,
     pub cmdbtn_tooltip_half_supply: bool,
@@ -301,6 +303,8 @@ impl Config {
                     }
                     Some(lighting)
                 };
+            } else if name == "aura" {
+                self.auras.parse_aura_config(&section.values)?;
             } else if name.starts_with("upgrade") {
                 let mut tokens = name.split(".").skip(1);
                 let generic_error = || {
@@ -430,6 +434,7 @@ impl Default for Config {
             cmdbtn_tooltip_half_supply: false,
             cmdbtn_force_stat_txt_tooltips: false,
             upgrades: Upgrades::new(),
+            auras: Auras::empty(),
             status_screen_tooltips: status_screen::Tooltips::new(),
             lighting: None,
             bunker_units: Vec::new(),
@@ -506,7 +511,7 @@ fn parse_race(value: &str) -> Result<u8, Error> {
     }
 }
 
-fn parse_u8_list<'a>(values: &'a str) -> impl Iterator<Item=Result<u8, Error>> + 'a {
+pub fn parse_u8_list<'a>(values: &'a str) -> impl Iterator<Item=Result<u8, Error>> + 'a {
     values.split(",").map(|x| parse_u8(x.trim()))
 }
 
@@ -569,7 +574,7 @@ fn parse_state(value: &str) -> Result<State, Error> {
     })
 }
 
-fn parse_stat(key: &str) -> Result<Stat, Error> {
+pub fn parse_stat(key: &str) -> Result<Stat, Error> {
     Ok(match key {
         "hp_regen" => Stat::HpRegen,
         "shield_regen" => Stat::ShieldRegen,
@@ -637,7 +642,7 @@ pub fn parse_bool_expr(condition: &str) -> Result<BoolExpr, Error> {
         .map_err(|e| e.into())
 }
 
-fn parse_int_expr(expr: &str) -> Result<IntExpr, Error> {
+pub fn parse_int_expr(expr: &str) -> Result<IntExpr, Error> {
     IntExpr::parse(expr.as_bytes())
         .map_err(|e| e.into())
 }

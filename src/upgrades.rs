@@ -298,6 +298,7 @@ impl State {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Stat {
     HpRegen,
