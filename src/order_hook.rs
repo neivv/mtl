@@ -1238,7 +1238,7 @@ fn has_way_of_attacking(unit: Unit) -> bool {
     let unit = unit.subunit_turret();
     match unit.id() {
         unit_id::CARRIER | unit_id::GANTRITHOR | unit_id::REAVER | unit_id::WARBRINGER => {
-            unit.hangar_count() != 0
+            unit.fighter_amount() != 0
         }
         x => x.ground_weapon().is_some() || x.air_weapon().is_some(),
     }

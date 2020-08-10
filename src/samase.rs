@@ -360,13 +360,17 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_shim::PluginApi) {
     bw_dat::set_is_scr(crate::is_scr());
     crate::init();
 
-    let required_version = 26;
+    let required_version = 29;
     if (*api).version < required_version {
         fatal(&format!(
             "Newer samase is required. (Plugin API version {}, this plugin requires version {})",
             (*api).version, required_version,
         ));
     }
+
+    let mut ext_arrays = null_mut();
+    let ext_arrays_len = ((*api).extended_arrays)(&mut ext_arrays);
+    bw_dat::set_extended_arrays(ext_arrays as *mut _, ext_arrays_len);
 
     CRASH_WITH_MESSAGE.0 = Some((*api).crash_with_message);
     GAME.init(((*api).game)().map(|x| mem::transmute(x)), "Game object");
@@ -572,7 +576,7 @@ mod prism {
     }
 }
 
-pub unsafe extern fn init_config(exit_on_error: bool, game: Option<Game>) {
+pub unsafe fn init_config(exit_on_error: bool, game: Option<Game>) {
     loop {
         match read_config(game) {
             Ok(o) => {
