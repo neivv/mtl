@@ -133,7 +133,7 @@ pub unsafe extern fn frame_hook() {
     {
         if let Some(ref light) = config.lighting {
             let step = match light.bound_death {
-                Some((player, unit_id)) => (**game).deaths[unit_id.0 as usize][player as usize],
+                Some((player, unit_id)) => game.unit_deaths(player, unit_id),
                 None => 1,
             };
             if step != 0 {

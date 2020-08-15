@@ -256,14 +256,18 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
     if return_cargo_order {
         if config.return_cargo_softcode {
             return_cargo_softcoded = true;
-            let player = unit.player() as usize;
+            let player = unit.player();
             // BW only searches for resource depots if the player owns at least one of the
             // five hardcoded depots.
             // Harvest gas searches for the depots when deciding where the worker should
             // be spawned when exiting the gas mine.
             // The reset collision order is a highprio order, so it'll be able to
             // execute return cargo order immediately afterwards.
-            (**game).completed_units_count[unit_id::COMMAND_CENTER.0 as usize][player] += 1;
+            game.set_completed_count(
+                player,
+                unit_id::COMMAND_CENTER,
+                game.completed_count(player, unit_id::COMMAND_CENTER) + 1,
+            );
         }
     }
     drop(aura_state_guard);
@@ -296,8 +300,12 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
         _ => (),
     }
     if return_cargo_softcoded {
-        let player = unit.player() as usize;
-        (**game).completed_units_count[unit_id::COMMAND_CENTER.0 as usize][player] -= 1;
+        let player = unit.player();
+        game.set_completed_count(
+            player,
+            unit_id::COMMAND_CENTER,
+            game.completed_count(player, unit_id::COMMAND_CENTER) - 1,
+        );
     }
     if harvest_gas_check {
         if unit.order_state() == 5 {
