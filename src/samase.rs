@@ -526,6 +526,17 @@ mod prism {
     }
 
     impl ShaderSetEntry {
+        const fn pixel_sm4(wrapper: &[u8]) -> ShaderSetEntry {
+            ShaderSetEntry {
+                format: 0x0,
+                shader_type: 0x6,
+                unk1: 0,
+                unk2: 0,
+                pointer: wrapper.as_ptr(),
+                len: wrapper.len() as u32,
+            }
+        }
+
         const fn pixel_sm5(wrapper: &[u8]) -> ShaderSetEntry {
             ShaderSetEntry {
                 format: 0x4,
@@ -542,37 +553,67 @@ mod prism {
     unsafe impl Send for ShaderSetEntry {}
 
     static WATER_BIN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/water.bin"));
-    static WATER_SET: &[ShaderSetEntry] = &[ShaderSetEntry::pixel_sm5(WATER_BIN)];
+    static WATER_SM4_BIN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/water.sm4.bin"));
+    static WATER_SET: &[ShaderSetEntry] = &[
+        ShaderSetEntry::pixel_sm4(WATER_SM4_BIN),
+        ShaderSetEntry::pixel_sm5(WATER_BIN),
+    ];
     static SPRITE_TILE_BIN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sprite_tile.bin"));
-    static SPRITE_TILE_SET: &[ShaderSetEntry] = &[ShaderSetEntry::pixel_sm5(SPRITE_TILE_BIN)];
+    static SPRITE_TILE_SM4_BIN: &[u8] =
+        include_bytes!(concat!(env!("OUT_DIR"), "/sprite_tile.sm4.bin"));
+    static SPRITE_TILE_SET: &[ShaderSetEntry] = &[
+        ShaderSetEntry::pixel_sm4(SPRITE_TILE_SM4_BIN),
+        ShaderSetEntry::pixel_sm5(SPRITE_TILE_BIN),
+    ];
     static SPRITE_TILE_EFFECT_BIN: &[u8] =
         include_bytes!(concat!(env!("OUT_DIR"), "/sprite_tile_effect.bin"));
-    static SPRITE_TILE_EFFECT_SET: &[ShaderSetEntry] =
-        &[ShaderSetEntry::pixel_sm5(SPRITE_TILE_EFFECT_BIN)];
+    static SPRITE_TILE_EFFECT_SM4_BIN: &[u8] =
+        include_bytes!(concat!(env!("OUT_DIR"), "/sprite_tile_effect.sm4.bin"));
+    static SPRITE_TILE_EFFECT_SET: &[ShaderSetEntry] = &[
+        ShaderSetEntry::pixel_sm4(SPRITE_TILE_EFFECT_SM4_BIN),
+        ShaderSetEntry::pixel_sm5(SPRITE_TILE_EFFECT_BIN),
+    ];
     static SPRITE_TILE_FISH_COLOR_BIN: &[u8] =
         include_bytes!(concat!(env!("OUT_DIR"), "/sprite_tile_fish_color.bin"));
-    static SPRITE_TILE_FISH_COLOR_SET: &[ShaderSetEntry] =
-        &[ShaderSetEntry::pixel_sm5(SPRITE_TILE_FISH_COLOR_BIN)];
+    static SPRITE_TILE_FISH_COLOR_SM4_BIN: &[u8] =
+        include_bytes!(concat!(env!("OUT_DIR"), "/sprite_tile_fish_color.sm4.bin"));
+    static SPRITE_TILE_FISH_COLOR_SET: &[ShaderSetEntry] = &[
+        ShaderSetEntry::pixel_sm4(SPRITE_TILE_FISH_COLOR_SM4_BIN),
+        ShaderSetEntry::pixel_sm5(SPRITE_TILE_FISH_COLOR_BIN),
+    ];
     static SPRITE_TILE_FISH_ALPHA_BIN: &[u8] =
         include_bytes!(concat!(env!("OUT_DIR"), "/sprite_tile_fish_alpha.bin"));
-    static SPRITE_TILE_FISH_ALPHA_SET: &[ShaderSetEntry] =
-        &[ShaderSetEntry::pixel_sm5(SPRITE_TILE_FISH_ALPHA_BIN)];
+    static SPRITE_TILE_FISH_ALPHA_SM4_BIN: &[u8] =
+        include_bytes!(concat!(env!("OUT_DIR"), "/sprite_tile_fish_alpha.sm4.bin"));
+    static SPRITE_TILE_FISH_ALPHA_SET: &[ShaderSetEntry] = &[
+        ShaderSetEntry::pixel_sm4(SPRITE_TILE_FISH_ALPHA_SM4_BIN),
+        ShaderSetEntry::pixel_sm5(SPRITE_TILE_FISH_ALPHA_BIN),
+    ];
     static SPRITE_PART_SOLID_FRAG_BIN: &[u8] =
         include_bytes!(concat!(env!("OUT_DIR"), "/sprite_part_solid_frag.bin"));
-    static SPRITE_PART_SOLID_FRAG_SET: &[ShaderSetEntry] =
-        &[ShaderSetEntry::pixel_sm5(SPRITE_PART_SOLID_FRAG_BIN)];
+    static SPRITE_PART_SOLID_FRAG_SM4_BIN: &[u8] =
+        include_bytes!(concat!(env!("OUT_DIR"), "/sprite_part_solid_frag.sm4.bin"));
+    static SPRITE_PART_SOLID_FRAG_SET: &[ShaderSetEntry] = &[
+        ShaderSetEntry::pixel_sm4(SPRITE_PART_SOLID_FRAG_SM4_BIN),
+        ShaderSetEntry::pixel_sm5(SPRITE_PART_SOLID_FRAG_BIN),
+    ];
     static DEFERRED_BLIT_BIN: &[u8] =
         include_bytes!(concat!(env!("OUT_DIR"), "/deferred_blit.bin"));
-    static DEFERRED_BLIT_SET: &[ShaderSetEntry] = &[ShaderSetEntry::pixel_sm5(DEFERRED_BLIT_BIN)];
+    static DEFERRED_BLIT_SM4_BIN: &[u8] =
+        include_bytes!(concat!(env!("OUT_DIR"), "/deferred_blit.sm4.bin"));
+    static DEFERRED_BLIT_SET: &[ShaderSetEntry] = &[
+        ShaderSetEntry::pixel_sm4(DEFERRED_BLIT_SM4_BIN),
+        ShaderSetEntry::pixel_sm5(DEFERRED_BLIT_BIN),
+    ];
 
     pub unsafe fn override_shaders(api: *const samase_shim::PluginApi) {
-        ((*api).set_prism_shaders)(1, 0xb, DEFERRED_BLIT_SET.as_ptr() as *const u8, 1);
-        ((*api).set_prism_shaders)(1, 0xe, SPRITE_TILE_SET.as_ptr() as *const u8, 1);
-        ((*api).set_prism_shaders)(1, 0xf, SPRITE_TILE_EFFECT_SET.as_ptr() as *const u8, 1);
-        ((*api).set_prism_shaders)(1, 0x17, SPRITE_PART_SOLID_FRAG_SET.as_ptr() as *const u8, 1);
-        ((*api).set_prism_shaders)(1, 0x20, WATER_SET.as_ptr() as *const u8, 1);
-        ((*api).set_prism_shaders)(1, 0x28, SPRITE_TILE_FISH_COLOR_SET.as_ptr() as *const u8, 1);
-        ((*api).set_prism_shaders)(1, 0x29, SPRITE_TILE_FISH_ALPHA_SET.as_ptr() as *const u8, 1);
+        ((*api).set_prism_shaders)(1, 0xb, DEFERRED_BLIT_SET.as_ptr() as *const u8, 2);
+        ((*api).set_prism_shaders)(1, 0xe, SPRITE_TILE_SET.as_ptr() as *const u8, 2);
+        ((*api).set_prism_shaders)(1, 0xf, SPRITE_TILE_EFFECT_SET.as_ptr() as *const u8, 2);
+        ((*api).set_prism_shaders)(1, 0x17, SPRITE_PART_SOLID_FRAG_SET.as_ptr() as *const u8, 2);
+        ((*api).set_prism_shaders)(1, 0x20, WATER_SET.as_ptr() as *const u8, 2);
+        ((*api).set_prism_shaders)(1, 0x28, SPRITE_TILE_FISH_COLOR_SET.as_ptr() as *const u8, 2);
+        ((*api).set_prism_shaders)(1, 0x29, SPRITE_TILE_FISH_ALPHA_SET.as_ptr() as *const u8, 2);
     }
 }
 

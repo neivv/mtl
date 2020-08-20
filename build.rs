@@ -29,13 +29,15 @@ fn main() {
         let path = Path::new("src/shaders/d3d11").join(source);
         println!("cargo:rerun-if-changed={}", path.to_str().unwrap());
         let bin_filename = format!("{}.bin", out_name);
+        let bin_sm4_filename = format!("{}.sm4.bin", out_name);
         let text_bytes = fs::read(path)
             .unwrap_or_else(|e| panic!("Couldn't read {}: {:?}", source, e));
-        let shader_bytes = compile(&text_bytes, defines)
+        let shader_bytes = compile(&text_bytes, defines, ShaderModel::Sm5)
             .unwrap_or_else(|e| panic!("Couldn't compile {}: {:?}", source, e));
         let wrapped = wrap_shader(&shader_bytes);
         fs::write(&out_path.join(bin_filename), &wrapped)
             .unwrap_or_else(|e| panic!("Couldn't write {}: {:?}", source, e));
+
         // Output disassembly for comparing things with dumped disasm.
         // Not necessary for actually building.
         let disasm = disassemble(&shader_bytes)
@@ -43,7 +45,26 @@ fn main() {
         let disasm_filename = format!("{}.asm", out_name);
         fs::write(&out_path.join(&disasm_filename), &disasm)
             .unwrap_or_else(|e| panic!("Couldn't write {}: {:?}", disasm_filename, e));
+
+        // SM4 shader
+        let shader_bytes = compile(&text_bytes, defines, ShaderModel::Sm4)
+            .unwrap_or_else(|e| panic!("Couldn't compile {}: {:?}", source, e));
+        let wrapped = wrap_shader(&shader_bytes);
+        fs::write(&out_path.join(bin_sm4_filename), &wrapped)
+            .unwrap_or_else(|e| panic!("Couldn't write {}: {:?}", source, e));
+
+        // SM4 disasm
+        let disasm = disassemble(&shader_bytes)
+            .unwrap_or_else(|e| panic!("Couldn't disassemble {}: {:?}", source, e));
+        let disasm_filename = format!("{}.sm4.asm", out_name);
+        fs::write(&out_path.join(&disasm_filename), &disasm)
+            .unwrap_or_else(|e| panic!("Couldn't write {}: {:?}", disasm_filename, e));
     }
+}
+
+enum ShaderModel {
+    Sm4,
+    Sm5,
 }
 
 fn wrap_shader(bytes: &[u8]) -> Vec<u8> {
@@ -58,7 +79,7 @@ fn wrap_shader(bytes: &[u8]) -> Vec<u8> {
     out
 }
 
-fn compile(bytes: &[u8], in_defines: &[(&str, &str)]) -> io::Result<Vec<u8>> {
+fn compile(bytes: &[u8], in_defines: &[(&str, &str)], model: ShaderModel) -> io::Result<Vec<u8>> {
     unsafe {
         let mut defines = vec![];
         // Hold define strings for the compilation
@@ -80,6 +101,10 @@ fn compile(bytes: &[u8], in_defines: &[(&str, &str)]) -> io::Result<Vec<u8>> {
         let mut code = null_mut();
         let mut errors = null_mut();
         let include = IncludeHandler::new(Path::new("src/shaders/d3d11").into());
+        let model_string = match model {
+            ShaderModel::Sm4 => "ps_4_0\0".as_ptr() as *const i8,
+            ShaderModel::Sm5 => "ps_5_0\0".as_ptr() as *const i8,
+        };
         let error = D3DCompile2(
             bytes.as_ptr() as *const _,
             bytes.len(),
@@ -87,7 +112,7 @@ fn compile(bytes: &[u8], in_defines: &[(&str, &str)]) -> io::Result<Vec<u8>> {
             defines.as_ptr(),
             include.0 as *mut ID3DInclude,
             b"main\0".as_ptr() as *const i8,
-            b"ps_5_0\0".as_ptr() as *const i8,
+            model_string,
             D3DCOMPILE_OPTIMIZATION_LEVEL3 | D3DCOMPILE_WARNINGS_ARE_ERRORS,
             0,
             0,
