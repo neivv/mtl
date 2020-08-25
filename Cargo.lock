@@ -43,7 +43,7 @@ checksum = "cf1de2fe8c75bc145a2f577add951f8134889b4795d47466a54a5c846d691693"
 [[package]]
 name = "bw_dat"
 version = "0.1.0"
-source = "git+https://github.com/neivv/aise?rev=d6d3486925c73172c125e3db175c6e24ab6f9647#d6d3486925c73172c125e3db175c6e24ab6f9647"
+source = "git+https://github.com/neivv/aise?rev=f239bc2e66d31e4838843b987238cce9456cf8d9#f239bc2e66d31e4838843b987238cce9456cf8d9"
 dependencies = [
  "bitflags",
  "byteorder",
@@ -444,7 +444,7 @@ checksum = "2439c63f3f6139d1b57529d16bc3b8bb855230c8efcc5d3a896c8bea7c3b1e84"
 [[package]]
 name = "samase_plugin"
 version = "0.5.0"
-source = "git+https://github.com/neivv/samase_plugin?rev=efea4458c610128a949728464b8099222bcadcdc#efea4458c610128a949728464b8099222bcadcdc"
+source = "git+https://github.com/neivv/samase_plugin?rev=f2c737224a3429bf35e563a76b8802b68d7aa2f#f2c737224a3429bf35e563a76b8802b68d7aa2fd"
 dependencies = [
  "bincode",
  "byteorder",
@@ -462,7 +462,7 @@ dependencies = [
 [[package]]
 name = "samase_shim"
 version = "0.5.0"
-source = "git+https://github.com/neivv/samase_plugin?rev=efea4458c610128a949728464b8099222bcadcdc#efea4458c610128a949728464b8099222bcadcdc"
+source = "git+https://github.com/neivv/samase_plugin?rev=f2c737224a3429bf35e563a76b8802b68d7aa2f#f2c737224a3429bf35e563a76b8802b68d7aa2fd"
 dependencies = [
  "byteorder",
  "lazy_static",

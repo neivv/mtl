@@ -1,6 +1,7 @@
 use std::mem;
 use std::ops;
 use std::ptr::{NonNull, null_mut};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use libc::c_void;
 
@@ -244,50 +245,44 @@ static mut ISSUE_ORDER: GlobalFunc<
     unsafe extern fn(*mut bw::Unit, u32, u32, u32, *mut bw::Unit, u32)
 > = GlobalFunc(None);
 
-static mut UNITS_DAT: GlobalFunc<unsafe extern fn() -> *mut DatTable> = GlobalFunc(None);
+static UNITS_DAT: AtomicUsize = AtomicUsize::new(0);
 pub fn units_dat() -> *mut DatTable {
-    unsafe { UNITS_DAT.get()() }
+    UNITS_DAT.load(Ordering::Relaxed) as *mut DatTable
 }
 
-static mut WEAPONS_DAT: GlobalFunc<extern fn() -> *mut bw_dat::DatTable> = GlobalFunc(None);
+static WEAPONS_DAT: AtomicUsize = AtomicUsize::new(0);
 pub fn weapons_dat() -> *mut bw_dat::DatTable {
-    unsafe { WEAPONS_DAT.get()() }
+    WEAPONS_DAT.load(Ordering::Relaxed) as *mut DatTable
 }
 
-static mut FLINGY_DAT: GlobalFunc<unsafe extern fn() -> *mut DatTable> = GlobalFunc(None);
+static FLINGY_DAT: AtomicUsize = AtomicUsize::new(0);
 pub fn flingy_dat() -> *mut DatTable {
-    unsafe { FLINGY_DAT.get()() }
+    FLINGY_DAT.load(Ordering::Relaxed) as *mut DatTable
 }
 
-static mut UPGRADES_DAT: GlobalFunc<extern fn() -> *mut bw_dat::DatTable> = GlobalFunc(None);
+static UPGRADES_DAT: AtomicUsize = AtomicUsize::new(0);
 pub fn upgrades_dat() -> *mut bw_dat::DatTable {
-    unsafe { UPGRADES_DAT.get()() }
+    UPGRADES_DAT.load(Ordering::Relaxed) as *mut DatTable
 }
 
-static mut TECHDATA_DAT: GlobalFunc<extern fn() -> *mut bw_dat::DatTable> = GlobalFunc(None);
+static TECHDATA_DAT: AtomicUsize = AtomicUsize::new(0);
 pub fn techdata_dat() -> *mut bw_dat::DatTable {
-    unsafe { TECHDATA_DAT.get()() }
+    TECHDATA_DAT.load(Ordering::Relaxed) as *mut DatTable
 }
 
-static mut SPRITES_DAT: GlobalFunc<unsafe extern fn() -> *mut DatTable> = GlobalFunc(None);
+static SPRITES_DAT: AtomicUsize = AtomicUsize::new(0);
 pub fn sprites_dat() -> *mut DatTable {
-    unsafe { SPRITES_DAT.get()() }
+    SPRITES_DAT.load(Ordering::Relaxed) as *mut DatTable
 }
 
-static mut ORDERS_DAT: GlobalFunc<extern fn() -> *mut bw_dat::DatTable> = GlobalFunc(None);
+static ORDERS_DAT: AtomicUsize = AtomicUsize::new(0);
 pub fn orders_dat() -> *mut bw_dat::DatTable {
-    unsafe { ORDERS_DAT.get()() }
+    ORDERS_DAT.load(Ordering::Relaxed) as *mut DatTable
 }
 
-static mut PORTDATA_DAT: GlobalFunc<extern fn() -> *mut bw_dat::DatTable> = GlobalFunc(None);
+static PORTDATA_DAT: AtomicUsize = AtomicUsize::new(0);
 pub fn portdata_dat() -> *mut bw_dat::DatTable {
-    unsafe {
-        if let Some(x) = PORTDATA_DAT.0 {
-            x()
-        } else {
-            null_mut()
-        }
-    }
+    PORTDATA_DAT.load(Ordering::Relaxed) as *mut DatTable
 }
 
 pub fn issue_order(
@@ -360,7 +355,7 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_shim::PluginApi) {
     bw_dat::set_is_scr(crate::is_scr());
     crate::init();
 
-    let required_version = 29;
+    let required_version = 30;
     if (*api).version < required_version {
         fatal(&format!(
             "Newer samase is required. (Plugin API version {}, this plugin requires version {})",
@@ -384,20 +379,29 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_shim::PluginApi) {
     );
 
     READ_FILE.0 = Some(mem::transmute(((*api).read_file)()));
-    UNITS_DAT.init(((*api).dat)(0).map(|x| mem::transmute(x)), "units_dat");
-    bw_dat::init_units(units_dat());
-    WEAPONS_DAT.init(((*api).dat)(1).map(|x| mem::transmute(x)), "weapons.dat");
-    bw_dat::init_weapons(weapons_dat());
-    FLINGY_DAT.init(((*api).dat)(2).map(|x| mem::transmute(x)), "flingy.dat");
-    bw_dat::init_flingy(flingy_dat());
-    UPGRADES_DAT.init(((*api).dat)(3).map(|x| mem::transmute(x)), "upgrades.dat");
-    bw_dat::init_upgrades(upgrades_dat());
-    TECHDATA_DAT.init(((*api).dat)(4).map(|x| mem::transmute(x)), "techdata.dat");
-    bw_dat::init_techdata(techdata_dat());
-    SPRITES_DAT.init(((*api).dat)(5).map(|x| mem::transmute(x)), "sprites.dat");
-    bw_dat::init_sprites(sprites_dat());
-    ORDERS_DAT.init(((*api).dat)(7).map(|x| mem::transmute(x)), "orders.dat");
-    bw_dat::init_orders(orders_dat());
+    let mut dat_len = 0usize;
+    let units_dat = ((*api).extended_dat)(0).expect("units.dat")(&mut dat_len);
+    bw_dat::init_units(units_dat as *const _, dat_len as usize);
+    UNITS_DAT.store(units_dat as usize, Ordering::Relaxed);
+    let weapons_dat = ((*api).extended_dat)(1).expect("weapons.dat")(&mut dat_len);
+    bw_dat::init_weapons(weapons_dat as *const _, dat_len);
+    WEAPONS_DAT.store(weapons_dat as usize, Ordering::Relaxed);
+    let flingy_dat = ((*api).extended_dat)(2).expect("flingy.dat")(&mut dat_len);
+    bw_dat::init_flingy(flingy_dat as *const _, dat_len);
+    FLINGY_DAT.store(flingy_dat as usize, Ordering::Relaxed);
+    let upgrades_dat = ((*api).extended_dat)(3).expect("upgrades.dat")(&mut dat_len);
+    bw_dat::init_upgrades(upgrades_dat as *const _, dat_len);
+    UPGRADES_DAT.store(upgrades_dat as usize, Ordering::Relaxed);
+    let techdata_dat = ((*api).extended_dat)(4).expect("techdata.dat")(&mut dat_len);
+    bw_dat::init_techdata(techdata_dat as *const _, dat_len);
+    TECHDATA_DAT.store(techdata_dat as usize, Ordering::Relaxed);
+    let sprites_dat = ((*api).extended_dat)(5).expect("sprites.dat")(&mut dat_len);
+    bw_dat::init_sprites(sprites_dat as *const _, dat_len);
+    SPRITES_DAT.store(sprites_dat as usize, Ordering::Relaxed);
+    let orders_dat = ((*api).extended_dat)(7).expect("orders.dat")(&mut dat_len);
+    bw_dat::init_orders(orders_dat as *const _, dat_len);
+    ORDERS_DAT.store(orders_dat as usize, Ordering::Relaxed);
+
     init_config(true, None);
     //((*api).hook_on_first_file_access)(init_config);
     let config = config::config();
@@ -499,7 +503,10 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_shim::PluginApi) {
     }
     if config.enable_map_dat_files {
         let ok = ((*api).hook_init_units)(crate::init_map_specific_dat);
-        PORTDATA_DAT.try_init(((*api).dat)(6).map(|x| mem::transmute(x)));
+        if let Some(portdata_dat) = ((*api).extended_dat)(9) {
+            let mut len = 0usize;
+            PORTDATA_DAT.store(portdata_dat(&mut len) as usize, Ordering::Relaxed);
+        }
         if ok == 0 {
             ((*api).warn_unsupported_feature)(b"Map specific dat\0".as_ptr());
         }

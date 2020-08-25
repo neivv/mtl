@@ -158,7 +158,7 @@ impl Upgrades {
                 self.units_with_upgrades[unit.0 as usize] = true;
             }
         } else {
-            self.units_with_upgrades = vec![true; bw_dat::unit::NONE.0 as usize];
+            self.units_with_upgrades = vec![true; UnitId::entry_amount() as usize];
         };
         if self.units_with_color_upgrades.len() < largest_unit_id as usize + 1 {
             self.units_with_color_upgrades.resize(largest_unit_id as usize + 1, false);
