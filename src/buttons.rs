@@ -35,6 +35,7 @@ pub unsafe fn draw_tooltip_hook(
             let string_id = (*button).enabled_string_id;
             if let Some(string) = stat_txt().by_index(string_id) {
                 let is_train_string = string.as_bytes().get(1).filter(|&&c| c == 1).is_some();
+                let is_upgrade_string = string.as_bytes().get(1).filter(|&&c| c == 2).is_some();
                 if is_train_string && config.cmdbtn_tooltip_half_supply {
                     let train_unit = UnitId((*button).act_var);
                     let dual_birth = train_unit.flags() & 0x400 != 0;
@@ -55,6 +56,15 @@ pub unsafe fn draw_tooltip_hook(
                         HALF_SUPPLY_VALUE.store(train_unit.supply_cost() / 2, Ordering::Relaxed);
                     }
                 }
+                if is_upgrade_string {
+                    let player = bw::client_selection().get(0)
+                        .and_then(|&x| Unit::from_ptr(x))
+                        .map(|x| x.player())
+                        .unwrap_or(0);
+                    let upgrade = UpgradeId((*button).act_var);
+                    let level = game.upgrade_level(player, upgrade);
+                    NEXT_UPGRADE_LEVEL.store(level.saturating_add(1), Ordering::Relaxed);
+                }
                 if config.cmdbtn_force_stat_txt_tooltips {
                     let text_count = tooltip_text_count(game, string, button);
                     MAIN_TEXT_STRING.store(string_id, Ordering::Relaxed);
@@ -69,6 +79,7 @@ pub unsafe fn draw_tooltip_hook(
     tooltip::set_text_hook_mode(0);
     HALF_SUPPLY_POS.store(0, Ordering::Relaxed);
     MAIN_TEXT_POS.store(0, Ordering::Relaxed);
+    NEXT_UPGRADE_LEVEL.store(0, Ordering::Relaxed);
     true
 }
 
@@ -120,6 +131,7 @@ static HALF_SUPPLY_VALUE: AtomicU32 = AtomicU32::new(0);
 static MAIN_TEXT_POS: AtomicU8 = AtomicU8::new(0);
 static MAIN_TEXT_INDEX: AtomicU8 = AtomicU8::new(0);
 static MAIN_TEXT_STRING: AtomicU16 = AtomicU16::new(0);
+static NEXT_UPGRADE_LEVEL: AtomicU8 = AtomicU8::new(0);
 
 // Buffer doesn't need to be 0-terminated
 pub fn tooltip_text_hook(buffer: &mut ArrayVec<[u8; 512]>, draw: u32) -> bool {
@@ -152,6 +164,12 @@ pub fn tooltip_text_hook(buffer: &mut ArrayVec<[u8; 512]>, draw: u32) -> bool {
                 .and_then(|x| x.get(2..))
                 .unwrap_or("???");
             let _ = write!(buffer, "{}", string);
+            let upgrade_level = NEXT_UPGRADE_LEVEL.load(Ordering::Relaxed);
+            if upgrade_level != 0 {
+                let next_level_string = stat_txt.by_index(0x31b)
+                    .unwrap_or("???");
+                let _ = write!(buffer, "\n{} {}", next_level_string, upgrade_level);
+            }
             if draw == 0 {
                 let start_index = MAIN_TEXT_INDEX.load(Ordering::Relaxed);
                 MAIN_TEXT_POS.store(start_index, Ordering::Relaxed);
