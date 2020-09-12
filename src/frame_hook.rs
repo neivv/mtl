@@ -122,6 +122,7 @@ pub unsafe extern fn frame_hook() {
     let game = Game::from_ptr(bw::game());
     let unit_array = bw::unit_array();
     let unit_search = UnitSearch::from_bw();
+    let mut extended_unit_fields = unit::extended_field_state();
     let mut aura_state = auras::aura_state();
     // Not doing frame_count == 0 as there are actually 2 frame 0s
     let first_frame = FIRST_FRAME.load(Ordering::Relaxed);
@@ -231,6 +232,11 @@ pub unsafe extern fn frame_hook() {
             Some(s) => s.saturating_add(aura_energy),
             None => aura_energy,
         };
+        let aura_resources = aura_state.unit_stat(unit, Stat::ResourceRegen, &unit_array);
+        let resource_regen = match regen.resources {
+            Some(s) => s.saturating_add(aura_resources),
+            None => aura_resources,
+        };
         if hp_regen != 0 {
             (**unit).hitpoints = (**unit).hitpoints.saturating_add(hp_regen);
             if (**unit).hitpoints <= 0 {
@@ -260,6 +266,32 @@ pub unsafe extern fn frame_hook() {
                 (**unit).energy = (**unit).energy.saturating_sub(neg as u16);
             }
             // Not handling past-the-max, bw hopefully handles that.
+        }
+        if resource_regen != 0 && unit.id().is_resource_container() {
+            let mut amount = resource_regen / 256;
+            let fractional = resource_regen as u8;
+            if fractional != 0 {
+                let fract_state = extended_unit_fields.get_mut(&unit_array, unit, 0);
+                let (new, overflow) = if resource_regen < 0 {
+                    let neg = 0u8.wrapping_sub(fractional);
+                    fract_state.overflowing_sub(neg)
+                } else {
+                    fract_state.overflowing_add(fractional)
+                };
+                *fract_state = new;
+                if overflow {
+                    if resource_regen < 0 {
+                        amount = amount.saturating_sub(1);
+                    } else {
+                        amount = amount.saturating_add(1);
+                    }
+                }
+            }
+            let ptr = (**unit).unit_specific2.as_mut_ptr() as *mut u16;
+            *ptr = (*ptr as i32)
+                .saturating_add(amount)
+                .max(0i32)
+                .min(65535) as u16;
         }
         if (**unit).build_queue[(**unit).current_build_slot as usize] != bw_dat::unit::NONE.0 {
             upgrades.update_build_queue(unit);

@@ -579,6 +579,7 @@ pub fn parse_stat(key: &str) -> Result<Stat, Error> {
         "hp_regen" => Stat::HpRegen,
         "shield_regen" => Stat::ShieldRegen,
         "energy_regen" => Stat::EnergyRegen,
+        "resource_regen" => Stat::ResourceRegen,
         "cooldown" => Stat::Cooldown,
         "air_cooldown" => Stat::AirCooldown,
         "ground_cooldown" => Stat::GroundCooldown,

@@ -322,6 +322,7 @@ pub enum Stat {
     PlayerColorPalette,
     ShowEnergy,
     ShowShields,
+    ResourceRegen,
 }
 
 impl Stat {
@@ -349,12 +350,14 @@ pub struct Regens {
     pub hp: Option<i32>,
     pub shield: Option<i32>,
     pub energy: Option<i32>,
+    pub resources: Option<i32>,
 }
 
 pub fn regens(config: &Config, game: Game, unit: Unit) -> Regens {
     let mut hp = 0i32;
     let mut shield = 0i32;
     let mut energy = 0i32;
+    let mut resources = 0i32;
     config.upgrades.matches(game, unit, |stat, vals| match *stat {
         Stat::HpRegen => {
             hp = hp.saturating_add(vals[0].eval_with_unit(unit, game));
@@ -365,12 +368,16 @@ pub fn regens(config: &Config, game: Game, unit: Unit) -> Regens {
         Stat::EnergyRegen => {
             energy = energy.saturating_add(vals[0].eval_with_unit(unit, game));
         }
+        Stat::ResourceRegen => {
+            resources = resources.saturating_add(vals[0].eval_with_unit(unit, game));
+        }
         _ => (),
     });
     Regens {
         hp: if hp != 0 { Some(hp) } else { None },
         shield: if shield != 0 { Some(shield) } else { None },
         energy: if energy != 0 { Some(energy) } else { None },
+        resources: if resources != 0 { Some(resources) } else { None },
     }
 }
 

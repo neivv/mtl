@@ -142,6 +142,7 @@ struct SaveData {
     // Probably not necessary to save, but jsut to take away one potential corner
     // case where saving causes sync to go off
     auras: auras::AuraState,
+    extended_unit_fields: unit::ExtendedUnitFields,
 }
 
 unsafe extern fn save(set_data: unsafe extern fn(*const u8, usize)) {
@@ -153,6 +154,7 @@ unsafe extern fn save(set_data: unsafe extern fn(*const u8, usize)) {
         rng: rng::get().clone(),
         lighting: render::lighting_state().clone(),
         auras: auras::aura_state().clone(),
+        extended_unit_fields: unit::extended_field_state().clone(),
     };
     match bincode::serialize(&save) {
         Ok(o) => {
@@ -182,6 +184,7 @@ unsafe extern fn load(ptr: *const u8, len: usize) -> u32 {
     rng::set_rng(data.rng);
     *render::lighting_state() = data.lighting;
     *auras::aura_state() = data.auras;
+    *unit::extended_field_state() = data.extended_unit_fields;
     1
 }
 
@@ -199,6 +202,7 @@ unsafe extern fn init_game() {
     upgrades::init_state_changes();
     *auras::aura_state() = auras::AuraState::new();
     frame_hook::enable_first_frame_hook();
+    *unit::extended_field_state() = unit::ExtendedUnitFields::new();
 }
 
 /// Fixes a BW issue where the music was hardcoded to match Blizz campaign races

@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::ptr::null_mut;
+use std::sync::{Mutex, MutexGuard};
 
 use byteorder::{WriteBytesExt, LE};
 use bw_dat::{self, Game, UnitId, Unit, UnitArray, unit, OrderId, order};
@@ -123,6 +124,41 @@ pub fn init_load_mapping() {
 
 pub fn clear_load_mapping() {
     load_mapping().borrow_mut().clear();
+}
+
+/// Extended unit fields. Lazily initialized to reduce overhead if not used.
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ExtendedUnitFields {
+    // 0x00 = Resource 1/256 fraction
+    arrays: Vec<Option<Vec<u8>>>,
+}
+
+impl ExtendedUnitFields {
+    pub fn new() -> ExtendedUnitFields {
+        ExtendedUnitFields {
+            arrays: vec![
+                None,
+            ],
+        }
+    }
+
+    pub fn get_mut(&mut self, unit_array: &UnitArray, unit: Unit, field: usize) -> &mut u8 {
+        let index = (*unit as usize).wrapping_sub(unit_array.ptr() as usize)
+            / std::mem::size_of::<bw::Unit>();
+        let arr = &mut self.arrays[field];
+        let arr = arr.get_or_insert_with(|| vec![0u8; unit_array.len()]);
+        &mut arr[index]
+    }
+}
+
+lazy_static! {
+    static ref EXTENDED_FIELDS: Mutex<ExtendedUnitFields> = Mutex::new(ExtendedUnitFields {
+        arrays: Vec::new(),
+    });
+}
+
+pub fn extended_field_state() -> MutexGuard<'static, ExtendedUnitFields> {
+    EXTENDED_FIELDS.lock().unwrap()
 }
 
 pub trait UnitExt {
