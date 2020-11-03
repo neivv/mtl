@@ -1,6 +1,6 @@
 [package]
 name = "mtl"
-version = "0.3.37"
+version = "0.3.38"
 authors = ["Markus Heikkinen <ittevien@gmail.com>"]
 edition = "2018"
 
@@ -48,7 +48,7 @@ features = ["heapapi", "libloaderapi", "processthreadsapi", "winuser"]
 
 [dependencies.samase_shim]
 git = "https://github.com/neivv/samase_plugin"
-rev = "f2c737224a3429bf35e563a76b8802b68d7aa2f"
+rev = "55fd93db16b270ffb85647e04b64362ef161c072"
 
 [dependencies.bw_dat]
 git = "https://github.com/neivv/aise"

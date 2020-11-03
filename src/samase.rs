@@ -355,7 +355,7 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_shim::PluginApi) {
     bw_dat::set_is_scr(crate::is_scr());
     crate::init();
 
-    let required_version = 30;
+    let required_version = 32;
     if (*api).version < required_version {
         fatal(&format!(
             "Newer samase is required. (Plugin API version {}, this plugin requires version {})",
@@ -484,6 +484,7 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_shim::PluginApi) {
     ((*api).hook_spawn_dialog)(crate::spawn_dialog_hook);
 
     ((*api).hook_draw_image)(render::draw_image_hook);
+    ((*api).hook_play_sound)(crate::play_sound_hook);
     if crate::is_scr() {
         ((*api).hook_renderer)(0, mem::transmute(render_scr::draw_hook as usize));
     }

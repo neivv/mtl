@@ -51,6 +51,8 @@ pub struct Config {
     pub enable_map_dat_files: bool,
     pub cmdbtn_tooltip_half_supply: bool,
     pub cmdbtn_force_stat_txt_tooltips: bool,
+    // !0 for no override
+    pub sound_remaps: Vec<u32>,
     rallies: Rallies,
 }
 
@@ -305,6 +307,17 @@ impl Config {
                 };
             } else if name == "aura" {
                 self.auras.parse_aura_config(&section.values)?;
+            } else if name == "sound_remaps" {
+                for &(ref key, ref val) in &section.values {
+                    let source = parse_u32(key)
+                        .with_context(|| format!("Invalid sound id \"{}\"", key))? as usize;
+                    let dest = parse_u32(val)
+                        .with_context(|| format!("Invalid sound id \"{}\"", val))?;
+                    if self.sound_remaps.len() <= source {
+                        self.sound_remaps.resize_with(source + 1, || !0);
+                    }
+                    self.sound_remaps[source] = dest;
+                }
             } else if name.starts_with("upgrade") {
                 let mut tokens = name.split(".").skip(1);
                 let generic_error = || {
@@ -438,6 +451,7 @@ impl Default for Config {
             status_screen_tooltips: status_screen::Tooltips::new(),
             lighting: None,
             bunker_units: Vec::new(),
+            sound_remaps: Vec::new(),
             rallies: Rallies {
                 can_rally: Vec::new(),
                 default_order: None,

@@ -373,3 +373,22 @@ unsafe extern fn spawn_dialog_hook(
     }
     result
 }
+
+unsafe extern fn play_sound_hook(
+    sound: u32,
+    volume: f32,
+    unit: *mut c_void,
+    x: *mut i32,
+    y: *mut i32,
+    orig: unsafe extern fn(u32, f32, *mut c_void, *mut i32, *mut i32) -> u32,
+) -> u32 {
+    let sound = {
+        let config = config::config();
+        config.sound_remaps
+            .get(sound as usize)
+            .copied()
+            .filter(|&x| x != !0)
+            .unwrap_or(sound)
+    };
+    orig(sound, volume, unit, x, y)
+}
