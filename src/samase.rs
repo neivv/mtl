@@ -613,6 +613,14 @@ mod prism {
         ShaderSetEntry::pixel_sm4(DEFERRED_BLIT_SM4_BIN),
         ShaderSetEntry::pixel_sm5(DEFERRED_BLIT_BIN),
     ];
+    static HEAT_DISTORTION_BIN: &[u8] =
+        include_bytes!(concat!(env!("OUT_DIR"), "/heat_distortion.bin"));
+    static HEAT_DISTORTION_SM4_BIN: &[u8] =
+        include_bytes!(concat!(env!("OUT_DIR"), "/heat_distortion.sm4.bin"));
+    static HEAT_DISTORTION_SET: &[ShaderSetEntry] = &[
+        ShaderSetEntry::pixel_sm4(HEAT_DISTORTION_SM4_BIN),
+        ShaderSetEntry::pixel_sm5(HEAT_DISTORTION_BIN),
+    ];
 
     pub unsafe fn override_shaders(api: *const samase_shim::PluginApi) {
         ((*api).set_prism_shaders)(1, 0xb, DEFERRED_BLIT_SET.as_ptr() as *const u8, 2);
@@ -620,6 +628,7 @@ mod prism {
         ((*api).set_prism_shaders)(1, 0xf, SPRITE_TILE_EFFECT_SET.as_ptr() as *const u8, 2);
         ((*api).set_prism_shaders)(1, 0x17, SPRITE_PART_SOLID_FRAG_SET.as_ptr() as *const u8, 2);
         ((*api).set_prism_shaders)(1, 0x20, WATER_SET.as_ptr() as *const u8, 2);
+        ((*api).set_prism_shaders)(1, 0x22, HEAT_DISTORTION_SET.as_ptr() as *const u8, 2);
         ((*api).set_prism_shaders)(1, 0x28, SPRITE_TILE_FISH_COLOR_SET.as_ptr() as *const u8, 2);
         ((*api).set_prism_shaders)(1, 0x29, SPRITE_TILE_FISH_ALPHA_SET.as_ptr() as *const u8, 2);
     }

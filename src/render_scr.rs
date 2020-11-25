@@ -50,7 +50,7 @@ pub unsafe extern fn draw_hook(
             for cmd in (*commands).commands.iter_mut().take(len) {
                 let is_game_shader = match cmd.shader_id {
                     // Normal game shaders
-                    9 | 0xe | 0xf | 0x20 => true,
+                    9 | 0xe | 0xf | 0x20 | 0x22 => true,
                     // Deferred rendering blit
                     0xb => true,
                     // Deferred rendering early shaders, they have lighting at blit shader
@@ -161,6 +161,8 @@ pub unsafe extern fn gl_shader_hook(filename: *const u8, out_size: *mut u32) -> 
         include_bytes!("shaders/gl/water.glsl")
     } else if filename.eq_ignore_ascii_case(b"util_lighting.glsl") {
         include_bytes!("shaders/gl/util_lighting.glsl")
+    } else if filename.eq_ignore_ascii_case(b"heat_distortion.glsl") {
+        include_bytes!("shaders/gl/heat_distortion.glsl")
     } else {
         return null_mut();
     };

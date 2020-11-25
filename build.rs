@@ -16,6 +16,7 @@ static SOURCES: &[(&str, &str, &[(&str, &str)])] = &[
     ("sprite_tile_fish_alpha", "sprite_tile.hlsl", &[("DRAW_EFFECT", "1"), ("ALPHA_DRAW", "1")]),
     ("sprite_part_solid_frag", "sprite_part_solid_frag.hlsl", &[]),
     ("deferred_blit", "deferred_blit.hlsl", &[]),
+    ("heat_distortion", "heat_distortion.hlsl", &[]),
 ];
 
 fn main() {
