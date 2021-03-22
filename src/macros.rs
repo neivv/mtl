@@ -25,8 +25,8 @@ macro_rules! ome2_thread_local {
     );
 
     ($name:ident: $ty:ty = $fun:ident($expr:expr)) => (
-        lazy_static!(static ref $name: ::thread_local::CachedThreadLocal<$ty> =
-            ::thread_local::CachedThreadLocal::new(););
+        lazy_static!(static ref $name: ::thread_local::ThreadLocal<$ty> =
+            ::thread_local::ThreadLocal::new(););
         fn $fun() -> &'static $ty {
             $name.get_or(|| $expr)
         }

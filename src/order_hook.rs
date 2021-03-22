@@ -1194,7 +1194,7 @@ fn can_be_infested(unit: Unit) -> bool {
 }
 
 unsafe fn ai_should_ignore_target(globals: &BwGlobals, unit: Unit, target: Unit) -> bool {
-    if (*globals.players.add(unit.player() as usize)).ty != 1 {
+    if (*globals.players.add(unit.player() as usize)).player_type != 1 {
         return false;
     }
     if unit.is_air() {
