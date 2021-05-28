@@ -331,17 +331,18 @@ unsafe extern fn init_map_specific_dat(init_units: unsafe extern fn()) {
 }
 
 unsafe fn update_dat_file(index: usize, mut file: &[u8]) {
-    let mut table = match index {
-        0 => samase::units_dat(),
-        1 => samase::weapons_dat(),
-        2 => samase::flingy_dat(),
-        3 => samase::upgrades_dat(),
-        4 => samase::techdata_dat(),
-        5 => samase::sprites_dat(),
-        7 => samase::orders_dat(),
-        8 => samase::portdata_dat(),
-        _ => std::ptr::null_mut(),
+    let table_fn: unsafe fn() -> _ = match index {
+        0 => samase::units_dat,
+        1 => samase::weapons_dat,
+        2 => samase::flingy_dat,
+        3 => samase::upgrades_dat,
+        4 => samase::techdata_dat,
+        5 => samase::sprites_dat,
+        6 => samase::orders_dat,
+        7 => samase::portdata_dat,
+        _ => return,
     };
+    let mut table = table_fn();
     if table.is_null() {
         return;
     }
