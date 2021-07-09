@@ -93,6 +93,7 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
     let mut harvest_gas_check = false;
     let mut harvest_minerals_check = false;
     let mut unload_check = false;
+    let mut release_fighter_check = false;
     let mut mining_override = None;
     let mut upgrade_check = None;
     let mut rally_check = None;
@@ -251,6 +252,11 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
         SCV_BUILD | PROBE_BUILD => {
             currently_building = unit.currently_building();
         }
+        CARRIER_MOVE | CARRIER_HOLD_POSITION | CARRIER_ATTACK_UNIT | CARRIER_IDLE |
+            REAVER_ATTACK_UNIT | REAVER_IDLE | REAVER_HOLD_POSITION =>
+        {
+            release_fighter_check = (**unit).order_timer == 0;
+        }
         _ => (),
     }
     if return_cargo_order {
@@ -346,15 +352,22 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
             (**unit).order_timer = new_timer;
         }
     }
-    if ground_cooldown_check {
-        if (**unit).ground_cooldown > 0 {
+    if ground_cooldown_check || release_fighter_check {
+        if (ground_cooldown_check && (**unit).ground_cooldown > 0) ||
+            (release_fighter_check && (**unit).order_timer > 0) {
             let upgrade_cooldown = upgrades::ground_cooldown(&config, game, unit)
                 .or_else(|| upgrades::cooldown(&config, game, unit));
             let new_cooldown = apply_aura_u8(
                 aura_state,
                 unit,
                 Stat::GroundCooldown,
-                upgrade_cooldown.unwrap_or((**unit).ground_cooldown),
+                upgrade_cooldown.unwrap_or_else(|| {
+                    if release_fighter_check {
+                        (**unit).order_timer
+                    } else {
+                        (**unit).ground_cooldown
+                    }
+                }),
                 unit_array,
             );
             let new_cooldown = apply_aura_u8(
@@ -364,7 +377,11 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
                 new_cooldown,
                 unit_array,
             );
-            (**unit).ground_cooldown = new_cooldown;
+            if release_fighter_check {
+                (**unit).order_timer = new_cooldown;
+            } else {
+                (**unit).ground_cooldown = new_cooldown;
+            }
         }
     }
     if air_cooldown_check {
