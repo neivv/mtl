@@ -200,6 +200,7 @@ unsafe extern fn init_game() {
     fix_campaign_music(game);
     frame_hook::init_tracked_spells();
     upgrades::init_state_changes();
+    rng::set_rng(rng::Rng::default());
     *auras::aura_state() = auras::AuraState::new();
     frame_hook::enable_first_frame_hook();
     *unit::extended_field_state() = unit::ExtendedUnitFields::new();
