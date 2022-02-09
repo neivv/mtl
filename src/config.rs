@@ -907,3 +907,26 @@ fn test_brace_split() {
     assert_eq!(split.next().unwrap(), " (1, 2, 3, 45");
     assert_eq!(split.next(), None);
 }
+
+#[test]
+fn aura_parse_crash() {
+    let text = br###"
+[aura]
+radius = 128
+source_unit = 86
+affected_players = 13
+shield_regen = 256
+source_condition = (upgrade(player, 57) == 2) && (ground_cooldown == 2)
+target_condition = (unit_id == 65 || unit_id == 66 || unit_id == 67 || unit_id == 68 || unit_id == 70 || unit_id == 71 || unit_id == 72 || unit_id == 73 || unit_id == 77 || unit_id == 78 || unit_id == 79 || unit_id == 80 || unit_id == 81 || unit_id == 82 || unit_id == 83 || unit_id == 86 || unit_id == 87 || unit_id == 88 || unit_id == 92)
+
+[aura]
+radius = 128
+source_unit = 87
+affected_players = 13
+shield_regen = 256
+source_condition = (upgrade(player, 57) == 2) && (ground_cooldown == 2)
+target_condition = (unit_id == 65 || unit_id == 66 || unit_id == 67 || unit_id == 68 || unit_id == 70 || unit_id == 71 || unit_id == 72 || unit_id == 73 || unit_id == 77 || unit_id == 78 || unit_id == 79 || unit_id == 80 || unit_id == 81 || unit_id == 82 || unit_id == 83 || unit_id == 86 || unit_id == 87 || unit_id == 88 || unit_id == 92)
+    "###;
+    let mut config = Config::default();
+    config.update(text).unwrap();
+}

@@ -93,7 +93,7 @@ impl Auras {
             target_condition,
             effects,
         });
-        if self.units_with_aura.len() < source_unit.0 as usize {
+        if self.units_with_aura.len() <= source_unit.0 as usize {
             self.units_with_aura.resize(source_unit.0 as usize + 1, false);
         }
         self.units_with_aura[source_unit.0 as usize] = true;
