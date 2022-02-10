@@ -36,7 +36,7 @@ impl Auras {
 
     pub fn parse_aura_config(&mut self, values: &[(String, String)]) -> Result<(), Error> {
         let mut radius = None;
-        let mut source_unit = None;
+        let mut source_units = Vec::new();
         let mut affected_players = None;
         let mut source_condition = None;
         let mut target_condition = None;
@@ -47,7 +47,7 @@ impl Auras {
                     radius = Some(config::parse_u16(&val).context("radius")?);
                 }
                 "source_unit" => {
-                    source_unit = Some(UnitId(config::parse_u16(&val).context("source_unit")?));
+                    source_units = config::parse_unit_list(val).context("source_unit")?;
                 }
                 "affected_players" => {
                     let players = config::parse_u8_list(&val)
@@ -83,27 +83,32 @@ impl Auras {
                 }
             }
         }
-        let source_unit = source_unit.ok_or_else(|| anyhow!("Missing source_unit"))?;
+        if source_units.is_empty() {
+            return Err(anyhow!("Missing source_unit"));
+        }
+        let max_unit = source_units.iter().map(|x| x.0).max().unwrap_or(0);
+        if self.units_with_aura.len() <= max_unit as usize {
+            self.units_with_aura.resize(max_unit as usize + 1, false);
+        }
+        for &unit in &source_units {
+            self.units_with_aura[unit.0 as usize] = true;
+        }
         self.auras.push(Aura {
             radius: radius.ok_or_else(|| anyhow!("Missing radius"))?,
-            source_unit,
+            source_units,
             affected_players: affected_players
                 .ok_or_else(|| anyhow!("Missing affected_players"))?,
             source_condition,
             target_condition,
             effects,
         });
-        if self.units_with_aura.len() <= source_unit.0 as usize {
-            self.units_with_aura.resize(source_unit.0 as usize + 1, false);
-        }
-        self.units_with_aura[source_unit.0 as usize] = true;
         Ok(())
     }
 }
 
 pub struct Aura {
     radius: u16,
-    source_unit: UnitId,
+    source_units: Vec<UnitId>,
     // Bits, also 13 (0x2000) for self, 14 (0x4000) for enemies and 15 (0x8000) for allies
     affected_players: u16,
     source_condition: Option<BoolExpr>,
@@ -240,7 +245,7 @@ pub fn step_auras(
             continue;
         }
         let active_auras = auras.auras.iter()
-            .filter(|x| x.source_unit == source_id)
+            .filter(|x| x.source_units.iter().any(|&id| id == source_id))
             .filter(|x| match x.source_condition {
                 Some(ref s) => s.eval_with_unit(source_unit, game),
                 None => true,
