@@ -4,7 +4,6 @@ use std::hash::{Hash, Hasher};
 use std::ptr::null_mut;
 use std::sync::{Mutex, MutexGuard};
 
-use byteorder::{WriteBytesExt, LE};
 use bw_dat::{self, Game, UnitId, Unit, UnitArray, unit, OrderId, order};
 use serde::{Serializer, Serialize, Deserializer, Deserialize};
 
@@ -95,9 +94,9 @@ impl Iterator for SaveIdMapping {
                 if self.in_subunit {
                     self.in_subunit = false;
                     let parent = (*unit).subunit;
-                    self.next = Unit::from_ptr((*parent).next);
+                    self.next = Unit::from_ptr((*parent).flingy.next as *mut bw::Unit);
                 } else {
-                    self.next = Unit::from_ptr((*unit).next);
+                    self.next = Unit::from_ptr((*unit).flingy.next as *mut bw::Unit);
                 }
             }
             Some(result)
@@ -189,13 +188,13 @@ impl UnitExt for Unit {
         unsafe {
             let old = self.id();
             (**self).previous_unit_id = (**self).unit_id;
-            (**self).previous_hp = (((**self).hitpoints >> 8) as u16).max(1);
+            (**self).previous_hp = ((self.hitpoints() >> 8) as u16).max(1);
             (**self).unit_id = new.0;
             let new_hp = (new.hitpoints() >> 8)
                 .saturating_mul(i32::from((**self).previous_hp))
                 .checked_div(old.hitpoints() >> 8)
                 .unwrap_or(1);
-            (**self).hitpoints = new_hp << 8;
+            (**self).flingy.hitpoints = new_hp << 8;
             let buttons = if !self.is_completed() || self.is_disabled() {
                 0xe4
             } else {
@@ -208,7 +207,7 @@ impl UnitExt for Unit {
     }
 
     fn set_resource_amount(self, value: u16) {
-        unsafe { (&mut (**self).unit_specific2[0..]).write_u16::<LE>(value).unwrap() }
+        unsafe { (**self).unit_specific2.resource.amount = value; }
     }
 
     fn issue_order(self, order: OrderId, pos: bw::Point, unit: Option<Unit>) {
@@ -407,7 +406,7 @@ impl Iterator for AliveUnits {
                 }
             }
             let unit = self.0;
-            self.0 = (*unit).next;
+            self.0 = (*unit).flingy.next as *mut bw::Unit;
             Some(Unit::from_ptr(unit).unwrap())
         }
     }
@@ -435,7 +434,7 @@ impl Iterator for UnitListIter {
                 None
             } else {
                 let result = Unit::from_ptr(self.0);
-                self.0 = (*self.0).next;
+                self.0 = (*self.0).flingy.next as *mut bw::Unit;
                 result
             }
         }

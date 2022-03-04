@@ -119,7 +119,7 @@ pub unsafe fn rally_cursor_marker_frame_hook(config: &Config, game: Game) {
                     _ => false,
                 };
                 if !has_vanilla_rally {
-                    let point = *((**unit).rally_pylon.as_ptr() as *mut bw::Point);
+                    let point = (**unit).rally_pylon.rally.pos;
                     if point.x != 0 {
                         show_cursor_marker(game, cursor_marker, &point);
                     }
@@ -416,9 +416,8 @@ unsafe fn set_rally_command(player: u8, uniq_player: u8, pos: &bw::Point, target
     let selected = crate::selection::Selection::normal(uniq_player);
     if let Some(unit) = selected.into_iter().next() {
         if unit.player() == player && unit.id() != unit::PYLON {
-            *((**unit).rally_pylon.as_ptr().add(4) as *mut *mut bw::Unit) =
-                target.map(|x| *x).unwrap_or_else(null_mut);
-            *((**unit).rally_pylon.as_ptr() as *mut bw::Point) = *pos;
+            (**unit).rally_pylon.rally.unit = target.map(|x| *x).unwrap_or_else(null_mut);
+            (**unit).rally_pylon.rally.pos = *pos;
         }
     }
 }

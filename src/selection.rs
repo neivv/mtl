@@ -5,12 +5,12 @@ use bw_dat::Unit;
 use crate::bw;
 
 pub struct Selection {
-    units: ArrayVec<[Unit; 12]>,
+    units: ArrayVec<Unit, 12>,
 }
 
 impl IntoIterator for Selection {
     type Item = Unit;
-    type IntoIter = arrayvec::IntoIter<[Unit; 12]>;
+    type IntoIter = arrayvec::IntoIter<Unit, 12>;
     fn into_iter(self) -> Self::IntoIter {
         self.units.into_iter()
     }

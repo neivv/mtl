@@ -10,7 +10,7 @@ use crate::auras;
 use crate::bw;
 use crate::config::config;
 use crate::render;
-use crate::unit::{self, SerializableUnit};
+use crate::unit::{self, UnitExt, SerializableUnit};
 use crate::unit_search::UnitSearch;
 use crate::upgrades::{self, Stat};
 
@@ -173,7 +173,7 @@ pub unsafe extern fn frame_hook() {
         if config.has_rally(unit.id()) {
             // Remove rallying to unit if the unit has disappeared from vision or started dying
             let rally_unit = {
-                Unit::from_ptr(*((**unit).rally_pylon.as_ptr().add(4) as *mut *mut bw::Unit))
+                Unit::from_ptr((**unit).rally_pylon.rally.unit)
             };
             if let Some(target) = rally_unit {
                 let player = unit.player();
@@ -181,8 +181,8 @@ pub unsafe extern fn frame_hook() {
                     target.is_invisible_hidden_to(player) ||
                     target.order() == order::DIE;
                 if clear {
-                    *((**unit).rally_pylon.as_ptr().add(4) as *mut *mut bw::Unit) = null_mut();
-                    *((**unit).rally_pylon.as_ptr() as *mut bw::Point) = target.position();
+                    (**unit).rally_pylon.rally.unit = null_mut();
+                    (**unit).rally_pylon.rally.pos = target.position();
                 }
             }
         }
@@ -238,14 +238,14 @@ pub unsafe extern fn frame_hook() {
             None => aura_resources,
         };
         if hp_regen != 0 {
-            (**unit).hitpoints = (**unit).hitpoints.saturating_add(hp_regen);
-            if (**unit).hitpoints <= 0 {
+            (**unit).flingy.hitpoints = (**unit).flingy.hitpoints.saturating_add(hp_regen);
+            if (**unit).flingy.hitpoints <= 0 {
                 // No code for killing units yet
-                (**unit).hitpoints = 1;
+                (**unit).flingy.hitpoints = 1;
             }
             let max_hp = unit.id().hitpoints();
-            if (**unit).hitpoints > max_hp {
-                (**unit).hitpoints = max_hp;
+            if (**unit).flingy.hitpoints > max_hp {
+                (**unit).flingy.hitpoints = max_hp;
             }
         }
         if shield_regen != 0 {
@@ -287,11 +287,12 @@ pub unsafe extern fn frame_hook() {
                     }
                 }
             }
-            let ptr = (**unit).unit_specific2.as_mut_ptr() as *mut u16;
-            *ptr = (*ptr as i32)
+            let old = unit.resource_amount();
+            let new = (old as i32)
                 .saturating_add(amount)
                 .max(0i32)
                 .min(65535) as u16;
+            unit.set_resource_amount(new);
         }
         if (**unit).build_queue[(**unit).current_build_slot as usize] != bw_dat::unit::NONE.0 {
             upgrades.update_build_queue(unit);

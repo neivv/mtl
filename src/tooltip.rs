@@ -60,7 +60,7 @@ pub unsafe extern fn layout_draw_text_hook(
     match mode {
         // Cmdbtn
         1 => {
-            let mut buffer: ArrayVec<[u8; 512]> = ArrayVec::new();
+            let mut buffer: ArrayVec<u8, 512> = ArrayVec::new();
             if crate::buttons::tooltip_text_hook(&mut buffer, draw) == true {
                 let _ = buffer.push(0);
                 let len = buffer.len();

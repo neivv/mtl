@@ -134,7 +134,7 @@ static MAIN_TEXT_STRING: AtomicU16 = AtomicU16::new(0);
 static NEXT_UPGRADE_LEVEL: AtomicU8 = AtomicU8::new(0);
 
 // Buffer doesn't need to be 0-terminated
-pub fn tooltip_text_hook(buffer: &mut ArrayVec<[u8; 512]>, draw: u32) -> bool {
+pub fn tooltip_text_hook(buffer: &mut ArrayVec<u8, 512>, draw: u32) -> bool {
     use std::io::Write;
     let pos = HALF_SUPPLY_POS.load(Ordering::Relaxed);
     let mut hooked = false;

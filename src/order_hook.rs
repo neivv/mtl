@@ -195,8 +195,8 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
             unload_check = (**unit).order_timer == 0;
         }
         UPGRADE => {
-            let upgrade = UpgradeId(u16::from((**unit).unit_specific[9]));
-            let level = (**unit).unit_specific[0xd];
+            let upgrade = UpgradeId(u16::from((**unit).unit_specific.building.upgrade));
+            let level = (**unit).unit_specific.building.next_upgrade_level;
             if upgrade != upgrade::NONE {
                 if game.upgrade_level(unit.player(), upgrade) < level {
                     upgrade_check = Some((upgrade, level));
@@ -409,7 +409,7 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
         if unit.target() == Some(vars.resource) {
             vars.resource.set_resource_amount(vars.old_amount);
         } else {
-            (**unit).unit_specific[0xf] = vars.carry;
+            (**unit).unit_specific.worker.carried_resource_count = vars.carry;
         }
     }
     if let Some((upgrade, level)) = upgrade_check {
@@ -456,31 +456,31 @@ pub unsafe extern fn secondary_order_hook(u: *mut c_void, orig: unsafe extern fn
             let game = crate::game::get();
             if let Some(new_timer) = upgrades::creep_spread_time(&config, game, unit) {
                 if new_timer == -1 {
-                    (**unit).unit_specific[0xc] = 10;
+                    (**unit).unit_specific.building.creep_spread_cooldown = 10;
                 } else {
                     creep_spread_time = Some(new_timer as u8);
                 }
             }
             if let Some(new_timer) = upgrades::larva_spawn_time(&config, game, unit) {
                 if new_timer == -1 {
-                    (**unit).unit_specific[0xa] = 10;
+                    (**unit).unit_specific.building.larva_timer = 10;
                 } else {
                     larva_spawn_time = Some(new_timer as u8);
                 }
             }
-            spread_creep_check = (**unit).unit_specific[0xc] == 0;
-            larva_spawn_check = (**unit).unit_specific[0xa] == 0;
+            spread_creep_check = (**unit).unit_specific.building.creep_spread_cooldown == 0;
+            larva_spawn_check = (**unit).unit_specific.building.larva_timer == 0;
         }
         SPAWNING_LARVA => {
             let game = crate::game::get();
             if let Some(new_timer) = upgrades::larva_spawn_time(&config, game, unit) {
                 if new_timer == -1 {
-                    (**unit).unit_specific[0xa] = 10;
+                    (**unit).unit_specific.building.larva_timer = 10;
                 } else {
                     larva_spawn_time = Some(new_timer as u8);
                 }
             }
-            larva_spawn_check = (**unit).unit_specific[0xa] == 0;
+            larva_spawn_check = (**unit).unit_specific.building.larva_timer == 0;
         }
         _ => ()
     }
@@ -488,7 +488,7 @@ pub unsafe extern fn secondary_order_hook(u: *mut c_void, orig: unsafe extern fn
     if spread_creep_check {
         let unit_array = &bw::unit_array();
         let aura_state = &auras::aura_state();
-        if (**unit).unit_specific[0xc] != 0 {
+        if (**unit).unit_specific.building.creep_spread_cooldown != 0 {
             if let Some(new_timer) = creep_spread_time {
                 let new_timer = apply_aura_u8(
                     aura_state,
@@ -497,14 +497,14 @@ pub unsafe extern fn secondary_order_hook(u: *mut c_void, orig: unsafe extern fn
                     new_timer,
                     unit_array,
                 );
-                (**unit).unit_specific[0xc] = new_timer;
+                (**unit).unit_specific.building.creep_spread_cooldown = new_timer;
             }
         }
     }
     if larva_spawn_check {
         let unit_array = &bw::unit_array();
         let aura_state = &auras::aura_state();
-        if (**unit).unit_specific[0xa] != 0 {
+        if (**unit).unit_specific.building.larva_timer != 0 {
             if let Some(new_timer) = larva_spawn_time {
                 let new_timer = apply_aura_u8(
                     aura_state,
@@ -513,7 +513,7 @@ pub unsafe extern fn secondary_order_hook(u: *mut c_void, orig: unsafe extern fn
                     new_timer,
                     unit_array,
                 );
-                (**unit).unit_specific[0xa] = new_timer;
+                (**unit).unit_specific.building.larva_timer = new_timer;
             }
         }
     }
@@ -542,10 +542,10 @@ impl RallyCheck {
     /// Returns None if the parent has no rally point set
     pub fn new(unit: Unit, parent: Unit) -> Option<RallyCheck> {
         let rally_unit = unsafe {
-            Unit::from_ptr(*((**parent).rally_pylon.as_ptr().add(4) as *mut *mut bw::Unit))
+            Unit::from_ptr((**parent).rally_pylon.rally.unit)
         };
         let rally_point = unsafe {
-            *((**parent).rally_pylon.as_ptr() as *mut bw::Point)
+            (**parent).rally_pylon.rally.pos
         };
         if rally_unit == Some(parent) || rally_point.x == 0 {
             // Rally not set
@@ -618,15 +618,15 @@ unsafe fn order_bunker_guard(
     assert!(unit.subunit_linked().is_none());
     let attacking = attack_at_point(globals, search, config, unit, attack_sprite, directions);
     if attacking {
-        (**unit).unk_move_waypoint = (**unit).order_target_pos;
+        (**unit).flingy.unk_move_waypoint = (**unit).order_target.pos;
     } else {
         if (**unit).order_timer == 0 {
             (**unit).order_timer = 15;
             if let Some(target) = pick_random_target(globals, search.init(globals.game), unit) {
-                (**unit).target = *target;
+                (**unit).order_target.unit = *target;
                 (**unit).order_wait = 0;
             } else {
-                (**unit).target = null_mut();
+                (**unit).order_target.unit = null_mut();
             }
         }
     }
@@ -660,7 +660,7 @@ unsafe fn attack_at_point(
     if !can_attack_unit(globals, unit, target) {
         return false;
     }
-    (**unit).order_target_pos = target.position();
+    (**unit).order_target.pos = target.position();
     if unit.subunit_linked().map(|x| x.id().is_subunit()).unwrap_or(false) {
         // Subunit handles its attacking by itself
         return true;
@@ -683,7 +683,7 @@ unsafe fn attack_at_point(
         }
         return true;
     }
-    if (**unit).flingy_flags & 0x8 != 0 {
+    if (**unit).flingy.flingy_flags & 0x8 != 0 {
         // Waiting for iscript gotorepeatattk
         return true;
     }
@@ -697,7 +697,7 @@ unsafe fn attack_at_point(
         return false;
     }
     let angle = angle_to(&unit.position(), &target.position());
-    if angle_diff((**unit).facing_direction, angle) > weapon.attack_angle() {
+    if angle_diff((**unit).flingy.facing_direction, angle) > weapon.attack_angle() {
         if unit.flags() & 0x0001_0000 != 0 {
             (**unit).order_wait = 0;
             return true;
@@ -714,7 +714,7 @@ unsafe fn attack_at_point(
         create_bunker_shoot_overlay(unit, attack_sprite, directions);
     }
     // gotorepeatattk flag
-    (**unit).flingy_flags |= 0x8;
+    (**unit).flingy.flingy_flags |= 0x8;
     let mut rng = crate::rng::get();
     // Note: Should probably be refactored to check auras, but at the same time
     // auras won't apply to hidden units
@@ -842,11 +842,11 @@ unsafe fn pick_new_attack_target_if_needed(
         if !can_attack_unit(globals, unit, target) {
             return;
         }
-        (**unit).target = *target;
+        (**unit).order_target.unit = *target;
         if let Some(subunit) = unit.subunit_linked() {
             let attack_order = subunit.id().attack_unit_order();
             if attack_order == subunit.order() || attack_order == order::HOLD_POSITION {
-                (**subunit).target = *target;
+                (**subunit).order_target.unit = *target;
             }
         }
     }
@@ -1084,7 +1084,7 @@ unsafe fn get_auto_target(
 unsafe fn check_firing_angle(unit: Unit, dest: &bw::Point, weapon: WeaponId) -> bool {
     let angle = angle_to(&unit.position(), dest);
     // Bw would always succeed for lurker and sets its facing direction
-    angle_diff(angle, (**unit).facing_direction) <= weapon.attack_angle()
+    angle_diff(angle, (**unit).flingy.facing_direction) <= weapon.attack_angle()
 }
 
 fn angle_to(from: &bw::Point, to: &bw::Point) -> u8 {
@@ -1136,7 +1136,7 @@ unsafe fn create_bunker_shoot_overlay(unit: Unit, sprite: SpriteId, directions: 
         Some(s) => s,
         None => return,
     };
-    let unit_direction = (**unit).facing_direction as u16;
+    let unit_direction = (**unit).flingy.facing_direction as u16;
     let lo_direction = ((unit_direction + 16) / 32) as u8 & 0x7;
 
     // Optimized form of
@@ -1244,8 +1244,9 @@ unsafe fn is_in_attack_range(unit: Unit, target: Unit) -> bool {
         }
     }
     let mut extra_distance = 0;
-    if (**unit).flingy_flags & 0x2 != 0 && (**target).flingy_flags & 0x2 != 0 {
-        let diff = angle_diff((**unit).movement_direction, (**target).movement_direction);
+    if (**unit).flingy.flingy_flags & 0x2 != 0 && (**target).flingy.flingy_flags & 0x2 != 0 {
+        let diff =
+            angle_diff((**unit).flingy.movement_direction, (**target).flingy.movement_direction);
         if diff > 0x20 {
             extra_distance = unit.halt_distance();
         }

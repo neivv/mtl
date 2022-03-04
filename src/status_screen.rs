@@ -59,7 +59,7 @@ pub unsafe fn draw_tooltip_hook(
         Some(s) => s,
         None => return false,
     };
-    let mut buffer: ArrayVec<[u8; 512]> = ArrayVec::new();
+    let mut buffer: ArrayVec<u8, 512> = ArrayVec::new();
     tooltip.format(game, &stat_txt, selected, weapon, &mut buffer);
     let _ = buffer.push(0);
     let len = buffer.len();
@@ -373,7 +373,7 @@ impl Tooltip {
                         let end = match bytes.iter().position(|&x| x == b'}') {
                             Some(s) => s,
                             None => {
-                                return Err(anyhow!("Unmatched {. Use {{ if you want the text to have a single {"));
+                                return Err(anyhow!("Unmatched {{. Use {{{{ if you want the text to have a single {{"));
                             }
                         };
                         let var = &text[1..end];
@@ -387,7 +387,7 @@ impl Tooltip {
                         add_text(&mut parts, "}");
                         text = &text[2..];
                     } else {
-                        return Err(anyhow!("Unmatched }. Use }} if you want the text to have a single }"));
+                        return Err(anyhow!("Unmatched }}. Use }}}} if you want the text to have a single }}"));
                     }
                 }
                 b'\\' | _ => {
