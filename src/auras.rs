@@ -10,6 +10,7 @@ use crate::config;
 use crate::unit;
 use crate::unit_search::UnitSearch;
 use crate::upgrades::Stat;
+use crate::ExprExt;
 
 lazy_static! {
     static ref AURA_STATE: Mutex<AuraState> = Mutex::new(AuraState::new());
@@ -247,7 +248,7 @@ pub fn step_auras(
         let active_auras = auras.auras.iter()
             .filter(|x| x.source_units.iter().any(|&id| id == source_id))
             .filter(|x| match x.source_condition {
-                Some(ref s) => s.eval_with_unit(source_unit, game),
+                Some(ref s) => s.eval_unit(source_unit, game),
                 None => true,
             });
         for aura in active_auras {
@@ -265,13 +266,13 @@ pub fn step_auras(
                     mask & affected_mask != 0
                 })
                 .filter(|&u| match aura.target_condition {
-                    Some(ref s) => s.eval_with_unit(u, game),
+                    Some(ref s) => s.eval_unit(u, game),
                     None => true,
                 });
             for target in units {
                 for &(stat, ref value) in &aura.effects {
                     // Using source unit for any effect evaluation
-                    let value = value.eval_with_unit(source_unit, game);
+                    let value = value.eval_unit(source_unit, game);
                     state.add_stat_change(target, stat, value, unit_array);
                 }
             }

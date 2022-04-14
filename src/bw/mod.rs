@@ -82,10 +82,12 @@ pub mod storm {
 
 static UNITS_DAT: AtomicUsize = AtomicUsize::new(0);
 static CURSOR_MARKER: AtomicUsize = AtomicUsize::new(0);
+static MAP_TILE_FLAGS: AtomicUsize = AtomicUsize::new(0);
 
 pub unsafe fn init_game_start_vars() {
     UNITS_DAT.store(samase::units_dat() as usize, Ordering::Relaxed);
     CURSOR_MARKER.store(0, Ordering::Relaxed);
+    MAP_TILE_FLAGS.store(0, Ordering::Relaxed);
 }
 
 pub fn cursor_marker() -> bw_dat::Sprite {
@@ -301,4 +303,13 @@ pub fn misc_ui_state() -> MiscUiState {
         is_targeting: out[1] != 0,
         is_placing_building: out[2] != 0,
     }
+}
+
+pub fn map_tile_flags() -> *mut u32 {
+    let mut val = MAP_TILE_FLAGS.load(Ordering::Relaxed);
+    if val == 0 {
+        val = samase::map_tile_flags() as usize;
+        MAP_TILE_FLAGS.store(val, Ordering::Relaxed);
+    }
+    val as *mut u32
 }

@@ -10,6 +10,7 @@ use bw_dat::{Game, Unit};
 
 use crate::config::Config;
 use crate::unit::{self, UnitExt};
+use crate::ExprExt;
 
 ome2_thread_local! {
     STATE_CHANGES: RefCell<UpgradeStateChanges> =
@@ -58,7 +59,7 @@ impl UpgradeStateChanges {
                     if changes.changes.iter().any(|x| x.0.is_state_change()) {
                         for unit in unit::player_units(player) {
                             let cond_ok = changes.condition.as_ref()
-                                .map(|x| x.eval_with_unit(unit, game))
+                                .map(|x| x.eval_unit(unit, game))
                                 .unwrap_or(true);
                             let ok = changes.units.iter().any(|&x| unit.matches_id(x)) &&
                                 state_reqs.iter().all(|x| x.matches_unit(unit)) &&
@@ -67,7 +68,7 @@ impl UpgradeStateChanges {
                                 for &(stat, ref values) in changes.changes.iter() {
                                     let eval = |i| {
                                         let expr: &IntExpr = &values[i];
-                                        expr.eval_with_unit(unit, game)
+                                        expr.eval_unit(unit, game)
                                     };
                                     match stat {
                                         Stat::SetUnitId => {
@@ -217,7 +218,7 @@ impl Upgrades {
                     if changes.units.iter().any(|&x| unit.matches_id(x)) {
                         matched_level = Some(changes.level);
                         let cond_ok = changes.condition.as_ref()
-                            .map(|x| x.eval_with_unit(unit, game))
+                            .map(|x| x.eval_unit(unit, game))
                             .unwrap_or(true);
                         if cond_ok {
                             for &(ref stat, ref vals) in &changes.changes {
@@ -243,6 +244,16 @@ fn eval_constant_int(expr: &IntExprTree<bw_dat::expr::NoCustom>) -> Option<i32> 
         Mul(x) => eval_constant_int(&x.0)?.saturating_mul(eval_constant_int(&x.1)?),
         Div(x) => eval_constant_int(&x.0)? / (eval_constant_int(&x.1)?),
         Modulo(x) => eval_constant_int(&x.0)? % (eval_constant_int(&x.1)?),
+        BitAnd(x) => eval_constant_int(&x.0)? & (eval_constant_int(&x.1)?),
+        BitOr(x) => eval_constant_int(&x.0)? | (eval_constant_int(&x.1)?),
+        BitXor(x) => eval_constant_int(&x.0)? ^ (eval_constant_int(&x.1)?),
+        Not(x) => !eval_constant_int(x)?,
+        LeftShift(x) => (eval_constant_int(&x.0)? as u32)
+            .checked_shl(eval_constant_int(&x.1)? as u32)
+            .unwrap_or(0) as i32,
+        RightShift(x) => (eval_constant_int(&x.0)? as u32)
+            .checked_shr(eval_constant_int(&x.1)? as u32)
+            .unwrap_or(0) as i32,
         Integer(i) => *i,
         Func(_) | Custom(_) => return None,
     })
@@ -360,16 +371,16 @@ pub fn regens(config: &Config, game: Game, unit: Unit) -> Regens {
     let mut resources = 0i32;
     config.upgrades.matches(game, unit, |stat, vals| match *stat {
         Stat::HpRegen => {
-            hp = hp.saturating_add(vals[0].eval_with_unit(unit, game));
+            hp = hp.saturating_add(vals[0].eval_unit(unit, game));
         }
         Stat::ShieldRegen => {
-            shield = shield.saturating_add(vals[0].eval_with_unit(unit, game));
+            shield = shield.saturating_add(vals[0].eval_unit(unit, game));
         }
         Stat::EnergyRegen => {
-            energy = energy.saturating_add(vals[0].eval_with_unit(unit, game));
+            energy = energy.saturating_add(vals[0].eval_unit(unit, game));
         }
         Stat::ResourceRegen => {
-            resources = resources.saturating_add(vals[0].eval_with_unit(unit, game));
+            resources = resources.saturating_add(vals[0].eval_unit(unit, game));
         }
         _ => (),
     });
@@ -385,7 +396,7 @@ fn upgrade_min_u8(config: &Config, game: Game, unit: Unit, match_stat: Stat) -> 
     let mut value = None;
     config.upgrades.matches(game, unit, |stat, vals| {
         if *stat == match_stat {
-            let val = clamp_u8(vals[0].eval_with_unit(unit, game));
+            let val = clamp_u8(vals[0].eval_unit(unit, game));
             value = Some(value.unwrap_or(!0).min(val));
         }
     });
@@ -396,7 +407,7 @@ fn upgrade_max_u8(config: &Config, game: Game, unit: Unit, match_stat: Stat) -> 
     let mut value = None;
     config.upgrades.matches(game, unit, |stat, vals| {
         if *stat == match_stat {
-            let val = clamp_u8(vals[0].eval_with_unit(unit, game));
+            let val = clamp_u8(vals[0].eval_unit(unit, game));
             value = Some(value.unwrap_or(0).max(val));
         }
     });
@@ -447,7 +458,7 @@ pub fn creep_spread_time(config: &Config, game: Game, unit: Unit) -> Option<i32>
     let mut value = None;
     config.upgrades.matches(game, unit, |stat, vals| match *stat {
         Stat::CreepSpreadTimer => {
-            let val = vals[0].eval_with_unit(unit, game).max(-1).min(255);
+            let val = vals[0].eval_unit(unit, game).max(-1).min(255);
             value = Some(value.unwrap_or(i32::max_value()).min(val));
         }
         _ => (),
@@ -459,7 +470,7 @@ pub fn larva_spawn_time(config: &Config, game: Game, unit: Unit) -> Option<i32> 
     let mut value = None;
     config.upgrades.matches(game, unit, |stat, vals| match *stat {
         Stat::LarvaTimer => {
-            let val = vals[0].eval_with_unit(unit, game).max(-1).min(255);
+            let val = vals[0].eval_unit(unit, game).max(-1).min(255);
             value = Some(value.unwrap_or(i32::max_value()).min(val));
         }
         _ => (),
@@ -476,9 +487,9 @@ pub fn player_color(config: &Config, game: Game, unit: Unit) -> Option<(f32, f32
     config.upgrades.matches(game, unit, |stat, vals| match *stat {
         Stat::PlayerColor => {
             color = Some((
-                clamp_u8(vals[0].eval_with_unit(unit, game)) as f32 / 255.0,
-                clamp_u8(vals[1].eval_with_unit(unit, game)) as f32 / 255.0,
-                clamp_u8(vals[2].eval_with_unit(unit, game)) as f32 / 255.0,
+                clamp_u8(vals[0].eval_unit(unit, game)) as f32 / 255.0,
+                clamp_u8(vals[1].eval_unit(unit, game)) as f32 / 255.0,
+                clamp_u8(vals[2].eval_unit(unit, game)) as f32 / 255.0,
             ));
         }
         _ => (),
@@ -492,7 +503,7 @@ pub fn player_color_palette(config: &Config, game: Game, unit: Unit) -> Option<[
         Stat::PlayerColorPalette => {
             let mut result = [0; 8];
             for (val, out) in vals.iter().zip(result.iter_mut()) {
-                *out = clamp_u8(val.eval_with_unit(unit, game));
+                *out = clamp_u8(val.eval_unit(unit, game));
             }
             color = Some(result);
         }
@@ -513,11 +524,11 @@ pub fn show_stats(config: &Config, game: Game, unit: Unit) -> ShowStats {
     };
     config.upgrades.matches(game, unit, |stat, vals| match *stat {
         Stat::ShowEnergy => {
-            let val = vals[0].eval_with_unit(unit, game) != 0;
+            let val = vals[0].eval_unit(unit, game) != 0;
             result.energy = Some(result.energy.unwrap_or(false).max(val));
         }
         Stat::ShowShields => {
-            let val = vals[0].eval_with_unit(unit, game) != 0;
+            let val = vals[0].eval_unit(unit, game) != 0;
             result.shields = Some(result.shields.unwrap_or(false).max(val));
         }
         _ => (),

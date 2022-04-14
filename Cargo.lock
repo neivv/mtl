@@ -51,7 +51,7 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 [[package]]
 name = "bw_dat"
 version = "0.1.0"
-source = "git+https://github.com/neivv/aise?rev=05d5d1a9350e807e8b96b81e34925e73d60fb5a3#05d5d1a9350e807e8b96b81e34925e73d60fb5a3"
+source = "git+https://github.com/neivv/aise?rev=68a4c868ed2dc3c68ec45d798718809b73383cc2#68a4c868ed2dc3c68ec45d798718809b73383cc2"
 dependencies = [
  "bitflags",
  "fxhash",
@@ -266,7 +266,7 @@ dependencies = [
 
 [[package]]
 name = "mtl"
-version = "0.3.46"
+version = "0.3.47"
 dependencies = [
  "anyhow",
  "arrayvec",

@@ -125,6 +125,11 @@ pub unsafe fn players() -> *mut bw::Player {
     PLAYERS.get()()
 }
 
+static mut MAP_TILE_FLAGS: GlobalFunc<extern fn() -> *mut u32> = GlobalFunc(None);
+pub fn map_tile_flags() -> *mut u32 {
+    unsafe { MAP_TILE_FLAGS.get()() }
+}
+
 static mut PATHING: GlobalFunc<extern fn() -> *mut bw::Pathing> = GlobalFunc(None);
 pub unsafe fn pathing() -> *mut bw::Pathing {
     PATHING.get()()
@@ -448,6 +453,7 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_shim::PluginApi) {
     SEND_COMMAND.0 = Some(mem::transmute(((*api).send_command)()));
     IS_OUTSIDE_GAME_SCREEN.0 = Some(mem::transmute(((*api).is_outside_game_screen)()));
     PLAYERS.0 = Some(mem::transmute(((*api).players)()));
+    MAP_TILE_FLAGS.0 = Some(mem::transmute(((*api).map_tile_flags)()));
     PATHING.0 = Some(mem::transmute(((*api).pathing)()));
     IS_REPLAY.0 = Some(mem::transmute(((*api).is_replay)()));
     CLIENT_SELECTION.0 = Some(mem::transmute(((*api).client_selection)()));

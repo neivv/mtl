@@ -394,3 +394,46 @@ unsafe extern fn play_sound_hook(
     };
     orig(sound, volume, unit, x, y)
 }
+
+trait ExprExt {
+    type Ret;
+    fn eval_unit(&self, unit: bw_dat::Unit, game: Game) -> Self::Ret;
+}
+
+impl ExprExt for bw_dat::expr::BoolExpr {
+    type Ret = bool;
+    fn eval_unit(&self, unit: bw_dat::Unit, game: Game) -> bool {
+        let mut ctx = bw_dat::expr::EvalCtx {
+            unit: Some(unit),
+            game: Some(game),
+            map_tile_flags: if self.required_context()
+                .contains(bw_dat::expr::RequiredContext::MAP_TILE_FLAGS)
+            {
+                Some(bw::map_tile_flags())
+            } else {
+                None
+            },
+            custom: bw_dat::expr::DefaultEval,
+        };
+        ctx.eval_bool(self)
+    }
+}
+
+impl ExprExt for bw_dat::expr::IntExpr {
+    type Ret = i32;
+    fn eval_unit(&self, unit: bw_dat::Unit, game: Game) -> i32 {
+        let mut ctx = bw_dat::expr::EvalCtx {
+            unit: Some(unit),
+            game: Some(game),
+            map_tile_flags: if self.required_context()
+                .contains(bw_dat::expr::RequiredContext::MAP_TILE_FLAGS)
+            {
+                Some(bw::map_tile_flags())
+            } else {
+                None
+            },
+            custom: bw_dat::expr::DefaultEval,
+        };
+        ctx.eval_int(self)
+    }
+}

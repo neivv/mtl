@@ -13,6 +13,7 @@ use crate::bw;
 use crate::config::{self, Config};
 use crate::string_tables::{self, StringTable};
 use crate::tooltip::{self, TooltipDrawFunc};
+use crate::ExprExt;
 
 static STATUS_SCREEN_DIALOG: AtomicUsize = AtomicUsize::new(0);
 static TOOLTIP_TEXT_BUFFER: AtomicUsize = AtomicUsize::new(0);
@@ -318,7 +319,7 @@ impl TooltipGroup {
         // Go through conditionals in reverse order,
         // which lets map-specific settings override globals.
         for (tooltip, cond) in self.conditional.iter().rev() {
-            if cond.eval_with_unit(unit, game) {
+            if cond.eval_unit(unit, game) {
                 return Some(&**tooltip);
             }
         }
