@@ -48,11 +48,11 @@ features = ["heapapi", "libloaderapi", "processthreadsapi", "winuser", "winerror
 
 [target.'cfg(target_arch = "x86")'.dependencies.samase_shim]
 git = "https://github.com/neivv/samase_plugin"
-rev = "574a20e4abf0b4146257dd49504a3a490e85bd86"
+rev = "1660aa7eb13daf1b903911ecf571c2b4a4c33fc8"
 
 [dependencies.samase_plugin]
 git = "https://github.com/neivv/samase_plugin"
-rev = "574a20e4abf0b4146257dd49504a3a490e85bd86"
+rev = "1660aa7eb13daf1b903911ecf571c2b4a4c33fc8"
 
 [dependencies.bw_dat]
 git = "https://github.com/neivv/aise"
