@@ -354,9 +354,8 @@ pub fn read_file_u8(name: &[u8]) -> Option<SamaseBox> {
     })
 }
 
-// Just using samase_shim's definition so that there isn't duplication/unnecessary mismatches
 #[no_mangle]
-pub unsafe extern fn samase_plugin_init(api: *const samase_shim::PluginApi) {
+pub unsafe extern fn samase_plugin_init(api: *const samase_plugin::PluginApi) {
     bw_dat::set_is_scr(crate::is_scr());
     crate::init();
 
@@ -628,7 +627,7 @@ mod prism {
         ShaderSetEntry::pixel_sm5(HEAT_DISTORTION_BIN),
     ];
 
-    pub unsafe fn override_shaders(api: *const samase_shim::PluginApi) {
+    pub unsafe fn override_shaders(api: *const samase_plugin::PluginApi) {
         ((*api).set_prism_shaders)(1, 0xb, DEFERRED_BLIT_SET.as_ptr() as *const u8, 2);
         ((*api).set_prism_shaders)(1, 0xe, SPRITE_TILE_SET.as_ptr() as *const u8, 2);
         ((*api).set_prism_shaders)(1, 0xf, SPRITE_TILE_EFFECT_SET.as_ptr() as *const u8, 2);
