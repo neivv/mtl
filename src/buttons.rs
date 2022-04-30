@@ -57,13 +57,15 @@ pub unsafe fn draw_tooltip_hook(
                     }
                 }
                 if is_upgrade_string {
-                    let player = bw::client_selection().get(0)
-                        .and_then(|&x| Unit::from_ptr(x))
-                        .map(|x| x.player())
-                        .unwrap_or(0);
                     let upgrade = UpgradeId((*button).act_var);
-                    let level = game.upgrade_level(player, upgrade);
-                    NEXT_UPGRADE_LEVEL.store(level.saturating_add(1), Ordering::Relaxed);
+                    if upgrade.repeat_count() > 1 {
+                        let player = bw::client_selection().get(0)
+                            .and_then(|&x| Unit::from_ptr(x))
+                            .map(|x| x.player())
+                            .unwrap_or(0);
+                        let level = game.upgrade_level(player, upgrade);
+                        NEXT_UPGRADE_LEVEL.store(level.saturating_add(1), Ordering::Relaxed);
+                    }
                 }
                 if config.cmdbtn_force_stat_txt_tooltips {
                     let text_count = tooltip_text_count(game, string, button);
