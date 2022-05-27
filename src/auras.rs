@@ -245,6 +245,9 @@ pub fn step_auras(
         if !can_have_aura {
             continue;
         }
+        if source_unit.is_hallucination() {
+            continue;
+        }
         let active_auras = auras.auras.iter()
             .filter(|x| x.source_units.iter().any(|&id| id == source_id))
             .filter(|x| match x.source_condition {
