@@ -469,10 +469,8 @@ pub struct Campaign {
 unsafe impl Sync for Campaign {}
 unsafe impl Send for Campaign {}
 
-lazy_static! {
-    static ref CONFIG: Mutex<Option<Arc<Config>>> = Mutex::new(None);
-    static ref CAMPAIGN: Mutex<Option<Arc<Campaign>>> = Mutex::new(None);
-}
+static CONFIG: Mutex<Option<Arc<Config>>> = Mutex::new(None);
+static CAMPAIGN: Mutex<Option<Arc<Campaign>>> = Mutex::new(None);
 
 fn bool_field(out: &mut bool, value: &str, field: &'static str) -> Result<(), Error> {
     match value {

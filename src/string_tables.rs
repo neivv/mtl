@@ -1,25 +1,31 @@
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 
+use fxhash::FxHashMap;
 use json::JsonValue;
 
 use crate::samase;
 
 pub struct StringTable {
-    by_index: Vec<String>,
+    by_index: Vec<Option<Arc<String>>>,
+    // Option to allow simple static construction
+    by_key: Option<FxHashMap<Vec<u8>, Arc<String>>>,
 }
 
 impl StringTable {
     pub fn by_index(&self, index: u16) -> Option<&str> {
         // 0 is always null string wherever tbl indices are used.
-        self.by_index.get(index.checked_sub(1)? as usize).map(|x| &**x)
+        self.by_index.get(index.checked_sub(1)? as usize).and_then(|x| x.as_ref()).map(|x| &***x)
+    }
+
+    pub fn by_key(&self, key: &[u8]) -> Option<&str> {
+        self.by_key.as_ref()?.get(key).map(|x| &***x)
     }
 }
 
-lazy_static! {
-    static ref STAT_TXT: Mutex<StringTable> = Mutex::new(StringTable {
-        by_index: vec![],
-    });
-}
+static STAT_TXT: Mutex<StringTable> = Mutex::new(StringTable {
+    by_index: Vec::new(),
+    by_key: None,
+});
 
 pub fn stat_txt() -> MutexGuard<'static, StringTable> {
     STAT_TXT.lock().unwrap()
@@ -110,17 +116,22 @@ pub fn init() {
             return;
         }
     };
+
     let mut by_index = Vec::with_capacity(1024);
+    let mut by_key = FxHashMap::with_capacity_and_hasher(1024, Default::default());
     for mut obj in arr {
         let key = obj.remove("Key").take_string();
         let val = obj.remove("Value").take_string();
-        if let (Some(_key), Some(val)) = (key, val) {
-            by_index.push(val);
+        if let (Some(key), Some(val)) = (key, val) {
+            let val = Arc::new(val);
+            by_index.push(Some(val.clone()));
+            by_key.insert(key.into_bytes(), val);
         } else {
-            by_index.push(String::new());
+            by_index.push(None);
         }
     }
     *STAT_TXT.lock().unwrap() = StringTable {
         by_index,
+        by_key: Some(by_key),
     };
 }

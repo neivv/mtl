@@ -472,12 +472,7 @@ impl Tooltip {
                             }
                         }
                         UnitVariable::ArmorType => {
-                            let string = match id.armor_type() {
-                                1 => "Small",
-                                2 => "Medium",
-                                3 => "Large",
-                                _ => "???",
-                            };
+                            let string = armor_type_string(stat_txt, id);
                             let _ = write!(out, "{}", string);
                         }
                     }
@@ -510,13 +505,7 @@ impl Tooltip {
                             let _ = write!(out, "{}", id.bonus().saturating_mul(factor));
                         }
                         WeaponVariable::DamageType => {
-                            let string = match id.damage_type() {
-                                1 => "Explosive",
-                                2 => "Concussive",
-                                3 => "Normal",
-                                4 => "Ignores armor",
-                                _ => "???",
-                            };
+                            let string = damage_type_string(stat_txt, id);
                             let _ = write!(out, "{}", string);
                         }
                         WeaponVariable::CurrentDamageBonus(factor) => {
@@ -537,6 +526,81 @@ impl Tooltip {
                     }
                 }
             }
+        }
+    }
+}
+
+fn init_name_string<'a>(buf: &'a mut [u8; 32], base: &[u8], value: u8) -> &'a [u8] {
+    let base_len = base.len().min(buf.len());
+    (&mut buf[..base_len]).copy_from_slice(&base[..base_len]);
+    let rest = &mut buf[base_len..];
+    if value < 10 {
+        if rest.len() < 1 {
+            return &buf[..base_len];
+        }
+        rest[0] = b'0'.wrapping_add(value);
+        return &buf[..(base_len + 1)];
+    } else if value < 100 {
+        if rest.len() < 2 {
+            return &buf[..base_len];
+        }
+        rest[0] = b'0'.wrapping_add(value / 10);
+        rest[1] = b'0'.wrapping_add(value % 10);
+        return &buf[..(base_len + 2)];
+    } else {
+        if rest.len() < 3 {
+            return &buf[..base_len];
+        }
+        rest[0] = b'0'.wrapping_add(value / 100);
+        let value = value % 100;
+        rest[1] = b'0'.wrapping_add(value / 10);
+        rest[2] = b'0'.wrapping_add(value % 10);
+        return &buf[..(base_len + 3)];
+    }
+}
+
+#[test]
+fn test_init_name_string() {
+    let mut name_buf = [0u8; 32];
+    let key = init_name_string(&mut name_buf, b"ARMOR_TYPE_", 0);
+    assert_eq!(key, &b"ARMOR_TYPE_0"[..]);
+
+    let key = init_name_string(&mut name_buf, b"ARMOR_TYPE_", 51);
+    assert_eq!(key, &b"ARMOR_TYPE_51"[..]);
+
+    let key = init_name_string(&mut name_buf, b"ARMOR_TYPE_", 196);
+    assert_eq!(key, &b"ARMOR_TYPE_196"[..]);
+}
+
+fn armor_type_string(stat_txt: &StringTable, id: UnitId) -> &str {
+    let value = id.armor_type();
+    let mut name_buf = [0u8; 32];
+    let key = init_name_string(&mut name_buf, b"ARMOR_TYPE_", value);
+    if let Some(val) = stat_txt.by_key(key) {
+        val
+    } else {
+        match value {
+            1 => "Small",
+            2 => "Medium",
+            3 => "Large",
+            _ => "???",
+        }
+    }
+}
+
+fn damage_type_string(stat_txt: &StringTable, id: WeaponId) -> &str {
+    let value = id.damage_type();
+    let mut name_buf = [0u8; 32];
+    let key = init_name_string(&mut name_buf, b"DAMAGE_TYPE_", value);
+    if let Some(val) = stat_txt.by_key(key) {
+        val
+    } else {
+        match value {
+            1 => "Explosive",
+            2 => "Concussive",
+            3 => "Normal",
+            4 => "Ignores armor",
+            _ => "???",
         }
     }
 }

@@ -185,7 +185,7 @@ struct IncludeHandlerHandle(*mut IncludeHandler);
 
 impl Drop for IncludeHandlerHandle {
     fn drop(&mut self) {
-        unsafe { Box::from_raw(self.0); }
+        unsafe { drop(Box::from_raw(self.0)); }
     }
 }
 

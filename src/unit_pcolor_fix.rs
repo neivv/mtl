@@ -3,10 +3,8 @@ use std::sync::Mutex;
 
 use byteorder::{ReadBytesExt, LE};
 
-lazy_static! {
-    static ref COLORS: Mutex<Option<Vec<Color>>> = Mutex::new(None);
-    static ref MINIMAP_COLORS: Mutex<Option<Vec<u8>>> = Mutex::new(None);
-}
+static COLORS: Mutex<Option<Vec<Color>>> = Mutex::new(None);
+static MINIMAP_COLORS: Mutex<Option<Vec<u8>>> = Mutex::new(None);
 
 struct Color([u8; 8]);
 

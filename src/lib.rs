@@ -84,9 +84,7 @@ fn init() {
 }
 
 
-lazy_static! {
-    static ref PATCHER: Mutex<whack::Patcher> = Mutex::new(whack::Patcher::new());
-}
+static PATCHER: Mutex<whack::Patcher> = Mutex::new(whack::Patcher::new());
 static IS_1161: AtomicBool = AtomicBool::new(false);
 
 fn is_scr() -> bool {

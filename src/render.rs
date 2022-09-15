@@ -21,9 +21,7 @@ ome2_thread_local! {
     }));
 }
 
-lazy_static! {
-    static ref LIGHTING_STATE: Mutex<LightingState> = Mutex::new(LightingState::new());
-}
+static LIGHTING_STATE: Mutex<LightingState> = Mutex::new(LightingState::new());
 
 struct SpriteToUnit {
     valid: bool,
@@ -39,7 +37,7 @@ pub struct LightingState {
 }
 
 impl LightingState {
-    pub fn new() -> LightingState {
+    pub const fn new() -> LightingState {
         LightingState {
             frame: 0,
         }

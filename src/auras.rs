@@ -12,9 +12,7 @@ use crate::unit_search::UnitSearch;
 use crate::upgrades::Stat;
 use crate::ExprExt;
 
-lazy_static! {
-    static ref AURA_STATE: Mutex<AuraState> = Mutex::new(AuraState::new());
-}
+static AURA_STATE: Mutex<AuraState> = Mutex::new(AuraState::new());
 
 pub fn aura_state() -> MutexGuard<'static, AuraState> {
     AURA_STATE.lock().unwrap()
@@ -144,7 +142,7 @@ pub struct AuraState {
 }
 
 impl AuraState {
-    pub fn new() -> AuraState {
+    pub const fn new() -> AuraState {
         AuraState {
             units: Vec::new(),
             stat_changes: Vec::new(),
