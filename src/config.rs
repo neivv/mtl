@@ -115,6 +115,11 @@ impl Config {
         let ini = Ini::open(&mut data)
             .context("Unable to read ini")?;
         let mut upgrades: BTreeMap<u8, BTreeMap<Vec<State>, Vec<UpgradeChanges>>> = BTreeMap::new();
+        // This is empty during initial load (stat_txt is only loaded on map start),
+        // so it should only be used for things visible ingame.
+        // Currently only used for stat_txt tooltips.
+        let stat_txt = crate::string_tables::stat_txt();
+        let stat_txt = &*stat_txt;
 
         for section in &ini.sections {
             let name = &section.name;
@@ -397,10 +402,14 @@ impl Config {
                     anyhow!(r#"status_screen requires either "weapon" "armor" "shields" or "special""#)
                 })?;
                 match ty {
-                    "weapon" => self.status_screen_tooltips.add_weapon(&section.values),
-                    "armor" => self.status_screen_tooltips.add_armor(&section.values),
-                    "shields" => self.status_screen_tooltips.add_shields(&section.values),
-                    "special" => self.status_screen_tooltips.add_special(&section.values),
+                    "weapon" => self.status_screen_tooltips.add_weapon(&section.values, stat_txt),
+                    "armor" => self.status_screen_tooltips.add_armor(&section.values, stat_txt),
+                    "shields" => {
+                        self.status_screen_tooltips.add_shields(&section.values, stat_txt)
+                    }
+                    "special" => {
+                        self.status_screen_tooltips.add_special(&section.values, stat_txt)
+                    }
                     _ => {
                         return Err(anyhow!(
                             r#"status_screen requires either "weapon" "armor" "shields" or "special", got "{}""#,

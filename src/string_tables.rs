@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, RwLock, RwLockReadGuard};
 
 use fxhash::FxHashMap;
 use json::JsonValue;
@@ -22,13 +22,13 @@ impl StringTable {
     }
 }
 
-static STAT_TXT: Mutex<StringTable> = Mutex::new(StringTable {
+static STAT_TXT: RwLock<StringTable> = RwLock::new(StringTable {
     by_index: Vec::new(),
     by_key: None,
 });
 
-pub fn stat_txt() -> MutexGuard<'static, StringTable> {
-    STAT_TXT.lock().unwrap()
+pub fn stat_txt() -> RwLockReadGuard<'static, StringTable> {
+    STAT_TXT.read().unwrap()
 }
 
 /// SCR stores string tables in a dumb double-escaped format where
@@ -130,7 +130,7 @@ pub fn init() {
             by_index.push(None);
         }
     }
-    *STAT_TXT.lock().unwrap() = StringTable {
+    *STAT_TXT.write().unwrap() = StringTable {
         by_index,
         by_key: Some(by_key),
     };

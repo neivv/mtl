@@ -154,25 +154,42 @@ impl Tooltips {
             !self.special_by_unit.is_empty()
     }
 
-    pub fn add_weapon(&mut self, config: &[(String, String)]) -> Result<(), Error> {
+    pub fn add_weapon(
+        &mut self,
+        config: &[(String, String)],
+        stat_txt: &StringTable,
+    ) -> Result<(), Error> {
         config_add(
             config,
+            stat_txt,
             &mut self.weapon,
             &mut self.weapon_by_unit,
             Some(&mut self.weapon_by_weapon),
         )
     }
 
-    pub fn add_armor(&mut self, config: &[(String, String)]) -> Result<(), Error> {
-        config_add(config, &mut self.armor, &mut self.armor_by_unit, None)
+    pub fn add_armor(
+        &mut self,
+        config: &[(String, String)],
+        stat_txt: &StringTable,
+    ) -> Result<(), Error> {
+        config_add(config, stat_txt, &mut self.armor, &mut self.armor_by_unit, None)
     }
 
-    pub fn add_shields(&mut self, config: &[(String, String)]) -> Result<(), Error> {
-        config_add(config, &mut self.shields, &mut self.shields_by_unit, None)
+    pub fn add_shields(
+        &mut self,
+        config: &[(String, String)],
+        stat_txt: &StringTable,
+    ) -> Result<(), Error> {
+        config_add(config, stat_txt, &mut self.shields, &mut self.shields_by_unit, None)
     }
 
-    pub fn add_special(&mut self, config: &[(String, String)]) -> Result<(), Error> {
-        config_add(config, &mut self.special, &mut self.special_by_unit, None)
+    pub fn add_special(
+        &mut self,
+        config: &[(String, String)],
+        stat_txt: &StringTable,
+    ) -> Result<(), Error> {
+        config_add(config, stat_txt, &mut self.special, &mut self.special_by_unit, None)
     }
 
     fn get_weapon(&self, game: Game, unit: Unit, weapon: WeaponId) -> Option<&Tooltip> {
@@ -219,6 +236,7 @@ impl Tooltips {
 
 fn config_add(
     config: &[(String, String)],
+    stat_txt: &StringTable,
     default: &mut TooltipGroup,
     by_unit: &mut Vec<Option<Box<TooltipGroup>>>,
     by_weapon: Option<&mut Vec<Option<Box<TooltipGroup>>>>,
@@ -247,10 +265,15 @@ fn config_add(
             _ => return Err(anyhow!("Unexpected '{}'", val)),
         }
     }
-    let text = match text {
+    let mut text = match text {
         Some(s) => s,
         None => return Err(anyhow!("Status screen tooltip had no text")),
     };
+    if let Some(rest) = text.strip_prefix("STAT_TXT:") {
+        if let Some(val) = stat_txt.by_key(rest.as_bytes()) {
+            text = val;
+        }
+    }
     let tooltip = Tooltip::parse(text)
         .with_context(|| format!("Parsing '{}'", text))?;
     let tooltip = Arc::new(tooltip);
