@@ -156,8 +156,7 @@ impl AuraState {
         value: i32,
         unit_array: &UnitArray,
     ) {
-        let index = (*unit as usize).wrapping_sub(unit_array.ptr() as usize)
-            / std::mem::size_of::<bw::Unit>();
+        let index = unit_array.to_index(unit) as usize;
         if self.units.len() <= index {
             self.units.resize(index + 1, !0);
         }

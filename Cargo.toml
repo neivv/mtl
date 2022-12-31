@@ -26,7 +26,6 @@ anyhow = "1.0"
 arrayvec = "0.7"
 bincode = "=1.2"
 byteorder = "1.1"
-chrono = "0.4"
 fern = "0.6"
 fxhash = "0.2"
 json = "0.12"
@@ -45,7 +44,7 @@ vec_map = "0.8.0"
 
 [dependencies.winapi]
 version = "0.3"
-features = ["heapapi", "libloaderapi", "processthreadsapi", "winuser", "winerror"]
+features = ["heapapi", "libloaderapi", "processthreadsapi", "sysinfoapi", "winuser", "winerror"]
 
 [target.'cfg(target_arch = "x86")'.dependencies.samase_shim]
 git = "https://github.com/neivv/samase_plugin"
@@ -57,7 +56,7 @@ rev = "1660aa7eb13daf1b903911ecf571c2b4a4c33fc8"
 
 [dependencies.bw_dat]
 git = "https://github.com/neivv/aise"
-rev = "68a4c868ed2dc3c68ec45d798718809b73383cc2"
+rev = "0cae8ebb2b085d9aad580f6e05005d7f55a81482"
 features = ["serde"]
 
 [target.'cfg(target_arch = "x86")'.dependencies.whack]

@@ -48,9 +48,14 @@ fn init() {
     if cfg!(debug_assertions) {
         let _ = fern::Dispatch::new()
             .format(|out, message, record| {
-                out.finish(format_args!("{}[{}:{}][{}] {}",
-                    chrono::Local::now()
-                        .format("[%Y-%m-%d][%H:%M:%S]"),
+                let time = windows::get_local_time();
+                out.finish(format_args!("[{:04}-{:02}-{:02}:{:02}:{:02}:{:02}][{}:{}][{}] {}",
+                    time.wYear,
+                    time.wMonth,
+                    time.wDay,
+                    time.wHour,
+                    time.wMinute,
+                    time.wSecond,
                     record.file().unwrap_or("???"),
                     record.line().unwrap_or(0),
                     record.level(),
@@ -144,8 +149,6 @@ struct SaveData {
 }
 
 unsafe extern fn save(set_data: unsafe extern fn(*const u8, usize)) {
-    unit::init_save_mapping();
-    defer!(unit::clear_save_mapping());
     let save = SaveData {
         tracked_spells: frame_hook::tracked_spells(),
         upgrade_state_changes: upgrades::global_state_changes().clone(),
@@ -166,9 +169,6 @@ unsafe extern fn save(set_data: unsafe extern fn(*const u8, usize)) {
 }
 
 unsafe extern fn load(ptr: *const u8, len: usize) -> u32 {
-    unit::init_load_mapping();
-    defer!(unit::clear_load_mapping());
-
     let slice = std::slice::from_raw_parts(ptr, len);
     let data: SaveData = match bincode::deserialize(slice) {
         Ok(o) => o,

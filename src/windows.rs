@@ -13,6 +13,8 @@ use winapi::shared::minwindef::{FARPROC, HMODULE};
 use winapi::um::libloaderapi::{
     self, FreeLibrary, GetModuleFileNameW, GetModuleHandleExW, LoadLibraryW,
 };
+use winapi::um::minwinbase::{SYSTEMTIME};
+use winapi::um::sysinfoapi::GetLocalTime;
 use winapi::um::winuser::{MessageBoxW};
 
 pub fn GetProcAddress(handle: HMODULE, func: &str) -> FARPROC {
@@ -76,5 +78,13 @@ pub fn module_name(handle: HMODULE) -> Option<OsString> {
 pub fn message_box(caption: &str, msg: &str) {
     unsafe {
         MessageBoxW(null_mut(), winapi_str(msg).as_ptr(), winapi_str(caption).as_ptr(), 0);
+    }
+}
+
+pub fn get_local_time() -> SYSTEMTIME {
+    unsafe {
+        let mut out: SYSTEMTIME = std::mem::zeroed();
+        GetLocalTime(&mut out);
+        out
     }
 }
