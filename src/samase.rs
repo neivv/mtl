@@ -8,7 +8,7 @@ use libc::c_void;
 use winapi::um::heapapi::{GetProcessHeap, HeapFree};
 use winapi::um::processthreadsapi::{GetCurrentProcess, TerminateProcess};
 
-use bw_dat::{self, DatTable, UnitId, Game};
+use bw_dat::{self, DatTable, ImageId, UnitId, Game};
 
 use crate::bw;
 use crate::config;
@@ -213,6 +213,21 @@ pub unsafe fn set_sprite_pos(sprite: *mut bw::Sprite, val: &bw::Point) {
     SET_SPRITE_POS.get()(sprite, val as *const bw::Point as *const u16);
 }
 
+static mut ADD_OVERLAY_ISCRIPT: GlobalFunc<
+    unsafe extern fn(*mut bw::Image, u32, i32, i32, u32),
+> = GlobalFunc(None);
+
+pub unsafe fn add_overlay_iscript(
+    base_image: *mut bw::Image,
+    image: ImageId,
+    x: i8,
+    y: i8,
+    above: bool,
+) {
+    ADD_OVERLAY_ISCRIPT.get()(base_image, image.0 as u32, x as i32, y as i32, above as u32)
+}
+
+
 static mut GET_TOOLTIP_DRAW_FUNC:
     GlobalFunc<unsafe extern fn() -> Option<unsafe extern fn(*mut bw::Control)>> = GlobalFunc(None);
 pub fn get_tooltip_draw_func() -> Option<unsafe extern fn(*mut bw::Control)> {
@@ -359,7 +374,7 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_plugin::PluginApi) {
     bw_dat::set_is_scr(crate::is_scr());
     crate::init();
 
-    let required_version = 32;
+    let required_version = 35;
     if (*api).version < required_version {
         fatal(&format!(
             "Newer samase is required. (Plugin API version {}, this plugin requires version {})",
@@ -468,6 +483,7 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_plugin::PluginApi) {
     MISC_UI_STATE.0 = Some(mem::transmute(((*api).misc_ui_state)(3)));
     GET_SPRITE_POS.0 = Some(mem::transmute(((*api).get_sprite_position)()));
     SET_SPRITE_POS.0 = Some(mem::transmute(((*api).set_sprite_position)()));
+    ADD_OVERLAY_ISCRIPT.0 = Some(mem::transmute(((*api).add_overlay_iscript)()));
     if let Some(tunit) = read_file("game\\tunit.pcx") {
         if let Err(e) = crate::unit_pcolor_fix::init_unit_colors(&tunit) {
             fatal(&format!("Invalid game\\tunit.pcx: {}", e));
