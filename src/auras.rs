@@ -71,6 +71,7 @@ impl Auras {
 
     pub fn parse_aura_config(&mut self, values: &[(String, String)]) -> Result<(), Error> {
         let mut radius = None;
+        let mut shape = AuraShape::Square;
         let mut source_units = Vec::new();
         let mut affected_players = None;
         let mut source_condition = None;
@@ -81,7 +82,15 @@ impl Auras {
         for &(ref key, ref val) in values {
             match &**key {
                 "radius" => {
-                    radius = Some(config::parse_u16(&val).context("radius")?);
+                    let (val, shape_) = if let Some(s) = val.strip_prefix("square") {
+                        (s.trim_start(), AuraShape::Square)
+                    } else if let Some(s) = val.strip_prefix("bw_circle") {
+                        (s.trim_start(), AuraShape::BwCircle)
+                    } else {
+                        (&**val, AuraShape::Square)
+                    };
+                    shape = shape_;
+                    radius = Some(config::parse_u16(val).context("radius")?);
                 }
                 "overlay" | "underlay" => {
                     let (val, dat_size) = match val.strip_prefix("with_dat_size") {
@@ -144,6 +153,7 @@ impl Auras {
         }
         self.auras.push(Aura {
             radius: radius.ok_or_else(|| anyhow!("Missing radius"))?,
+            shape,
             source_units,
             affected_players: affected_players
                 .ok_or_else(|| anyhow!("Missing affected_players"))?,
@@ -194,6 +204,7 @@ impl Auras {
 
 pub struct Aura {
     radius: u16,
+    shape: AuraShape,
     source_units: Vec<UnitId>,
     // Bits, also 13 (0x2000) for self, 14 (0x4000) for enemies and 15 (0x8000) for allies
     affected_players: u16,
@@ -202,6 +213,12 @@ pub struct Aura {
     overlay: OverlayId,
     underlay: OverlayId,
     effects: Vec<(Stat, IntExpr)>,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+enum AuraShape {
+    Square,
+    BwCircle,
 }
 
 impl Aura {
@@ -506,6 +523,15 @@ pub fn step_auras(
                 .filter(|&u| {
                     let mask = 1u16 << (u.player() & 0xf);
                     mask & affected_mask != 0
+                })
+                .filter(|&u| {
+                    match aura.shape {
+                        AuraShape::Square => true,
+                        AuraShape::BwCircle => {
+                            let distance = bw::distance(pos, u.position());
+                            distance < aura.radius as u32
+                        }
+                    }
                 })
                 .filter(|&u| match aura.target_condition {
                     Some(ref s) => s.eval_unit(u, game),
