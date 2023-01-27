@@ -778,13 +778,19 @@ pub fn read_campaign(mut data: &[u8]) -> Result<Campaign, Error> {
     }).collect::<Vec<Vec<bw::CampaignMission>>>();
 
     for section in &ini.sections {
-        let index = match &*section.name {
-            "zerg" => 0,
-            "terran" => 1,
-            "protoss" => 2,
-            "expzerg" => 3,
-            "expterran" => 4,
-            "expprotoss" => 5,
+        // The list terminator has to have mission id 0, but race is still
+        // set and used to determine if the epilogue is played, so set it
+        // to what it originally would be.
+        // If user wants to override it they could add
+        // `map = 0,0,zerg` entry at end for example, which would make
+        // this terminator entry be unchecked by bw.
+        let (index, orig_race) = match &*section.name {
+            "zerg" => (0, 0),
+            "terran" => (1, 1),
+            "protoss" => (2, 2),
+            "expzerg" => (3, 0),
+            "expterran" => (4, 1),
+            "expprotoss" => (5, 2),
             name => return Err(anyhow!("Invalid campaign name {}", name)),
         };
         let mut missions = Vec::with_capacity(10);
@@ -831,15 +837,14 @@ pub fn read_campaign(mut data: &[u8]) -> Result<Campaign, Error> {
             name_index: 0,
             campaign_mission: 0,
             cinematic: 0,
-            race: 0,
+            race: orig_race,
             hidden: 0,
         });
         result[index] = missions;
     }
     let mut campaigns = [std::ptr::null_mut(); 6];
-    for (i, mut vec) in result.into_iter().enumerate() {
-        campaigns[i] = vec.as_mut_ptr();
-        std::mem::forget(vec);
+    for (i, vec) in result.into_iter().enumerate() {
+        campaigns[i] = Vec::leak(vec).as_mut_ptr();
     }
     Ok(Campaign {
         campaigns,
