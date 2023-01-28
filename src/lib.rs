@@ -232,33 +232,10 @@ unsafe fn fix_campaign_music(game: Game) {
     }
 }
 
-fn game_map_path(game: Game) -> Option<&'static str> {
-    let bytes = unsafe {
-        &((**game).map_path)[..]
-    };
-    // Get the null-terminated subslice
-    let bytes = bytes.split(|&x| x == 0).next().unwrap();
-    std::str::from_utf8(bytes).ok()
-}
-
-fn read_map_file(game: Game, filename: &str) -> Option<samase::SamaseBox> {
-    use std::borrow::Cow;
-    let filename = unsafe {
-        if (**game).campaign_mission == 0 {
-            Cow::Borrowed(filename)
-        } else {
-            let map_path = game_map_path(game)?;
-            format!("{}\\{}", map_path, filename).into()
-        }
-    };
-    samase::read_file(&filename)
-}
-
 // This hook is at init_units, as that's a point when saves have correct map_path in game.
 // During init_game pre hook that path is only valid if there is no save.
 unsafe extern fn init_map_specific_dat(init_units: unsafe extern fn()) {
     init_units();
-    let game = crate::game::get();
     // NOTE: Ordering must match update_dat_table order.
     // No images.dat since it is loaded on game startup.
     // Could just have code to keep track of if this is using
@@ -274,37 +251,9 @@ unsafe extern fn init_map_specific_dat(init_units: unsafe extern fn()) {
         "arr\\orders.dat",
         "arr\\portdata.dat",
     ];
-    let map_path = match game_map_path(game) {
-        Some(s) => s,
-        None => return,
-    };
-    if (**game).campaign_mission != 0 {
-        let mut buffer = [0u8; 256];
-        for (i, file) in FILES.iter().enumerate() {
-            use std::io::Write;
-            let _ = write!(&mut buffer[..], "{}\\{}", map_path, file);
-            if let Some(file) = samase::read_file_u8(&buffer) {
-                update_dat_file(i, &file);
-            }
-        }
-    } else {
-        let mut buffer = Vec::new();
-        let mut mpq = match mpq::Archive::open(map_path) {
-            Ok(o) => o,
-            Err(e) => {
-                error!("Couldn't open map MPQ: {}", e);
-                return;
-            }
-        };
-        for (i, filename) in FILES.iter().enumerate() {
-            if let Ok(file) = mpq.open_file(filename) {
-                buffer.resize(file.size() as usize, 0u8);
-                if let Err(e) = file.read(&mut mpq, &mut buffer[..]) {
-                    error!("Failed to read {}: {}", filename, e);
-                } else {
-                    update_dat_file(i, &buffer[..]);
-                }
-            }
+    for (i, file) in FILES.iter().enumerate() {
+        if let Some(file) = samase::read_map_file(file) {
+            update_dat_file(i, &file);
         }
     }
 

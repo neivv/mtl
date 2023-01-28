@@ -32,7 +32,6 @@ json = "0.12"
 lazy_static = "1.0"
 libc = "0.2"
 log = "0.4"
-mpq = "=0.7.0"
 pcx = "0.2"
 rand = "0.7"
 scopeguard = "1.1"
@@ -48,11 +47,11 @@ features = ["heapapi", "libloaderapi", "processthreadsapi", "sysinfoapi", "winus
 
 [target.'cfg(target_arch = "x86")'.dependencies.samase_shim]
 git = "https://github.com/neivv/samase_plugin"
-rev = "1660aa7eb13daf1b903911ecf571c2b4a4c33fc8"
+rev = "eae8462aeb8a34fc0a23b51a4c23be6a09f82618"
 
 [dependencies.samase_plugin]
 git = "https://github.com/neivv/samase_plugin"
-rev = "1660aa7eb13daf1b903911ecf571c2b4a4c33fc8"
+rev = "eae8462aeb8a34fc0a23b51a4c23be6a09f82618"
 
 [dependencies.bw_dat]
 git = "https://github.com/neivv/aise"

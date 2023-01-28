@@ -3,6 +3,8 @@ use std::sync::Mutex;
 
 use byteorder::{ReadBytesExt, LE};
 
+use crate::samase;
+
 static COLORS: Mutex<Option<Vec<Color>>> = Mutex::new(None);
 static MINIMAP_COLORS: Mutex<Option<Vec<u8>>> = Mutex::new(None);
 
@@ -47,7 +49,7 @@ pub fn game_start_hook() {
         return;
     }
     let game = crate::game::get();
-    let scenario_chk = match crate::read_map_file(game, "staredit\\scenario.chk") {
+    let scenario_chk = match samase::read_map_file("staredit\\scenario.chk") {
         Some(s) => s,
         None => {
             error!("No scenario.chk ???");

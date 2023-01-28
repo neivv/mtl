@@ -369,18 +369,43 @@ pub fn read_file_u8(name: &[u8]) -> Option<SamaseBox> {
     })
 }
 
+static mut READ_MAP_FILE: GlobalFunc<extern fn(*const u8, *mut usize) -> *mut u8> =
+    GlobalFunc(None);
+
+pub fn read_map_file(name: &str) -> Option<SamaseBox> {
+    read_map_file_u8(name.as_bytes())
+}
+
+pub fn read_map_file_u8(name: &[u8]) -> Option<SamaseBox> {
+    let read = unsafe { READ_MAP_FILE.0? };
+    let mut vec = Vec::with_capacity(name.len());
+    vec.extend_from_slice(name);
+    vec.push(0);
+    let mut size = 0usize;
+    let result = read(vec.as_ptr(), &mut size);
+    NonNull::new(result).map(|data| SamaseBox {
+        data,
+        len: size,
+    })
+}
+
+fn check_version(api_version: u16, required_version: u16) {
+    if api_version < required_version {
+        fatal(&format!(
+            "Newer samase is required. (Plugin API version {}, this plugin requires version {})",
+            api_version, required_version,
+        ));
+    }
+}
+
 #[no_mangle]
 pub unsafe extern fn samase_plugin_init(api: *const samase_plugin::PluginApi) {
     bw_dat::set_is_scr(crate::is_scr());
     crate::init();
 
-    let required_version = 35;
-    if (*api).version < required_version {
-        fatal(&format!(
-            "Newer samase is required. (Plugin API version {}, this plugin requires version {})",
-            (*api).version, required_version,
-        ));
-    }
+    let required_version = 35; // Currently map_specific_dats require 38
+    let api_version = (*api).version;
+    check_version(api_version, required_version);
 
     let mut ext_arrays = null_mut();
     let ext_arrays_len = ((*api).extended_arrays)(&mut ext_arrays);
@@ -524,12 +549,16 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_plugin::PluginApi) {
         prism::override_shaders(api);
     }
     if config.enable_map_dat_files {
-        let ok = ((*api).hook_init_units)(crate::init_map_specific_dat);
+        check_version(api_version, 38);
+        let mut ok = ((*api).hook_init_units)(crate::init_map_specific_dat) != 0;
+        READ_MAP_FILE.0 = mem::transmute(((*api).read_map_file)());
+        ok &= READ_MAP_FILE.0.is_some();
+
         if let Some(portdata_dat) = ((*api).extended_dat)(9) {
             let mut len = 0usize;
             PORTDATA_DAT.store(portdata_dat(&mut len) as usize, Ordering::Relaxed);
         }
-        if ok == 0 {
+        if !ok {
             ((*api).warn_unsupported_feature)(b"Map specific dat\0".as_ptr());
         }
     }
@@ -705,10 +734,8 @@ fn read_config(game: Option<Game>) -> Result<config::Config, String> {
     let mut config = config::Config::default();
     let result = config.update(&config_slice)
         .and_then(|()| {
-            if let Some(game) = game {
-                if let Some(map_ini) = crate::read_map_file(game, "samase\\mtl_map.ini") {
-                    return config.update(&map_ini);
-                }
+            if let Some(map_ini) = read_map_file("samase\\mtl_map.ini") {
+                return config.update(&map_ini);
             }
             Ok(())
         });
