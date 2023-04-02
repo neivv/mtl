@@ -5,7 +5,7 @@ use libc::c_void;
 
 use crate::bw;
 use crate::config;
-use crate::render::{self, LightingState};
+use crate::render::{self};
 
 static DRAW_COMMANDS: AtomicUsize = AtomicUsize::new(0);
 
@@ -13,24 +13,6 @@ fn get_draw_commands() -> *mut bw::scr::DrawCommands {
     let ptr = DRAW_COMMANDS.load(Ordering::Relaxed);
     assert!(ptr != 0);
     ptr as *mut bw::scr::DrawCommands
-}
-
-pub unsafe fn global_light(
-    config: &config::Lighting,
-    state: &LightingState,
-) -> (f32, f32, f32) {
-    let low = config.end;
-    let high = config.start;
-    if config.cycle == 0 {
-        return high;
-    }
-    let cycle = (state.frame % config.cycle) as f32 / (config.cycle as f32) * 3.14 * 2.0;
-    let pos = (cycle.cos() + 1.0) / 2.0;
-    (
-        low.0 + (high.0 - low.0) * pos,
-        low.1 + (high.1 - low.1) * pos,
-        low.2 + (high.2 - low.2) * pos,
-    )
 }
 
 pub unsafe extern fn draw_hook(
@@ -44,9 +26,9 @@ pub unsafe extern fn draw_hook(
     let len = (*commands).draw_command_count as usize;
     {
         let config = config::config();
-        if let Some(ref conf_light) = config.lighting {
+        if config.lighting.is_some() {
             let lighting_state = render::lighting_state();
-            let color = global_light(conf_light, &lighting_state);
+            let color = lighting_state.global_light();
             for cmd in (*commands).commands.iter_mut().take(len) {
                 let is_game_shader = match cmd.shader_id {
                     // Normal game shaders

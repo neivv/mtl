@@ -8,6 +8,7 @@ use libc::c_void;
 use bw_dat::{Game, Unit};
 
 use crate::bw;
+use crate::config;
 use crate::render_scr;
 use crate::unit::{active_units};
 use crate::upgrades;
@@ -33,14 +34,99 @@ struct SpriteToUnit {
 #[derive(Clone)]
 pub struct LightingState {
     // Increases with game frames if lighting is enabled
-    pub frame: u32,
+    frame: u32,
+    // 0 = None, 1-based value at which to stop
+    dest_frame: u32,
+    cycle: u32,
+    start: (f32, f32, f32),
+    end: (f32, f32, f32),
 }
 
 impl LightingState {
     pub const fn new() -> LightingState {
         LightingState {
             frame: 0,
+            dest_frame: 0,
+            cycle: 0,
+            start: (0.0, 0.0, 0.0),
+            end: (0.0, 0.0, 0.0),
         }
+    }
+
+    pub fn load_config(&mut self, config: &config::Lighting) {
+        self.start = config.start;
+        self.end = config.end;
+        self.cycle = config.cycle;
+    }
+
+    pub fn step(&mut self, step: u32) {
+        if step == 0 {
+            return;
+        }
+        let old_frame = self.frame;
+        self.frame = self.frame.wrapping_add(step);
+        if self.dest_frame != 0 {
+            if self.frame >= self.dest_frame && old_frame < self.dest_frame {
+                self.frame = self.dest_frame - 1;
+                return;
+            }
+        }
+        if self.cycle != 0 {
+            self.frame = self.frame % self.cycle;
+            if self.dest_frame != 0 {
+                if self.frame >= self.dest_frame {
+                    self.frame = self.dest_frame - 1;
+                    return;
+                }
+            }
+        }
+    }
+
+    pub fn get_frame(&mut self) -> u32 {
+        self.frame
+    }
+
+    pub fn set_frame(&mut self, value: u32) {
+        self.frame = value;
+    }
+
+    pub fn set_cycle(&mut self, value: u32) {
+        self.cycle = value;
+    }
+
+    pub fn set_dest_frame(&mut self, value: u32) {
+        self.dest_frame = value.wrapping_add(1);
+    }
+
+    pub fn clear_dest_frame(&mut self) {
+        self.dest_frame = 0;
+    }
+
+    pub fn set_colors(&mut self, start: (f32, f32, f32), end: (f32, f32, f32)) {
+        self.start = start;
+        self.end = end;
+    }
+
+    fn cycle_pos(&self) -> f32 {
+        if self.cycle == 0 {
+            return 0.0;
+        }
+        (self.frame % self.cycle) as f32 / (self.cycle as f32)
+    }
+
+    pub fn global_light(&self) -> (f32, f32, f32) {
+        let low = self.start;
+        let high = self.end;
+        if self.cycle == 0 {
+            return high;
+        }
+        let cycle = self.cycle_pos() * 3.14 * 2.0;
+        let pos = (cycle.cos() + 1.0) / 2.0;
+        (
+            low.0 + (high.0 - low.0) * pos,
+            low.1 + (high.1 - low.1) * pos,
+            low.2 + (high.2 - low.2) * pos,
+        )
     }
 }
 
@@ -154,7 +240,7 @@ pub unsafe extern fn draw_image_hook(image: *mut c_void, orig: unsafe extern fn(
     orig(image);
     if let Some(track) = track {
         if track.changed() {
-            if let Some(ref lighting) = config.lighting {
+            if config.lighting.is_some() {
                 // This is no-op if RTL is enabled. RTL's lighting change
                 // is done by changing deferred_blit shader's uniforms.
                 if (*image).drawfunc == 0xb {
@@ -166,7 +252,7 @@ pub unsafe extern fn draw_image_hook(image: *mut c_void, orig: unsafe extern fn(
                     // own light source.
                 } else {
                     let lighting_state = lighting_state();
-                    track.set_multiply(render_scr::global_light(lighting, &lighting_state));
+                    track.set_multiply(lighting_state.global_light());
                 }
             }
             if let Some(unit) = unit {

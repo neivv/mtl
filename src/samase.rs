@@ -403,7 +403,7 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_plugin::PluginApi) {
     bw_dat::set_is_scr(crate::is_scr());
     crate::init();
 
-    let required_version = 35; // Currently map_specific_dats require 38
+    let required_version = 38;
     let api_version = (*api).version;
     check_version(api_version, required_version);
 
@@ -548,10 +548,9 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_plugin::PluginApi) {
         ((*api).hook_file_read)(b"ShadersHLSL\\\0".as_ptr(), render_scr::d3d_shader_hook);
         prism::override_shaders(api);
     }
+    READ_MAP_FILE.0 = mem::transmute(((*api).read_map_file)());
     if config.enable_map_dat_files {
-        check_version(api_version, 38);
         let mut ok = ((*api).hook_init_units)(crate::init_map_specific_dat) != 0;
-        READ_MAP_FILE.0 = mem::transmute(((*api).read_map_file)());
         ok &= READ_MAP_FILE.0.is_some();
 
         if let Some(portdata_dat) = ((*api).extended_dat)(9) {

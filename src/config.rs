@@ -63,6 +63,7 @@ pub struct Lighting {
     pub cycle: u32,
     // if set, only step lighting when death is nonzero at frame rate of death value
     pub bound_death: Option<(u8, UnitId)>,
+    pub config_death: Option<UnitId>,
 }
 
 struct Rallies {
@@ -283,6 +284,7 @@ impl Config {
                         end: (1.0, 1.0, 1.0),
                         cycle: 0,
                         bound_death: None,
+                        config_death: None,
                     };
                     for &(ref key, ref val) in &section.values {
                         match &**key {
@@ -304,6 +306,10 @@ impl Config {
                                 lighting.bound_death = parse_u32_tuple(val, 2)
                                     .map(|x| Some((x[0] as u8, UnitId(x[1] as u16))))
                                     .context("lighting.death")?;
+                            }
+                            "config_death" => {
+                                lighting.config_death = Some(UnitId(parse_u16(val)
+                                    .context("lighting.config_death")?));
                             }
                             x => return Err(anyhow!("unknown key {}", x)),
                         }

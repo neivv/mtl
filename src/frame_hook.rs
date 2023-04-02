@@ -118,6 +118,26 @@ pub fn set_tracked_spells(spells: TrackedSpells) {
     *tracked().borrow_mut() = spells;
 }
 
+fn read_deaths_color(game: Game, player: u8, unit_id: UnitId) -> (f32, f32, f32) {
+    let r = game.unit_deaths(player, unit_id);
+    let g = game.unit_deaths(player + 1, unit_id);
+    let b = game.unit_deaths(player + 2, unit_id);
+    (
+        r as f32 / 255.0,
+        g as f32 / 255.0,
+        b as f32 / 255.0,
+    )
+}
+
+fn write_deaths_color(game: Game, player: u8, unit_id: UnitId, value: (f32, f32, f32)) {
+    let r = (value.0 * 255.0) as u32;
+    let g = (value.0 * 255.0) as u32;
+    let b = (value.0 * 255.0) as u32;
+    game.set_unit_deaths(player, unit_id, r);
+    game.set_unit_deaths(player + 1, unit_id, g);
+    game.set_unit_deaths(player + 2, unit_id, b);
+}
+
 pub unsafe extern fn frame_hook() {
     let game = Game::from_ptr(bw::game());
     let unit_array = bw::unit_array();
@@ -133,13 +153,58 @@ pub unsafe extern fn frame_hook() {
     let config = config();
     {
         if let Some(ref light) = config.lighting {
+            if first_frame {
+                render::lighting_state().load_config(&light);
+            }
             let step = match light.bound_death {
                 Some((player, unit_id)) => game.unit_deaths(player, unit_id),
                 None => 1,
             };
             if step != 0 {
                 let mut lighting_state = render::lighting_state();
-                lighting_state.frame = lighting_state.frame.wrapping_add(step);
+                lighting_state.step(step);
+            }
+            if let Some(unit_id) = light.config_death {
+                let player = 0;
+                let state = game.unit_deaths(player, unit_id);
+                if state != 0 {
+                    let mut lighting_state = render::lighting_state();
+                    game.set_unit_deaths(player, unit_id, 0);
+                    match state {
+                        1 => {
+                            lighting_state.set_frame(game.unit_deaths(player + 1, unit_id));
+                        }
+                        2 => {
+                            lighting_state.set_dest_frame(game.unit_deaths(player + 1, unit_id));
+                        }
+                        3 => {
+                            lighting_state.clear_dest_frame();
+                        }
+                        4 => {
+                            lighting_state.set_cycle(game.unit_deaths(player + 1, unit_id));
+                        }
+                        5 => {
+                            let start = read_deaths_color(game, player + 1, unit_id);
+                            let end = read_deaths_color(game, player + 4, unit_id);
+                            lighting_state.set_colors(start, end);
+                        }
+                        6 => {
+                            let start = lighting_state.global_light();
+                            let end = read_deaths_color(game, player + 1, unit_id);
+                            let frames = game.unit_deaths(player + 4, unit_id);
+                            lighting_state.set_frame(0);
+                            lighting_state.set_cycle(frames.saturating_mul(2));
+                            lighting_state.set_dest_frame(frames);
+                            lighting_state.set_colors(end, start);
+                        }
+                        7 => {
+                            let value = lighting_state.global_light();
+                            write_deaths_color(game, player + 1, unit_id, value);
+                            game.set_unit_deaths(player + 4, unit_id, lighting_state.get_frame());
+                        }
+                        _ => (),
+                    }
+                }
             }
         }
         auras::step_auras(&config.auras, &mut aura_state, game, &unit_search, &unit_array);
