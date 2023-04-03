@@ -44,13 +44,13 @@ pub unsafe extern fn draw_hook(
                     0x18 | 0x19 | 0x1a => true,
                     _ => false,
                 };
-                if cmd.uniforms[3] == -4.0 {
+                if cmd.shader_constants[3] == -4.0 {
                     // HP bar
-                    cmd.uniforms[3] = 1.0;
+                    cmd.shader_constants[3] = 1.0;
                 } else if is_game_shader {
-                    cmd.uniforms[0] = color.0;
-                    cmd.uniforms[1] = color.1;
-                    cmd.uniforms[2] = color.2;
+                    cmd.shader_constants[0] = color.0;
+                    cmd.shader_constants[1] = color.1;
+                    cmd.shader_constants[2] = color.2;
                 } else if is_deferred_sprite {
                     // Deferred sprite.
                     // Set lighting enable always to 1.0 (expect for HP bars
@@ -62,7 +62,7 @@ pub unsafe extern fn draw_hook(
                     // There is also the foliage fish which uses shaders 0x28/0x29
                     // and those shaders won't even write to lighting enable
                     // (Making it undefined). Leaving that as is for now though.
-                    cmd.uniforms[0x12] = 1.0;
+                    cmd.shader_constants[0x12] = 1.0;
                 }
             }
         }
@@ -94,7 +94,7 @@ impl TrackImageRender {
         let new_len = (*self.draw_commands).draw_command_count as usize;
         for cmd in &mut (*self.draw_commands).commands[old_len..new_len] {
             // Tells to not apply lighting later on at draw_hook
-            cmd.uniforms[3] = -4.0;
+            cmd.shader_constants[3] = -4.0;
         }
     }
 
@@ -102,9 +102,9 @@ impl TrackImageRender {
         let old_len = self.old_command_count as usize;
         let new_len = (*self.draw_commands).draw_command_count as usize;
         for cmd in &mut (*self.draw_commands).commands[old_len..new_len] {
-            cmd.uniforms[0] = color.0;
-            cmd.uniforms[1] = color.1;
-            cmd.uniforms[2] = color.2;
+            cmd.shader_constants[0] = color.0;
+            cmd.shader_constants[1] = color.1;
+            cmd.shader_constants[2] = color.2;
         }
     }
 
@@ -112,10 +112,17 @@ impl TrackImageRender {
         let old_len = self.old_command_count as usize;
         let new_len = (*self.draw_commands).draw_command_count as usize;
         for cmd in &mut (*self.draw_commands).commands[old_len..new_len] {
-            cmd.uniforms[8] = color.0;
-            cmd.uniforms[9] = color.1;
-            cmd.uniforms[10] = color.2;
+            cmd.shader_constants[8] = color.0;
+            cmd.shader_constants[9] = color.1;
+            cmd.shader_constants[10] = color.2;
         }
+    }
+
+    pub unsafe fn new_draw_commands(&self) -> (*mut bw::scr::DrawCommand, usize) {
+        let old_len = self.old_command_count as usize;
+        let new_len = (*self.draw_commands).draw_command_count as usize;
+        let start = (*self.draw_commands).commands.as_mut_ptr().add(old_len);
+        (start, new_len.saturating_sub(old_len))
     }
 }
 

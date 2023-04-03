@@ -53,7 +53,16 @@ pub struct Config {
     pub cmdbtn_force_stat_txt_tooltips: bool,
     // !0 for no override
     pub sound_remaps: Vec<u32>,
+    pub button_colors: Option<ButtonColors>,
     rallies: Rallies,
+}
+
+#[derive(Default)]
+pub struct ButtonColors {
+    pub disabled: Option<(f32, f32, f32)>,
+    pub enabled: Option<(f32, f32, f32)>,
+    pub using: Option<(f32, f32, f32)>,
+    pub active: Option<(f32, f32, f32)>,
 }
 
 pub struct Lighting {
@@ -274,6 +283,18 @@ impl Config {
                                 "force_stat_txt_tooltips",
                             )?
                         }
+                        "disabled_color" | "enabled_color" | "active_color" | "use_color" => {
+                            let color = parse_f32_tuple(val, 3)
+                                .map(|x| (x[0], x[1], x[2]))
+                                .context("lighting.start")?;
+                            let out = self.button_colors.get_or_insert_with(ButtonColors::default);
+                            match &**key {
+                                "disabled_color" => out.disabled = Some(color),
+                                "enabled_color" => out.enabled = Some(color),
+                                "use_color" => out.using = Some(color),
+                                "active_color" | _=> out.active = Some(color),
+                            }
+                        }
                         x => return Err(anyhow!("unknown key {}", x)),
                     }
                 }
@@ -465,6 +486,7 @@ impl Default for Config {
             auras: Auras::empty(),
             status_screen_tooltips: status_screen::Tooltips::new(),
             lighting: None,
+            button_colors: None,
             bunker_units: Vec::new(),
             sound_remaps: Vec::new(),
             rallies: Rallies {

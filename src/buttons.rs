@@ -1,3 +1,4 @@
+use std::mem;
 use std::sync::atomic::{AtomicUsize, AtomicU32, AtomicU16, AtomicU8, Ordering};
 
 use arrayvec::ArrayVec;
@@ -5,14 +6,81 @@ use bw_dat::dialog::{Control, Dialog};
 use bw_dat::{Game, TechId, Unit, UnitId, UpgradeId};
 
 use crate::bw;
-use crate::config::Config;
+use crate::config::{self, Config};
 use crate::string_tables::stat_txt;
 use crate::tooltip::{self, TooltipDrawFunc};
+use crate::render_scr::{track_image_render};
 
 static CMDBTN_DIALOG: AtomicUsize = AtomicUsize::new(0);
+static CMDBTN_BUTTON_DRAW: AtomicUsize = AtomicUsize::new(0);
 
 pub fn cmdbtn_dialog_created(dialog: Dialog) {
     CMDBTN_DIALOG.store(*dialog as usize, Ordering::Relaxed);
+    if crate::is_scr() {
+        unsafe {
+            let mut draw = None;
+            for ctrl in dialog.children().filter(|x| x.control_type() == 2) {
+                let ctrl = *ctrl as *mut bw::scr::Control;
+                if draw.is_none() {
+                    draw = (*ctrl).draw;
+                } else if (*ctrl).draw != draw {
+                    continue;
+                }
+                (*ctrl).draw = Some(draw_button_hook);
+            }
+            CMDBTN_BUTTON_DRAW.store(mem::transmute(draw), Ordering::Relaxed);
+        }
+    }
+}
+
+unsafe extern "C" fn draw_button_hook(
+    ctrl: *mut bw::scr::Control,
+    x: i32,
+    y: i32,
+    rect: *const bw::Rect,
+    self_rect: *const bw::Rect,
+) {
+    let orig:
+        unsafe extern "C" fn(*mut bw::scr::Control, i32, i32, *const bw::Rect, *const bw::Rect) =
+        mem::transmute(CMDBTN_BUTTON_DRAW.load(Ordering::Relaxed));
+    let track = track_image_render();
+    orig(ctrl, x, y, rect, self_rect);
+    let (cmds, amount) = track.new_draw_commands();
+    if amount > 1 {
+        let cmd = cmds.add(1);
+        let config = config::config();
+        if let Some(ref colors) = config.button_colors {
+            let ctrl = Control::new(ctrl as *mut bw::Control);
+            let button = ctrl.user_pointer();
+            let icon = if button.is_null() {
+                u16::MAX - 1
+            } else {
+                *(button as *mut u16).add(1)
+            };
+            let color = if ctrl.is_disabled() {
+                colors.disabled.as_ref()
+            } else if ctrl.flags() & 0x4000_0000 != 0 {
+                colors.using.as_ref()
+            } else if icon == active_icon() {
+                colors.active.as_ref()
+            } else {
+                colors.enabled.as_ref()
+            };
+            if let Some(color) = color {
+                (*cmd).shader_constants[0] = color.0;
+                (*cmd).shader_constants[1] = color.1;
+                (*cmd).shader_constants[2] = color.2;
+            }
+        }
+    }
+}
+
+unsafe fn active_icon() -> u16 {
+    bw::client_selection()
+        .get(0)
+        .and_then(|&unit| Unit::from_ptr(unit))
+        .map(|unit| unit.order().icon() as u16)
+        .unwrap_or(u16::MAX)
 }
 
 pub unsafe fn draw_tooltip_hook(
