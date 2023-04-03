@@ -145,6 +145,7 @@ pub unsafe extern fn frame_hook() {
     let mut extended_unit_fields = unit::extended_field_state();
     let mut aura_state = auras::aura_state();
     // Not doing frame_count == 0 as there are actually 2 frame 0s
+    // Note that this is also set on first frame after load
     let first_frame = FIRST_FRAME.load(Ordering::Relaxed);
     if first_frame {
         FIRST_FRAME.store(false, Ordering::Relaxed);
@@ -153,7 +154,7 @@ pub unsafe extern fn frame_hook() {
     let config = config();
     {
         if let Some(ref light) = config.lighting {
-            if first_frame {
+            if first_frame && game.frame_count() < 2 {
                 render::lighting_state().load_config(&light);
             }
             let step = match light.bound_death {
