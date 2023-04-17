@@ -181,7 +181,7 @@ impl UnitExt for Unit {
             if target.id().is_beacon() || target.id().is_powerup() {
                 order::MOVE
             } else if self.is_enemy(game, target) {
-                order::ATTACK
+                unit_id.attack_unit_order()
             } else if target.can_load_unit(game, units, self) {
                 order::ENTER_TRANSPORT
             } else if target.is_burrowed() {
@@ -251,7 +251,7 @@ impl UnitExt for Unit {
                 if not_enemy {
                     unit_id.return_to_idle_order()
                 } else {
-                    order::ATTACK
+                    unit_id.attack_unit_order()
                 }
             }
             4 => {
