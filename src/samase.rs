@@ -691,9 +691,13 @@ pub unsafe fn init_config(exit_on_error: bool, game: Option<Game>) {
                 break;
             }
             Err(msg) => {
-                windows::message_box("Mtl", &msg);
-                if exit_on_error {
-                    TerminateProcess(GetCurrentProcess(), 0x42302aef);
+                let retry = windows::message_box_retry("Mtl", &msg);
+                if !retry {
+                    if exit_on_error {
+                        TerminateProcess(GetCurrentProcess(), 0x42302aef);
+                    } else {
+                        return;
+                    }
                 }
             }
         }
@@ -709,9 +713,13 @@ pub unsafe fn init_config(exit_on_error: bool, game: Option<Game>) {
                     break;
                 }
                 Err(msg) => {
-                    windows::message_box("Mtl", &msg);
-                    if exit_on_error {
-                        TerminateProcess(GetCurrentProcess(), 0x42302aef);
+                    let retry = windows::message_box_retry("Mtl", &msg);
+                    if !retry {
+                        if exit_on_error {
+                            TerminateProcess(GetCurrentProcess(), 0x42302aef);
+                        } else {
+                            return;
+                        }
                     }
                 }
             }

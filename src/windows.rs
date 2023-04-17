@@ -81,6 +81,13 @@ pub fn message_box(caption: &str, msg: &str) {
     }
 }
 
+/// Return true on retry
+pub fn message_box_retry(caption: &str, msg: &str) -> bool {
+    unsafe {
+        MessageBoxW(null_mut(), winapi_str(msg).as_ptr(), winapi_str(caption).as_ptr(), 5) == 4
+    }
+}
+
 pub fn get_local_time() -> SYSTEMTIME {
     unsafe {
         let mut out: SYSTEMTIME = std::mem::zeroed();
