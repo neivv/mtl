@@ -202,14 +202,17 @@ pub unsafe extern fn draw_image_hook(image: *mut c_void, orig: unsafe extern fn(
         track = Some(render_scr::track_image_render());
     } else {
         track = None;
-        if let Some(unit) = unit {
-            if let Some(color) = upgrades::player_color_palette(&config, game, unit) {
-                (&mut (*bw::default_grp_remap)[0x8..0x10]).copy_from_slice(&color);
-                let trans50 = *bw::trans50;
-                for (i, &color) in color.iter().enumerate() {
-                    let output = trans50.add(0x100 * (0x8 + i));
-                    let input = trans50.add(0x100 * color as usize);
-                    std::ptr::copy(input, output, 0x100);
+        #[cfg(target_pointer_width = "32")]
+        {
+            if let Some(unit) = unit {
+                if let Some(color) = upgrades::player_color_palette(&config, game, unit) {
+                    (&mut (*bw::default_grp_remap)[0x8..0x10]).copy_from_slice(&color);
+                    let trans50 = *bw::trans50;
+                    for (i, &color) in color.iter().enumerate() {
+                        let output = trans50.add(0x100 * (0x8 + i));
+                        let input = trans50.add(0x100 * color as usize);
+                        std::ptr::copy(input, output, 0x100);
+                    }
                 }
             }
         }

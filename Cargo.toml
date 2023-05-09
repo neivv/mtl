@@ -55,7 +55,7 @@ rev = "f952146e7cb657449765cc15af96a9ba0100af20"
 
 [dependencies.bw_dat]
 git = "https://github.com/neivv/aise"
-rev = "d9c5fab91605e46fec840fd5d8ce8a960690a3a3"
+rev = "351e43a6a131741f56f7f233971186efc863776a"
 features = ["serde"]
 
 [target.'cfg(target_arch = "x86")'.dependencies.whack]

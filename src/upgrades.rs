@@ -497,6 +497,7 @@ pub fn player_color(config: &Config, game: Game, unit: Unit) -> Option<(f32, f32
     color
 }
 
+#[cfg(target_pointer_width = "32")]
 pub fn player_color_palette(config: &Config, game: Game, unit: Unit) -> Option<[u8; 8]> {
     let mut color = None;
     config.upgrades.matches(game, unit, |stat, vals| match *stat {

@@ -55,19 +55,23 @@ pub fn units_dat() -> &'static [DatTable] {
     }
 }
 
+#[cfg(target_pointer_width = "32")]
 whack_hooks!(stdcall, 0x00400000,
     0x00488410 => create_fow_sprite(u32, *mut c_void) -> *mut c_void;
 );
 
+#[cfg(target_pointer_width = "32")]
 whack_funcs!(init_funcs, 0x00400000,
     0x004D58B0 => set_image_draw_funcs_1161(@eax *mut Image, @ebx u32);
 );
 
+#[cfg(target_pointer_width = "32")]
 whack_vars!(init_vars, 0x00400000,
     0x0050CDC1 => default_grp_remap: [u8; 256];
     0x00512960 => trans50: *mut u8;
 );
 
+#[cfg(target_pointer_width = "32")]
 pub mod storm {
     #[repr(C)]
     pub struct SCode {
@@ -123,7 +127,10 @@ pub unsafe fn set_image_drawfuncs(image: *mut Image, drawfunc: u8) {
             (*image).drawfunc_param = 0x230 as *mut c_void;
         }
     } else {
-        set_image_draw_funcs_1161(image, drawfunc as u32);
+        #[cfg(target_pointer_width = "32")]
+        {
+            set_image_draw_funcs_1161(image, drawfunc as u32);
+        }
     }
 }
 

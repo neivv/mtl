@@ -2,8 +2,6 @@ use std::cell::RefCell;
 use std::ptr::null_mut;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use libc::c_void;
-
 use bw_dat::{self, Game, Unit, UnitId, order};
 
 use crate::auras;
@@ -446,11 +444,12 @@ unsafe fn timer_override(
     }
 }
 
+#[cfg(target_pointer_width = "32")]
 pub unsafe fn check_fow_sprite_creation_desync(
     unit_id: u32,
-    base: *mut c_void,
-    orig: unsafe extern fn(u32, *mut c_void) -> *mut c_void,
-) -> *mut c_void {
+    base: *mut libc::c_void,
+    orig: unsafe extern fn(u32, *mut libc::c_void) -> *mut libc::c_void,
+) -> *mut libc::c_void {
     let old_seed = crate::samase::rng_seed();
     let result = orig(unit_id, base);
     if old_seed != crate::samase::rng_seed() {

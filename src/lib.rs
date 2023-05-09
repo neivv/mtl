@@ -2,11 +2,15 @@
 #[macro_use] extern crate log;
 #[macro_use] extern crate scopeguard;
 #[macro_use] extern crate serde_derive;
+
+#[cfg(target_pointer_width = "32")]
 #[macro_use] extern crate whack;
 
 extern crate bw_dat;
+#[cfg(target_pointer_width = "32")]
 extern crate samase_shim;
 
+#[cfg(target_pointer_width = "32")]
 pub mod mpqdraft;
 pub mod samase;
 
@@ -37,7 +41,9 @@ mod unit_pcolor_fix;
 mod upgrades;
 mod windows;
 
+#[cfg(target_pointer_width = "32")]
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(target_pointer_width = "32")]
 use std::sync::Mutex;
 
 use libc::c_void;
@@ -89,13 +95,22 @@ fn init() {
 }
 
 
+#[cfg(target_pointer_width = "32")]
 static PATCHER: Mutex<whack::Patcher> = Mutex::new(whack::Patcher::new());
+#[cfg(target_pointer_width = "32")]
 static IS_1161: AtomicBool = AtomicBool::new(false);
 
+#[cfg(target_pointer_width = "32")]
 fn is_scr() -> bool {
     IS_1161.load(Ordering::Relaxed) == false
 }
 
+#[cfg(target_pointer_width = "64")]
+fn is_scr() -> bool {
+    true
+}
+
+#[cfg(target_pointer_width = "32")]
 #[no_mangle]
 #[allow(non_snake_case)]
 pub extern fn Initialize() {
