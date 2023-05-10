@@ -294,6 +294,8 @@ unsafe extern fn init_map_specific_dat(init_units: unsafe extern fn()) {
 }
 
 unsafe fn update_dat_file(index: usize, mut file: &[u8]) {
+    use byteorder::{ByteOrder, LittleEndian};
+
     let table_fn: unsafe fn() -> _ = match index {
         0 => samase::units_dat,
         1 => samase::weapons_dat,
@@ -308,6 +310,20 @@ unsafe fn update_dat_file(index: usize, mut file: &[u8]) {
     let mut table = table_fn();
     if table.is_null() {
         return;
+    }
+    if index == 7 {
+        // First 2 fields in portdata are usize-sized, can't just memcpy them on 64bit.
+        // Though this code runs one 32bit too for consistency.
+        for _ in 0..2 {
+            let mut out = (*table).data as *mut usize;
+            for _ in 0..((*table).entries as usize) {
+                let value = LittleEndian::read_u32(file);
+                *out = value as usize;
+                out = out.add(1);
+                file = &file[4..];
+            }
+            table = table.add(1);
+        }
     }
     while file.len() != 0 {
         let copy_len = (*table).entries as usize * (*table).entry_size as usize;
