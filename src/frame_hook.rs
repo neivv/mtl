@@ -301,7 +301,7 @@ pub unsafe extern fn frame_hook() {
             Some(s) => s.saturating_add(aura_resources),
             None => aura_resources,
         };
-        if hp_regen != 0 {
+        if unit.hitpoints() > 0 && (hp_regen > 0 || (hp_regen < 0 && !unit.is_invincible())) {
             (**unit).flingy.hitpoints = (**unit).flingy.hitpoints.saturating_add(hp_regen);
             if (**unit).flingy.hitpoints <= 0 {
                 // No code for killing units yet
@@ -312,7 +312,7 @@ pub unsafe extern fn frame_hook() {
                 (**unit).flingy.hitpoints = max_hp;
             }
         }
-        if shield_regen != 0 {
+        if shield_regen > 0 || (shield_regen < 0 && !unit.is_invincible()) {
             (**unit).shields = (**unit).shields.saturating_add(shield_regen);
             if (**unit).shields < 0 {
                 (**unit).shields = 0;

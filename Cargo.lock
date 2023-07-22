@@ -169,7 +169,7 @@ dependencies = [
 
 [[package]]
 name = "mtl"
-version = "0.3.57"
+version = "0.3.58"
 dependencies = [
  "anyhow",
  "arrayvec",
