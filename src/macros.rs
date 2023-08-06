@@ -25,10 +25,10 @@ macro_rules! ome2_thread_local {
     );
 
     ($name:ident: $ty:ty = $fun:ident($expr:expr)) => (
-        lazy_static!(static ref $name: ::thread_local::ThreadLocal<$ty> =
-            ::thread_local::ThreadLocal::new(););
+        static $name: std::sync::OnceLock<thread_local::ThreadLocal<$ty>> =
+            std::sync::OnceLock::new();
         fn $fun() -> &'static $ty {
-            $name.get_or(|| $expr)
+            $name.get_or_init(|| thread_local::ThreadLocal::new()).get_or(|| $expr)
         }
     );
 }
