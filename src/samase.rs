@@ -8,6 +8,7 @@ use libc::c_void;
 use winapi::um::heapapi::{GetProcessHeap, HeapFree};
 use winapi::um::processthreadsapi::{GetCurrentProcess, TerminateProcess};
 
+use samase_plugin::FuncId;
 use bw_dat::{self, DatTable, ImageId, UnitId, Game};
 
 use crate::bw;
@@ -227,6 +228,26 @@ pub unsafe fn add_overlay_iscript(
     ADD_OVERLAY_ISCRIPT.get()(base_image, image.0 as u32, x as i32, y as i32, above as u32)
 }
 
+static KILL_UNIT: AtomicUsize = AtomicUsize::new(0);
+static UNIT_SET_HP: AtomicUsize = AtomicUsize::new(0);
+
+#[inline]
+fn load_func<T: Copy>(global: &AtomicUsize) -> T {
+    let value = global.load(Ordering::Relaxed);
+    debug_assert!(value != 0);
+    assert!(mem::size_of::<T>() == mem::size_of::<fn()>());
+    unsafe {
+        mem::transmute_copy(&value)
+    }
+}
+
+pub unsafe fn kill_unit(unit: *mut bw::Unit) {
+    load_func::<unsafe extern fn(*mut bw::Unit)>(&KILL_UNIT)(unit)
+}
+
+pub unsafe fn unit_set_hp(unit: *mut bw::Unit, value: i32) {
+    load_func::<unsafe extern fn(*mut bw::Unit, i32)>(&UNIT_SET_HP)(unit, value)
+}
 
 static mut GET_TOOLTIP_DRAW_FUNC:
     GlobalFunc<unsafe extern fn() -> Option<unsafe extern fn(*mut bw::Control)>> = GlobalFunc(None);
@@ -403,7 +424,7 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_plugin::PluginApi) {
     bw_dat::set_is_scr(crate::is_scr());
     crate::init();
 
-    let required_version = 38;
+    let required_version = 39;
     let api_version = (*api).version;
     check_version(api_version, required_version);
 
@@ -509,6 +530,27 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_plugin::PluginApi) {
     GET_SPRITE_POS.0 = Some(mem::transmute(((*api).get_sprite_position)()));
     SET_SPRITE_POS.0 = Some(mem::transmute(((*api).set_sprite_position)()));
     ADD_OVERLAY_ISCRIPT.0 = Some(mem::transmute(((*api).add_overlay_iscript)()));
+
+    static FUNCS: &[(&AtomicUsize, FuncId)] = &[
+        (&KILL_UNIT, FuncId::KillUnit),
+        (&UNIT_SET_HP, FuncId::UnitSetHp),
+    ];
+    let max_func = FUNCS.iter().map(|x| x.1 as u16).max().unwrap_or(0);
+    if max_func >= (*api).max_func_id {
+        fatal(&format!(
+            "Newer samase is required. (Largest function id is {}, this plugin requires {})",
+            (*api).max_func_id, max_func,
+        ));
+    }
+    for &(global, func_id) in FUNCS {
+        let func = ((*api).get_func)(func_id as u16);
+        if let Some(f) = func {
+            global.store(f as usize, Ordering::Relaxed);
+        } else {
+            fatal(&format!("Func {} not found", func_id as u16));
+        }
+    }
+
     if let Some(tunit) = read_file("game\\tunit.pcx") {
         if let Err(e) = crate::unit_pcolor_fix::init_unit_colors(&tunit) {
             fatal(&format!("Invalid game\\tunit.pcx: {}", e));

@@ -102,6 +102,8 @@ pub trait UnitExt {
     fn rclick_order(self, game: Game, units: &UnitArray, target: Unit) -> OrderId;
     fn can_be_infested(self) -> bool;
     fn can_harvest_gas_from(self, target: Unit) -> bool;
+    fn kill(self);
+    fn set_hitpoints(self, value: i32);
 }
 
 impl UnitExt for Unit {
@@ -310,6 +312,18 @@ impl UnitExt for Unit {
         self.player() == target.player() &&
             target.is_completed() &&
             target.id().is_gas_building()
+    }
+
+    fn kill(self) {
+        unsafe {
+            samase::kill_unit(*self)
+        }
+    }
+
+    fn set_hitpoints(self, value: i32) {
+        unsafe {
+            samase::unit_set_hp(*self, value)
+        }
     }
 }
 

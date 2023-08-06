@@ -302,14 +302,15 @@ pub unsafe extern fn frame_hook() {
             None => aura_resources,
         };
         if unit.hitpoints() > 0 && (hp_regen > 0 || (hp_regen < 0 && !unit.is_invincible())) {
-            (**unit).flingy.hitpoints = (**unit).flingy.hitpoints.saturating_add(hp_regen);
-            if (**unit).flingy.hitpoints <= 0 {
-                // No code for killing units yet
-                (**unit).flingy.hitpoints = 1;
-            }
-            let max_hp = unit.id().hitpoints();
-            if (**unit).flingy.hitpoints > max_hp {
-                (**unit).flingy.hitpoints = max_hp;
+            let mut new_hp = (**unit).flingy.hitpoints.saturating_add(hp_regen);
+            if new_hp <= 0 {
+                unit.kill();
+            } else {
+                let max_hp = unit.id().hitpoints();
+                if new_hp > max_hp {
+                    new_hp = max_hp;
+                }
+                unit.set_hitpoints(new_hp);
             }
         }
         if shield_regen > 0 || (shield_regen < 0 && !unit.is_invincible()) {
