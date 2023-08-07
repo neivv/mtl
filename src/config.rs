@@ -11,6 +11,7 @@ use crate::auras::Auras;
 use crate::bw;
 use crate::ini::Ini;
 use crate::status_screen;
+use crate::sound_remaps::SoundRemaps;
 use crate::upgrades::{Upgrades, Upgrade, UpgradeChanges, State, Stat};
 
 /// Various timers, in frames, unlike bw's 8-frame chunks.
@@ -52,7 +53,7 @@ pub struct Config {
     pub cmdbtn_tooltip_half_supply: bool,
     pub cmdbtn_force_stat_txt_tooltips: bool,
     // !0 for no override
-    pub sound_remaps: Vec<u32>,
+    pub sound_remaps: SoundRemaps,
     pub button_colors: Option<ButtonColors>,
     rallies: Rallies,
 }
@@ -340,16 +341,7 @@ impl Config {
             } else if name == "aura" {
                 self.auras.parse_aura_config(&section.values)?;
             } else if name == "sound_remaps" {
-                for &(ref key, ref val) in &section.values {
-                    let source = parse_u32(key)
-                        .with_context(|| format!("Invalid sound id \"{}\"", key))? as usize;
-                    let dest = parse_u32(val)
-                        .with_context(|| format!("Invalid sound id \"{}\"", val))?;
-                    if self.sound_remaps.len() <= source {
-                        self.sound_remaps.resize_with(source + 1, || !0);
-                    }
-                    self.sound_remaps[source] = dest;
-                }
+                self.sound_remaps.parse_config(&section.values)?;
             } else if name.starts_with("upgrade") {
                 let mut tokens = name.split(".").skip(1);
                 let generic_error = || {
@@ -488,7 +480,7 @@ impl Default for Config {
             lighting: None,
             button_colors: None,
             bunker_units: Vec::new(),
-            sound_remaps: Vec::new(),
+            sound_remaps: SoundRemaps::new(),
             rallies: Rallies {
                 can_rally: Vec::new(),
                 default_order: None,
@@ -527,7 +519,7 @@ fn u32_field(out: &mut Option<u32>, value: &str, field_name: &'static str) -> Re
     Ok(())
 }
 
-fn parse_u32(value: &str) -> Result<u32, Error> {
+pub fn parse_u32(value: &str) -> Result<u32, Error> {
     Ok(if value.starts_with("0x") {
         u32::from_str_radix(&value[2..], 16)?
     } else {

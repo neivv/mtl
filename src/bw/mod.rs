@@ -229,11 +229,11 @@ pub fn rng_seed() -> u32 {
 }
 
 pub fn players() -> *mut Player {
-    unsafe { samase::players() }
+    samase::players()
 }
 
 pub fn pathing() -> *mut Pathing {
-    unsafe { samase::pathing() }
+    samase::pathing()
 }
 
 pub fn send_command(data: &[u8]) {
@@ -248,7 +248,7 @@ pub fn unit_array() -> UnitArray {
 }
 
 pub fn local_player_id() -> u8 {
-    unsafe { samase::local_player_id() as u8 }
+    samase::local_player_id() as u8
 }
 
 pub fn client_selection() -> &'static [*mut Unit] {
@@ -260,7 +260,7 @@ pub fn client_selection() -> &'static [*mut Unit] {
 }
 
 pub fn is_replay() -> bool {
-    unsafe { samase::is_replay() != 0 }
+    samase::is_replay() != 0
 }
 
 pub fn is_outside_game_screen(x: i16, y: i16) -> bool {
@@ -293,7 +293,7 @@ pub fn screen_coord_to_game(x: i16, y: i16) -> Point {
 }
 
 pub fn selections() -> *mut *mut Unit {
-    unsafe { samase::selections() }
+    samase::selections()
 }
 
 pub struct MiscUiState {

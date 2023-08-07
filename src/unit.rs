@@ -386,3 +386,11 @@ impl Iterator for UnitListIter {
         }
     }
 }
+
+pub fn first_player_unit(player: u8) -> Option<Unit> {
+    if player < 12 {
+        unsafe { Unit::from_ptr(*samase::first_player_unit().add(player as usize)) }
+    } else {
+        None
+    }
+}

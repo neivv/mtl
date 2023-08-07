@@ -1,14 +1,14 @@
 use std::mem;
 use std::ops;
 use std::ptr::{NonNull, null_mut};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, AtomicU8, Ordering};
 
 use libc::c_void;
 
 use winapi::um::heapapi::{GetProcessHeap, HeapFree};
 use winapi::um::processthreadsapi::{GetCurrentProcess, TerminateProcess};
 
-use samase_plugin::FuncId;
+use samase_plugin::{FuncId, VarId};
 use bw_dat::{self, DatTable, ImageId, UnitId, Game};
 
 use crate::bw;
@@ -45,13 +45,24 @@ impl<T: Copy> GlobalFunc<T> {
     }
 }
 
-static mut RNG_SEED: GlobalFunc<extern fn() -> u32> = GlobalFunc(None);
-pub fn rng_seed() -> Option<u32> {
-    unsafe {
-        if let Some(rng) = RNG_SEED.0 {
-            Some(rng())
-        } else {
-            None
+struct GlobalFunc2<T: Copy>(AtomicUsize, std::marker::PhantomData<T>);
+
+impl<T: Copy> GlobalFunc2<T> {
+    const fn new() -> GlobalFunc2<T> {
+        GlobalFunc2(AtomicUsize::new(0), std::marker::PhantomData)
+    }
+
+    fn set(&self, val: T) {
+        unsafe {
+            self.0.store(mem::transmute_copy(&val), Ordering::Relaxed);
+        }
+    }
+
+    fn get(&self) -> T {
+        unsafe {
+            let value = self.0.load(Ordering::Relaxed);
+            debug_assert!(value != 0);
+            mem::transmute_copy(&value)
         }
     }
 }
@@ -63,24 +74,219 @@ fn fatal(text: &str) -> ! {
     unreachable!();
 }
 
-static mut CRASH_WITH_MESSAGE: GlobalFunc<unsafe extern fn(*const u8) -> !> = GlobalFunc(None);
+const GLOBALS: &[VarId] = &[
+    VarId::Game,
+    VarId::FirstActiveUnit,
+    VarId::FirstHiddenUnit,
+    VarId::FirstPlayerUnit,
+    VarId::IscriptBin,
+    VarId::Players,
+    VarId::MapTileFlags,
+    VarId::Pathing,
+    VarId::IsReplay,
+    VarId::ClientSelection,
+    VarId::Selections,
+    VarId::LocalPlayerId,
+    VarId::Zoom,
+    VarId::ScreenX,
+    VarId::ScreenY,
+    VarId::FirstLoneSprite,
+    VarId::SpriteHlines,
+    VarId::SpriteHlinesEnd,
+    VarId::IsPaused,
+    VarId::IsTargeting,
+    VarId::IsPlacingBuilding,
+    // Writable
+    VarId::DrawCursorMarker,
+    // Optional
+    VarId::RngSeed,
+    // Writable + Optional
+    VarId::TooltipDrawFunc,
+];
+
+const fn global_idx(var: VarId) -> usize {
+    let mut i = 0;
+    loop {
+        if GLOBALS[i] as u16 == var as u16 {
+            return i;
+        }
+        i += 1;
+    }
+}
+
+const FIRST_WRITABLE_GLOBAL: usize = global_idx(VarId::DrawCursorMarker);
+const FIRST_OPTIONAL_GLOBAL: usize = global_idx(VarId::RngSeed);
+
+const ZERO_U8: AtomicU8 = AtomicU8::new(0);
+static OPT_GLOBALS: [AtomicU8; GLOBALS.len() - FIRST_OPTIONAL_GLOBAL] = [
+    ZERO_U8; GLOBALS.len() - FIRST_OPTIONAL_GLOBAL
+];
+
+static CRASH_WITH_MESSAGE: GlobalFunc2<unsafe extern fn(*const u8) -> !> = GlobalFunc2::new();
 pub fn crash_with_message(msg: &str) -> ! {
     let msg = format!("{}\0", msg);
     unsafe { CRASH_WITH_MESSAGE.get()(msg.as_bytes().as_ptr()) }
 }
 
-static mut GAME: GlobalFunc<extern fn() -> *mut bw::Game> = GlobalFunc(None);
-pub fn game() -> *mut bw::Game {
-    unsafe { GAME.get()() }
+unsafe fn init_globals(api: *const samase_plugin::PluginApi) {
+    let mut result = [0u8; GLOBALS.len()];
+    ((*api).load_vars)(GLOBALS.as_ptr() as *const u16, result.as_mut_ptr(), GLOBALS.len());
+    let mut i = 0;
+    for (last, needed) in [(FIRST_WRITABLE_GLOBAL, 2), (FIRST_OPTIONAL_GLOBAL, 3)] {
+        while i < last {
+            if result[i] < needed {
+                if result[i] == 1 {
+                    fatal(
+                        &format!("Newer samase is required (Failed to get variable {:?})", GLOBALS[i])
+                    );
+                } else {
+                    fatal(&format!("Failed to get variable {:?}", GLOBALS[i]));
+                }
+            }
+            i += 1;
+        }
+    }
+    while i < GLOBALS.len() {
+        OPT_GLOBALS[i - FIRST_OPTIONAL_GLOBAL].store(result[i], Ordering::Relaxed);
+        i += 1;
+    }
 }
 
-static mut FIRST_ACTIVE_UNIT: GlobalFunc<extern fn() -> *mut bw::Unit> = GlobalFunc(None);
-pub fn first_active_unit() -> *mut bw::Unit {
-    unsafe { FIRST_ACTIVE_UNIT.0.map(|x| x()).unwrap_or(null_mut()) }
+static READ_VARS:
+    GlobalFunc2<unsafe extern fn(*const u16, *mut usize, usize)> = GlobalFunc2::new();
+fn read_var(var: VarId) -> usize {
+    unsafe {
+        let var = var as u16;
+        let mut out = 0usize;
+        READ_VARS.get()(&var, &mut out, 1);
+        out
+    }
 }
-static mut FIRST_HIDDEN_UNIT: GlobalFunc<extern fn() -> *mut bw::Unit> = GlobalFunc(None);
+
+static WRITE_VARS:
+    GlobalFunc2<unsafe extern fn(*const u16, *const usize, usize)> = GlobalFunc2::new();
+fn write_var(var: VarId, value: usize) {
+    unsafe {
+        let var = var as u16;
+        WRITE_VARS.get()(&var, &value, 1);
+    }
+}
+
+/// Returns result from samase api (0/1 = bad, 2 = read-only, 3 = read/write)
+macro_rules! opt_global {
+    ($id:expr) => {{
+        const IDX: usize = global_idx($id) - FIRST_OPTIONAL_GLOBAL;
+        OPT_GLOBALS[IDX].load(Ordering::Relaxed)
+    }}
+}
+
+pub fn rng_seed() -> Option<u32> {
+    if opt_global!(VarId::RngSeed) >= 2 {
+        Some(read_var(VarId::RngSeed) as u32)
+    } else {
+        None
+    }
+}
+
+pub fn game() -> *mut bw::Game {
+    read_var(VarId::Game) as _
+}
+
+pub fn first_active_unit() -> *mut bw::Unit {
+    read_var(VarId::FirstActiveUnit) as _
+}
+
 pub fn first_hidden_unit() -> *mut bw::Unit {
-    unsafe { FIRST_HIDDEN_UNIT.0.map(|x| x()).unwrap_or(null_mut()) }
+    read_var(VarId::FirstHiddenUnit) as _
+}
+
+pub fn first_player_unit() -> *mut *mut bw::Unit {
+    read_var(VarId::FirstPlayerUnit) as _
+}
+
+pub fn get_iscript_bin() -> *mut bw::Unit {
+    read_var(VarId::IscriptBin) as _
+}
+
+pub fn players() -> *mut bw::Player {
+    read_var(VarId::Players) as _
+}
+
+pub fn map_tile_flags() -> *mut u32 {
+    read_var(VarId::MapTileFlags) as _
+}
+
+pub fn pathing() -> *mut bw::Pathing {
+    read_var(VarId::Pathing) as _
+}
+
+pub fn is_replay() -> u32 {
+    read_var(VarId::IsReplay) as _
+}
+
+pub fn client_selection() -> *mut *mut bw::Unit {
+    read_var(VarId::ClientSelection) as _
+}
+
+pub fn local_player_id() -> u32 {
+    read_var(VarId::LocalPlayerId) as _
+}
+
+pub fn ui_scale() -> f32 {
+    f32::from_bits(read_var(VarId::Zoom) as u32)
+}
+
+pub unsafe fn screen_pos(x: *mut i32, y: *mut i32) {
+    let vars = [VarId::ScreenX as u16, VarId::ScreenY as u16];
+    let mut result = [0usize, 0];
+    READ_VARS.get()(vars.as_ptr(), result.as_mut_ptr(), 2);
+    *x = result[0] as i32;
+    *y = result[1] as i32;
+}
+
+pub fn first_lone_sprite() -> *mut bw::LoneSprite {
+    read_var(VarId::FirstLoneSprite) as _
+}
+
+pub fn sprite_hlines() -> *mut *mut bw::Sprite {
+    read_var(VarId::SpriteHlines) as _
+}
+
+pub fn sprite_hlines_end() -> *mut *mut bw::Sprite {
+    read_var(VarId::SpriteHlinesEnd) as _
+}
+
+pub fn selections() -> *mut *mut bw::Unit {
+    read_var(VarId::Selections) as _
+}
+
+pub fn draw_cursor_marker(draw: u32) {
+    write_var(VarId::DrawCursorMarker, draw as usize);
+}
+
+pub fn misc_ui_state(out: &mut [u8]) {
+    let vars = [VarId::IsPaused, VarId::IsTargeting, VarId::IsPlacingBuilding];
+    let mut result = [0usize, 0, 0];
+    unsafe {
+        READ_VARS.get()(vars.as_ptr() as *const u16, result.as_mut_ptr(), 3);
+    }
+    out[0] = result[0] as u8;
+    out[1] = result[1] as u8;
+    out[2] = result[2] as u8;
+}
+
+pub fn get_tooltip_draw_func() -> Option<unsafe extern fn(*mut bw::Control)> {
+    if opt_global!(VarId::TooltipDrawFunc) >= 2 {
+        unsafe { Some(mem::transmute(read_var(VarId::TooltipDrawFunc))) }
+    } else {
+        None
+    }
+}
+
+pub fn set_tooltip_draw_func(new: Option<unsafe extern fn(*mut bw::Control)>) {
+    if opt_global!(VarId::TooltipDrawFunc) >= 3 {
+        unsafe { write_var(VarId::TooltipDrawFunc, mem::transmute(new)); }
+    }
 }
 
 static mut AI_UPDATE_ATTACK_TARGET:
@@ -100,11 +306,6 @@ pub unsafe fn create_lone_sprite(id: u32, x: i32, y: i32, player: u32) -> *mut b
     CREATE_LONE_SPRITE.get()(id, x, y, player)
 }
 
-static mut GET_ISCRIPT_BIN: GlobalFunc<extern fn() -> *const u8> = GlobalFunc(None);
-pub unsafe fn get_iscript_bin() -> *const u8 {
-    GET_ISCRIPT_BIN.get()()
-}
-
 static mut STEP_ISCRIPT_FRAME:
     GlobalFunc<extern fn(*mut bw::Image, *mut bw::Iscript, u32, *mut u32)> = GlobalFunc(None);
 pub unsafe fn step_iscript_frame(
@@ -121,34 +322,9 @@ pub unsafe fn send_command(data: &[u8]) {
     SEND_COMMAND.get()(data.as_ptr(), data.len() as u32)
 }
 
-static mut PLAYERS: GlobalFunc<extern fn() -> *mut bw::Player> = GlobalFunc(None);
-pub unsafe fn players() -> *mut bw::Player {
-    PLAYERS.get()()
-}
-
-static mut MAP_TILE_FLAGS: GlobalFunc<extern fn() -> *mut u32> = GlobalFunc(None);
-pub fn map_tile_flags() -> *mut u32 {
-    unsafe { MAP_TILE_FLAGS.get()() }
-}
-
-static mut PATHING: GlobalFunc<extern fn() -> *mut bw::Pathing> = GlobalFunc(None);
-pub unsafe fn pathing() -> *mut bw::Pathing {
-    PATHING.get()()
-}
-
-static mut IS_REPLAY: GlobalFunc<extern fn() -> u32> = GlobalFunc(None);
-pub unsafe fn is_replay() -> u32 {
-    IS_REPLAY.get()()
-}
-
 static mut IS_OUTSIDE_GAME_SCREEN: GlobalFunc<extern fn(i32, i32) -> u32> = GlobalFunc(None);
 pub unsafe fn is_outside_game_screen(x: i32, y: i32) -> u32 {
     IS_OUTSIDE_GAME_SCREEN.get()(x, y)
-}
-
-static mut CLIENT_SELECTION: GlobalFunc<extern fn() -> *mut *mut bw::Unit> = GlobalFunc(None);
-pub unsafe fn client_selection() -> *mut *mut bw::Unit {
-    CLIENT_SELECTION.get()()
 }
 
 static mut UNIT_ARRAY_LEN: GlobalFunc<extern fn(*mut *mut bw::Unit, *mut usize)> = GlobalFunc(None);
@@ -157,46 +333,6 @@ pub unsafe fn unit_array() -> (*mut bw::Unit, usize) {
     let mut ptr = null_mut();
     UNIT_ARRAY_LEN.get()(&mut ptr, &mut size);
     (ptr, size)
-}
-
-static mut LOCAL_PLAYER_ID: GlobalFunc<extern fn() -> u32> = GlobalFunc(None);
-pub unsafe fn local_player_id() -> u32 {
-    LOCAL_PLAYER_ID.get()()
-}
-
-static mut UI_SCALE: GlobalFunc<extern fn() -> f32> = GlobalFunc(None);
-pub unsafe fn ui_scale() -> f32 {
-    UI_SCALE.get()()
-}
-
-static mut SCREEN_POS: GlobalFunc<extern fn(*mut i32, *mut i32)> = GlobalFunc(None);
-pub unsafe fn screen_pos(x: *mut i32, y: *mut i32) {
-    SCREEN_POS.get()(x, y)
-}
-
-static mut FIRST_LONE_SPRITE: GlobalFunc<extern fn() -> *mut bw::LoneSprite> = GlobalFunc(None);
-pub unsafe fn first_lone_sprite() -> *mut bw::LoneSprite {
-    FIRST_LONE_SPRITE.get()()
-}
-
-static mut SPRITE_HLINES: GlobalFunc<extern fn() -> *mut *mut bw::Sprite> = GlobalFunc(None);
-pub unsafe fn sprite_hlines() -> *mut *mut bw::Sprite {
-    SPRITE_HLINES.get()()
-}
-
-static mut SPRITE_HLINES_END: GlobalFunc<extern fn() -> *mut *mut bw::Sprite> = GlobalFunc(None);
-pub unsafe fn sprite_hlines_end() -> *mut *mut bw::Sprite {
-    SPRITE_HLINES_END.get()()
-}
-
-static mut SELECTIONS: GlobalFunc<extern fn() -> *mut *mut bw::Unit> = GlobalFunc(None);
-pub unsafe fn selections() -> *mut *mut bw::Unit {
-    SELECTIONS.get()()
-}
-
-static mut DRAW_CURSOR_MARKER: GlobalFunc<extern fn(u32)> = GlobalFunc(None);
-pub fn draw_cursor_marker(draw: u32) {
-    unsafe { DRAW_CURSOR_MARKER.get()(draw) }
 }
 
 static mut GET_SPRITE_POS: GlobalFunc<extern fn(*mut bw::Sprite, *mut u16)> = GlobalFunc(None);
@@ -247,34 +383,6 @@ pub unsafe fn kill_unit(unit: *mut bw::Unit) {
 
 pub unsafe fn unit_set_hp(unit: *mut bw::Unit, value: i32) {
     load_func::<unsafe extern fn(*mut bw::Unit, i32)>(&UNIT_SET_HP)(unit, value)
-}
-
-static mut GET_TOOLTIP_DRAW_FUNC:
-    GlobalFunc<unsafe extern fn() -> Option<unsafe extern fn(*mut bw::Control)>> = GlobalFunc(None);
-pub fn get_tooltip_draw_func() -> Option<unsafe extern fn(*mut bw::Control)> {
-    unsafe {
-        if let Some(func) = GET_TOOLTIP_DRAW_FUNC.0 {
-            func()
-        } else {
-            None
-        }
-    }
-}
-
-static mut SET_TOOLTIP_DRAW_FUNC:
-    GlobalFunc<unsafe extern fn(Option<unsafe extern fn(*mut bw::Control)>)> = GlobalFunc(None);
-pub fn set_tooltip_draw_func(new: Option<unsafe extern fn(*mut bw::Control)>) {
-    unsafe {
-        if let Some(func) = SET_TOOLTIP_DRAW_FUNC.0 {
-            func(new)
-        }
-    }
-}
-
-static mut MISC_UI_STATE: GlobalFunc<extern fn(*mut u8)> = GlobalFunc(None);
-pub fn misc_ui_state(out: &mut [u8]) {
-    assert_eq!(out.len(), 3);
-    unsafe { MISC_UI_STATE.get()(out.as_mut_ptr()) }
 }
 
 static mut GET_REGION: GlobalFunc<extern fn(u32, u32) -> u32> = GlobalFunc(None);
@@ -424,7 +532,7 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_plugin::PluginApi) {
     bw_dat::set_is_scr(crate::is_scr());
     crate::init();
 
-    let required_version = 39;
+    let required_version = 40;
     let api_version = (*api).version;
     check_version(api_version, required_version);
 
@@ -432,16 +540,10 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_plugin::PluginApi) {
     let ext_arrays_len = ((*api).extended_arrays)(&mut ext_arrays);
     bw_dat::set_extended_arrays(ext_arrays as *mut _, ext_arrays_len);
 
-    CRASH_WITH_MESSAGE.0 = Some((*api).crash_with_message);
-    GAME.init(((*api).game)().map(|x| mem::transmute(x)), "Game object");
-    FIRST_ACTIVE_UNIT.init(
-        ((*api).first_active_unit)().map(|x| mem::transmute(x)),
-        "First active unit",
-    );
-    FIRST_HIDDEN_UNIT.init(
-        ((*api).first_hidden_unit)().map(|x| mem::transmute(x)),
-        "First active unit",
-    );
+    CRASH_WITH_MESSAGE.set((*api).crash_with_message);
+    READ_VARS.set((*api).read_vars);
+    WRITE_VARS.set((*api).write_vars);
+    init_globals(api);
 
     READ_FILE.0 = Some(mem::transmute(((*api).read_file)()));
     let mut dat_len = 0usize;
@@ -504,29 +606,13 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_plugin::PluginApi) {
         ((*api).warn_unsupported_feature)(b"Saving\0".as_ptr());
     }
     PRINT_TEXT.0 = Some(mem::transmute(((*api).print_text)()));
-    RNG_SEED.0 = Some(mem::transmute(((*api).rng_seed)()));
     AI_UPDATE_ATTACK_TARGET.0 = Some(mem::transmute(((*api).ai_update_attack_target)()));
     UPDATE_VISIBILITY_POINT.0 = Some(mem::transmute(((*api).update_visibility_point)()));
     CREATE_LONE_SPRITE.0 = Some(mem::transmute(((*api).create_lone_sprite)()));
-    GET_ISCRIPT_BIN.0 = Some(mem::transmute(((*api).get_iscript_bin)()));
     STEP_ISCRIPT_FRAME.0 = Some(mem::transmute(((*api).step_iscript)()));
     SEND_COMMAND.0 = Some(mem::transmute(((*api).send_command)()));
     IS_OUTSIDE_GAME_SCREEN.0 = Some(mem::transmute(((*api).is_outside_game_screen)()));
-    PLAYERS.0 = Some(mem::transmute(((*api).players)()));
-    MAP_TILE_FLAGS.0 = Some(mem::transmute(((*api).map_tile_flags)()));
-    PATHING.0 = Some(mem::transmute(((*api).pathing)()));
-    IS_REPLAY.0 = Some(mem::transmute(((*api).is_replay)()));
-    CLIENT_SELECTION.0 = Some(mem::transmute(((*api).client_selection)()));
     UNIT_ARRAY_LEN.0 = Some(mem::transmute(((*api).unit_array_len)()));
-    LOCAL_PLAYER_ID.0 = Some(mem::transmute(((*api).local_player_id)()));
-    UI_SCALE.0 = Some(mem::transmute(((*api).ui_scale)()));
-    SCREEN_POS.0 = Some(mem::transmute(((*api).screen_pos)()));
-    FIRST_LONE_SPRITE.0 = Some(mem::transmute(((*api).first_lone_sprite)()));
-    SPRITE_HLINES.0 = Some(mem::transmute(((*api).sprite_hlines)()));
-    SPRITE_HLINES_END.0 = Some(mem::transmute(((*api).sprite_hlines_end)()));
-    SELECTIONS.0 = Some(mem::transmute(((*api).selections)()));
-    DRAW_CURSOR_MARKER.0 = Some(mem::transmute(((*api).draw_cursor_marker)()));
-    MISC_UI_STATE.0 = Some(mem::transmute(((*api).misc_ui_state)(3)));
     GET_SPRITE_POS.0 = Some(mem::transmute(((*api).get_sprite_position)()));
     SET_SPRITE_POS.0 = Some(mem::transmute(((*api).set_sprite_position)()));
     ADD_OVERLAY_ISCRIPT.0 = Some(mem::transmute(((*api).add_overlay_iscript)()));
@@ -607,8 +693,6 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_plugin::PluginApi) {
         let ok = ((*api).hook_layout_draw_text)(crate::tooltip::layout_draw_text_hook);
         if ok != 0 {
             ((*api).hook_draw_graphic_layers)(crate::tooltip::draw_graphic_layers_hook);
-            GET_TOOLTIP_DRAW_FUNC.0 = Some(mem::transmute(((*api).get_tooltip_draw_func)()));
-            SET_TOOLTIP_DRAW_FUNC.0 = Some(mem::transmute(((*api).set_tooltip_draw_func)()));
         }
     }
 }

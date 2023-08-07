@@ -31,6 +31,7 @@ mod render;
 mod render_scr;
 mod rng;
 mod selection;
+mod sound_remaps;
 mod status_screen;
 mod string_tables;
 mod tooltip;
@@ -363,11 +364,8 @@ unsafe extern fn play_sound_hook(
 ) -> u32 {
     let sound = {
         let config = config::config();
-        config.sound_remaps
-            .get(sound as usize)
-            .copied()
-            .filter(|&x| x != !0)
-            .unwrap_or(sound)
+        let unit = bw_dat::Unit::from_ptr(unit as *mut bw::Unit);
+        config.sound_remaps.remap(sound, unit)
     };
     orig(sound, volume, unit, x, y)
 }
