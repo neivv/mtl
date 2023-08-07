@@ -40,9 +40,21 @@ unsafe extern "C" fn draw_button_hook(
     rect: *const bw::Rect,
     self_rect: *const bw::Rect,
 ) {
+    draw_button_hook_main(ctrl, x, y, rect, self_rect, &CMDBTN_BUTTON_DRAW);
+}
+
+pub unsafe extern "C" fn draw_button_hook_main(
+    ctrl: *mut bw::scr::Control,
+    x: i32,
+    y: i32,
+    rect: *const bw::Rect,
+    self_rect: *const bw::Rect,
+    orig: &AtomicUsize,
+) {
     let orig:
         unsafe extern "C" fn(*mut bw::scr::Control, i32, i32, *const bw::Rect, *const bw::Rect) =
-        mem::transmute(CMDBTN_BUTTON_DRAW.load(Ordering::Relaxed));
+        mem::transmute(orig.load(Ordering::Relaxed));
+
     let track = track_image_render();
     orig(ctrl, x, y, rect, self_rect);
     let (cmds, amount) = track.new_draw_commands();

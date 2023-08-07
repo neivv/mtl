@@ -1,4 +1,5 @@
 use std::io::Write;
+use std::mem;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -17,9 +18,54 @@ use crate::ExprExt;
 
 static STATUS_SCREEN_DIALOG: AtomicUsize = AtomicUsize::new(0);
 static TOOLTIP_TEXT_BUFFER: AtomicUsize = AtomicUsize::new(0);
+static STATUS_SCREEN_BUTTON_DRAW: AtomicUsize = AtomicUsize::new(0);
 
 pub fn status_screen_dialog_created(dialog: Dialog) {
     STATUS_SCREEN_DIALOG.store(*dialog as usize, Ordering::Relaxed);
+    if crate::is_scr() {
+        unsafe {
+            let mut draw = None;
+            for ctrl in dialog.children().filter(|x| x.control_type() == 2) {
+                let ctrl = *ctrl as *mut bw::scr::Control;
+                if draw.is_none() {
+                    draw = (*ctrl).draw;
+                } else if (*ctrl).draw != draw {
+                    continue;
+                }
+                (*ctrl).draw = Some(draw_button_hook);
+            }
+            STATUS_SCREEN_BUTTON_DRAW.store(mem::transmute(draw), Ordering::Relaxed);
+        }
+    }
+}
+
+unsafe extern "C" fn draw_button_hook(
+    ctrl_: *mut bw::scr::Control,
+    x: i32,
+    y: i32,
+    rect: *const bw::Rect,
+    self_rect: *const bw::Rect,
+) {
+    let ctrl = Control::new(ctrl_ as *mut bw::Control);
+    if ctrl.is_disabled() {
+        // Disabled status screen buttons (E.g. 2/3/4/5 on build queue) shouldn't use
+        // same disabled color override as cmdbtn buttons.
+        // These buttons can just be edited in grps anyway.
+        let orig:
+            unsafe extern "C" fn(*mut bw::scr::Control, i32, i32, *const bw::Rect, *const bw::Rect) =
+            mem::transmute(STATUS_SCREEN_BUTTON_DRAW.load(Ordering::Relaxed));
+
+        orig(ctrl_, x, y, rect, self_rect);
+    } else {
+        crate::buttons::draw_button_hook_main(
+            ctrl_,
+            x,
+            y,
+            rect,
+            self_rect,
+            &STATUS_SCREEN_BUTTON_DRAW,
+        );
+    }
 }
 
 pub unsafe fn draw_tooltip_hook(
