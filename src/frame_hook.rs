@@ -147,7 +147,6 @@ pub unsafe extern fn frame_hook() {
     let first_frame = FIRST_FRAME.load(Ordering::Relaxed);
     if first_frame {
         FIRST_FRAME.store(false, Ordering::Relaxed);
-        crate::samase::init_config(false, Some(game));
     }
     let config = config();
     {

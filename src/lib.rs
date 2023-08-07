@@ -24,6 +24,7 @@ mod frame_hook;
 mod game;
 mod ini;
 mod lo;
+mod map_dat;
 mod order;
 mod order_hook;
 mod rally;
@@ -48,7 +49,7 @@ use std::sync::Mutex;
 
 use libc::c_void;
 
-use bw_dat::{Game, UnitId};
+use bw_dat::{Game};
 
 fn init() {
     if cfg!(debug_assertions) {
@@ -251,87 +252,12 @@ unsafe fn fix_campaign_music(game: Game) {
 // During init_game pre hook that path is only valid if there is no save.
 unsafe extern fn init_map_specific_dat(init_units: unsafe extern fn()) {
     init_units();
-    // NOTE: Ordering must match update_dat_table order.
-    // No images.dat since it is loaded on game startup.
-    // Could just have code to keep track of if this is using
-    // global images.dat or not, and reload global when necessary,
-    // but I'm guessing images.dat editing isn't needed.
-    static FILES: &[&str] = &[
-        "arr\\units.dat",
-        "arr\\weapons.dat",
-        "arr\\flingy.dat",
-        "arr\\upgrades.dat",
-        "arr\\techdata.dat",
-        "arr\\sprites.dat",
-        "arr\\orders.dat",
-        "arr\\portdata.dat",
-    ];
-    for (i, file) in FILES.iter().enumerate() {
-        if let Some(file) = samase::read_map_file(file) {
-            update_dat_file(i, &file);
-        }
-    }
-
-    // Patch units.dat target acquisition range values
-    let units_dat = samase::units_dat();
-    let target_acquisition_range = units_dat.add(23);
-    assert_eq!((*target_acquisition_range).entry_size, 1);
-    let acq_range_data = (*target_acquisition_range).data as *mut u8;
-    for i in 0..(*target_acquisition_range).entries {
-        let turret_id = match UnitId(i as u16).subunit() {
-            Some(s) => s,
-            None => UnitId(i as u16),
-        };
-        let mut range = turret_id.target_acquisition_range() as u32;
-        if let Some(weapon) = turret_id.ground_weapon() {
-            range = range.max(weapon.max_range() / 32);
-        }
-        if let Some(weapon) = turret_id.air_weapon() {
-            range = range.max(weapon.max_range() / 32);
-        }
-        *acq_range_data.add(i as usize) = range as u8;
-    }
-}
-
-unsafe fn update_dat_file(index: usize, mut file: &[u8]) {
-    use byteorder::{ByteOrder, LittleEndian};
-
-    let table_fn: unsafe fn() -> _ = match index {
-        0 => samase::units_dat,
-        1 => samase::weapons_dat,
-        2 => samase::flingy_dat,
-        3 => samase::upgrades_dat,
-        4 => samase::techdata_dat,
-        5 => samase::sprites_dat,
-        6 => samase::orders_dat,
-        7 => samase::portdata_dat,
-        _ => return,
-    };
-    let mut table = table_fn();
-    if table.is_null() {
+    crate::samase::init_config(false, true);
+    let config = config::config();
+    if !config.map_dat_files.enable {
         return;
     }
-    if index == 7 {
-        // First 2 fields in portdata are usize-sized, can't just memcpy them on 64bit.
-        // Though this code runs one 32bit too for consistency.
-        for _ in 0..2 {
-            let mut out = (*table).data as *mut usize;
-            for _ in 0..((*table).entries as usize) {
-                let value = LittleEndian::read_u32(file);
-                *out = value as usize;
-                out = out.add(1);
-                file = &file[4..];
-            }
-            table = table.add(1);
-        }
-    }
-    while file.len() != 0 {
-        let copy_len = (*table).entries as usize * (*table).entry_size as usize;
-        assert!(file.len() >= copy_len);
-        std::ptr::copy_nonoverlapping(file.as_ptr(), (*table).data as *mut u8, copy_len);
-        file = &file[copy_len..];
-        table = table.add(1);
-    }
+    map_dat::load(&config.map_dat_files);
 }
 
 unsafe extern fn spawn_dialog_hook(

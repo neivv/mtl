@@ -9,7 +9,7 @@ use winapi::um::heapapi::{GetProcessHeap, HeapFree};
 use winapi::um::processthreadsapi::{GetCurrentProcess, TerminateProcess};
 
 use samase_plugin::{FuncId, VarId};
-use bw_dat::{self, DatTable, ImageId, UnitId, Game};
+use bw_dat::{self, DatTable, ImageId, UnitId};
 
 use crate::bw;
 use crate::config;
@@ -569,7 +569,7 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_plugin::PluginApi) {
     bw_dat::init_orders(orders_dat as *const _, dat_len);
     ORDERS_DAT.store(orders_dat as usize, Ordering::Relaxed);
 
-    init_config(true, None);
+    init_config(true, false);
     //((*api).hook_on_first_file_access)(init_config);
     let config = config::config();
     let result = ((*api).hook_step_objects)(crate::frame_hook::frame_hook, 0);
@@ -677,9 +677,13 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_plugin::PluginApi) {
         prism::override_shaders(api);
     }
     READ_MAP_FILE.0 = mem::transmute(((*api).read_map_file)());
-    if config.enable_map_dat_files {
-        let mut ok = ((*api).hook_init_units)(crate::init_map_specific_dat) != 0;
-        ok &= READ_MAP_FILE.0.is_some();
+    // Always hook init_units for a good point of loading mtl_map.ini
+    let ok = ((*api).hook_init_units)(crate::init_map_specific_dat);
+    if ok == 0 {
+        ((*api).warn_unsupported_feature)(b"mtl_map.ini\0".as_ptr());
+    }
+    if ok != 0 && config.map_dat_files.enable {
+        let ok = READ_MAP_FILE.0.is_some();
 
         if let Some(portdata_dat) = ((*api).extended_dat)(9) {
             let mut len = 0usize;
@@ -809,9 +813,9 @@ mod prism {
     }
 }
 
-pub unsafe fn init_config(exit_on_error: bool, game: Option<Game>) {
+pub unsafe fn init_config(exit_on_error: bool, load_map_ini: bool) {
     loop {
-        match read_config(game) {
+        match read_config(load_map_ini) {
             Ok(o) => {
                 config::set_config(o);
                 break;
@@ -853,12 +857,12 @@ pub unsafe fn init_config(exit_on_error: bool, game: Option<Game>) {
     }
 }
 
-fn read_config(game: Option<Game>) -> Result<config::Config, String> {
+fn read_config(load_map_ini: bool) -> Result<config::Config, String> {
     let config_slice = match read_file("samase/mtl.ini") {
         Some(s) => s,
         None => return Err(format!("Configuration file samase/mtl.ini not found.")),
     };
-    if game.is_none() {
+    if !load_map_ini {
         match read_file("samase\\mtl_map.ini") {
             Some(_) => return Err("Global mtl_map.ini is not allowed".into()),
             None => (),

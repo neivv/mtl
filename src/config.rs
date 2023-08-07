@@ -10,6 +10,7 @@ use bw_dat::expr::{IntExpr, BoolExpr};
 use crate::auras::Auras;
 use crate::bw;
 use crate::ini::Ini;
+use crate::map_dat::MapDatFiles;
 use crate::status_screen;
 use crate::sound_remaps::SoundRemaps;
 use crate::upgrades::{Upgrades, Upgrade, UpgradeChanges, State, Stat};
@@ -49,7 +50,7 @@ pub struct Config {
     pub lighting: Option<Lighting>,
     pub auras: Auras,
     pub dont_override_shaders: bool,
-    pub enable_map_dat_files: bool,
+    pub map_dat_files: MapDatFiles,
     pub cmdbtn_tooltip_half_supply: bool,
     pub cmdbtn_force_stat_txt_tooltips: bool,
     // !0 for no override
@@ -259,12 +260,18 @@ impl Config {
                     match &**key {
                         "enable_map_dat_files" => {
                             bool_field(
-                                &mut self.enable_map_dat_files,
+                                &mut self.map_dat_files.enable,
                                 &val,
                                 "enable_map_dat_files",
                             )?
                         }
-                        x => return Err(anyhow!("unknown key {}", x)),
+                        x => {
+                            if let Some(list) = self.map_dat_files.enable_list_by_config_name(x) {
+                                *list = parse_u16_list(val)?;
+                            } else {
+                                return Err(anyhow!("unknown key {}", x));
+                            }
+                        }
                     }
                 }
             } else if name == "buttons" {
@@ -471,7 +478,7 @@ impl Default for Config {
             return_cargo_softcode: false,
             zerg_building_training: false,
             dont_override_shaders: false,
-            enable_map_dat_files: false,
+            map_dat_files: MapDatFiles::default(),
             cmdbtn_tooltip_half_supply: false,
             cmdbtn_force_stat_txt_tooltips: false,
             upgrades: Upgrades::new(),
@@ -554,6 +561,17 @@ fn parse_race(value: &str) -> Result<u8, Error> {
 
 pub fn parse_u8_list<'a>(values: &'a str) -> impl Iterator<Item=Result<u8, Error>> + 'a {
     values.split(",").map(|x| parse_u8(x.trim()))
+}
+
+pub fn parse_u16_list(values: &str) -> Result<Vec<u16>, Error> {
+    let count = values.split(",").count();
+    let mut out = Vec::with_capacity(count);
+    for tok in values.split(",").map(|x| x.trim()) {
+        let id = parse_u16(tok)
+            .with_context(|| format!("Invalid integer {}", tok))?;
+        out.push(id);
+    }
+    Ok(out)
 }
 
 pub fn parse_unit_list(values: &str) -> Result<Vec<UnitId>, Error> {
