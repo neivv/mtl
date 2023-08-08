@@ -182,6 +182,8 @@ unsafe fn update_dat_file(index: usize, mut file: &[u8], enabled_ids: &[u16]) {
             }
             if is_supported_ext_field(index, table_n) {
                 if let Some(data) = file.get(offset..offset.wrapping_add(size)) {
+                    let shift = dat_values_per_entry_shift(index, table_n);
+                    let in_size = in_size << shift;
                     if enabled_ids.is_empty() {
                         for i in 0..entry_count {
                             update_table_field(index, table_n, table, i, data, 0, in_size);
@@ -304,6 +306,7 @@ unsafe fn update_table_field(
     index: u16,
     data: &[u8],
     start_index: usize,
+    // Should be already shifted for dimensionbox etc with multiple values per entry
     in_size: u32,
 ) {
     let index = index as usize;
@@ -312,9 +315,8 @@ unsafe fn update_table_field(
     }
     let data_index = index - start_index;
     let is_pointer_sized = dat == 7 && table_n < 2;
-    let in_size = if is_pointer_sized { 4 } else { in_size };
+    let size = if is_pointer_sized { 4 } else { in_size } as usize;
     let shift = dat_values_per_entry_shift(dat, table_n);
-    let size = (in_size << shift) as usize;
     let out_size = ((*table).entry_size << shift) as usize;
     let start = (data_index as usize).wrapping_mul(size);
     let out_start = (data_index as usize).wrapping_mul(out_size);
