@@ -204,7 +204,7 @@ pub fn first_player_unit() -> *mut *mut bw::Unit {
     read_var(VarId::FirstPlayerUnit) as _
 }
 
-pub fn get_iscript_bin() -> *mut bw::Unit {
+pub fn get_iscript_bin() -> *mut u8 {
     read_var(VarId::IscriptBin) as _
 }
 
