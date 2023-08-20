@@ -241,7 +241,7 @@ impl Aura {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct AuraState {
-    /// Index by unit uid, gives index to stat_changes, !0 if not set
+    /// Index by unit uid, gives index to stat_changes, u32::MAX if not set
     units: Vec<u32>,
     /// Variable len data, None means end of unit's array
     stat_changes: Vec<Option<(Stat, i32)>>,
@@ -283,13 +283,13 @@ impl AuraState {
         unit_array: &UnitArray,
     ) {
         if self.units.len() <= index {
-            self.units.resize(unit_array.len(), !0);
+            self.units.resize(unit_array.len(), u32::MAX);
             if self.units.len() <= index {
                 return;
             }
         }
         let stat_index = self.units[index] as usize;
-        if stat_index == !0 {
+        if stat_index == u32::MAX as usize {
             // Unit didn't have stat overrides this frame, append them to end
             let stat_index = self.stat_changes.len();
             self.units[index] = stat_index as u32;
@@ -333,7 +333,7 @@ impl AuraState {
 
     pub fn unit_stat(&self, unit: Unit, stat: Stat, unit_array: &UnitArray) -> i32 {
         let index = unit_array.to_index(unit) as usize;
-        let stat_index = match self.units.get(index).filter(|&&x| x != !0) {
+        let stat_index = match self.units.get(index).filter(|&&x| x != u32::MAX) {
             Some(&s) => s as usize,
             None => return 0,
         };
@@ -488,9 +488,7 @@ pub fn step_auras(
     unit_search: &UnitSearch,
     unit_array: &UnitArray,
 ) {
-    for val in &mut state.units {
-        *val = !0;
-    }
+    state.units.fill(u32::MAX);
     mem::swap(&mut state.overlay_state, &mut state.prev_frame_overlays);
     state.stat_changes.clear();
     let alliance_masks = make_alliance_masks(game);
