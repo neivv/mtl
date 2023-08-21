@@ -293,7 +293,11 @@ unsafe extern fn play_sound_hook(
         let unit = bw_dat::Unit::from_ptr(unit as *mut bw::Unit);
         config.sound_remaps.remap(sound, unit)
     };
-    orig(sound, volume, unit, x, y)
+    if sound != 0 {
+        orig(sound, volume, unit, x, y)
+    } else {
+        0
+    }
 }
 
 trait ExprExt {
