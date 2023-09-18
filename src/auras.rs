@@ -567,7 +567,7 @@ fn make_alliance_masks(game: Game) -> AllianceMasks {
     for player in 0..8 {
         let mut mask = 0;
         let mut bit = 1;
-        for other in 0..8 {
+        for other in 0..12 {
             if game.allied(player, other) {
                 mask |= bit;
             }
