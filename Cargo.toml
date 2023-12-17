@@ -1,6 +1,6 @@
 [package]
 name = "mtl"
-version = "0.3.65"
+version = "0.3.66"
 authors = ["Markus Heikkinen <ittevien@gmail.com>"]
 edition = "2018"
 
@@ -54,7 +54,7 @@ rev = "821c5be0a6aabfa8b5fc5b2af2920dc685393058"
 
 [dependencies.bw_dat]
 git = "https://github.com/neivv/aise"
-rev = "351e43a6a131741f56f7f233971186efc863776a"
+rev = "3d1b9ea15af8ae0ccf80af54d8c1800d48b17474"
 features = ["serde"]
 
 [target.'cfg(target_arch = "x86")'.dependencies.whack]
