@@ -233,6 +233,9 @@ pub unsafe extern fn frame_hook() {
     tracked.remove_dead_units();
     crate::rally::rally_cursor_marker_frame_hook(&config, game);
     for unit in unit::alive_units() {
+        if unit.order() == order::DIE {
+            continue;
+        }
         if config.has_rally(unit.id()) {
             // Remove rallying to unit if the unit has disappeared from vision or started dying
             let rally_unit = {
