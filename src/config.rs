@@ -5,10 +5,10 @@ use smallvec::SmallVec;
 
 use anyhow::{anyhow, Context, Error};
 use bw_dat::{UnitId, OrderId, SpriteId, WeaponId};
-use bw_dat::expr::{IntExpr, BoolExpr};
 
 use crate::auras::Auras;
 use crate::bw;
+use crate::expr::{IntExpr, parse_int_expr, parse_bool_expr};
 use crate::ini::Ini;
 use crate::map_dat::MapDatFiles;
 use crate::status_screen;
@@ -695,16 +695,6 @@ impl<'a> Iterator for BraceSplit<'a> {
         self.0 = "";
         Some(result)
     }
-}
-
-pub fn parse_bool_expr(condition: &str) -> Result<BoolExpr, Error> {
-    BoolExpr::parse(condition.as_bytes())
-        .map_err(|e| e.into())
-}
-
-pub fn parse_int_expr(expr: &str) -> Result<IntExpr, Error> {
-    IntExpr::parse(expr.as_bytes())
-        .map_err(|e| e.into())
 }
 
 fn parse_int_expr_tuple(expr: &str, count: u8) -> Result<Vec<IntExpr>, Error> {

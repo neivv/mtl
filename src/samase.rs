@@ -366,6 +366,7 @@ pub unsafe fn add_overlay_iscript(
 
 static KILL_UNIT: AtomicUsize = AtomicUsize::new(0);
 static UNIT_SET_HP: AtomicUsize = AtomicUsize::new(0);
+static UNIT_MAX_ENERGY: AtomicUsize = AtomicUsize::new(0);
 
 #[inline]
 fn load_func<T: Copy>(global: &AtomicUsize) -> T {
@@ -383,6 +384,10 @@ pub unsafe fn kill_unit(unit: *mut bw::Unit) {
 
 pub unsafe fn unit_set_hp(unit: *mut bw::Unit, value: i32) {
     load_func::<unsafe extern fn(*mut bw::Unit, i32)>(&UNIT_SET_HP)(unit, value)
+}
+
+pub unsafe fn unit_max_energy(unit: *mut bw::Unit) -> u32 {
+    load_func::<unsafe extern fn(*mut bw::Unit) -> u32>(&UNIT_MAX_ENERGY)(unit)
 }
 
 static mut GET_REGION: GlobalFunc<extern fn(u32, u32) -> u32> = GlobalFunc(None);
@@ -620,6 +625,7 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_plugin::PluginApi) {
     static FUNCS: &[(&AtomicUsize, FuncId)] = &[
         (&KILL_UNIT, FuncId::KillUnit),
         (&UNIT_SET_HP, FuncId::UnitSetHp),
+        (&UNIT_MAX_ENERGY, FuncId::UnitMaxEnergy),
     ];
     let max_func = FUNCS.iter().map(|x| x.1 as u16).max().unwrap_or(0);
     if max_func >= (*api).max_func_id {

@@ -7,14 +7,13 @@ use arrayvec::ArrayVec;
 use anyhow::{anyhow, Context, Error};
 
 use bw_dat::dialog::{Control, Dialog};
-use bw_dat::expr::{BoolExpr};
 use bw_dat::{Game, Unit, UnitId, WeaponId, unit, upgrade};
 
 use crate::bw;
 use crate::config::{self, Config};
+use crate::expr::{BoolExpr, ExprExt, parse_bool_expr};
 use crate::string_tables::{self, StringTable};
 use crate::tooltip::{self, TooltipDrawFunc};
-use crate::ExprExt;
 
 static STATUS_SCREEN_DIALOG: AtomicUsize = AtomicUsize::new(0);
 static TOOLTIP_TEXT_BUFFER: AtomicUsize = AtomicUsize::new(0);
@@ -303,7 +302,7 @@ fn config_add(
                 weapons = config::parse_weapon_list(val)?;
             }
             "condition" => {
-                condition = Some(Arc::new(config::parse_bool_expr(val)?));
+                condition = Some(Arc::new(parse_bool_expr(val)?));
             }
             "text" => {
                 text = Some(&**val);

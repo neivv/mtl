@@ -5,12 +5,11 @@ use smallvec::SmallVec;
 use vec_map::VecMap;
 
 use bw_dat::{order, UnitId, UpgradeId, OrderId};
-use bw_dat::expr::{BoolExpr, IntExpr, IntExprTree};
 use bw_dat::{Game, Unit};
 
 use crate::config::Config;
+use crate::expr::{BoolExpr, IntExpr, IntExprTree, ExprExt};
 use crate::unit::{self, UnitExt};
-use crate::ExprExt;
 
 ome2_thread_local! {
     STATE_CHANGES: RefCell<UpgradeStateChanges> =
@@ -236,7 +235,7 @@ impl Upgrades {
     }
 }
 
-fn eval_constant_int(expr: &IntExprTree<bw_dat::expr::NoCustom>) -> Option<i32> {
+fn eval_constant_int(expr: &IntExprTree) -> Option<i32> {
     use bw_dat::expr::IntExprTree::*;
     Some(match expr {
         Add(x) => eval_constant_int(&x.0)?.saturating_add(eval_constant_int(&x.1)?),

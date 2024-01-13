@@ -3,16 +3,15 @@ use std::sync::{Mutex, MutexGuard};
 
 use anyhow::{anyhow, Context, Error};
 
-use bw_dat::expr::{BoolExpr, IntExpr};
 use bw_dat::{Game, Image, ImageId, Unit, UnitId, UnitArray};
 
 use crate::bw;
 use crate::config;
+use crate::expr::{BoolExpr, ExprExt, IntExpr, parse_bool_expr, parse_int_expr};
 use crate::samase;
 use crate::unit;
 use crate::unit_search::UnitSearch;
 use crate::upgrades::Stat;
-use crate::ExprExt;
 
 trait BwTrait {
     fn set_iscript_animation(&self, image: Image, anim: u8);
@@ -119,19 +118,19 @@ impl Auras {
                 }
                 "source_condition" => {
                     source_condition = Some(
-                        config::parse_bool_expr(&val).context("Parsing source_condition")?
+                        parse_bool_expr(&val).context("Parsing source_condition")?
                     );
                 }
                 "target_condition" => {
                     target_condition = Some(
-                        config::parse_bool_expr(&val).context("Parsing target_condition")?
+                        parse_bool_expr(&val).context("Parsing target_condition")?
                     );
                 }
                 x => {
                     let stat = config::parse_stat(x).with_context(|| format!("{}", x))?;
                     let value_count = stat.value_count();
                     let val = if value_count == 1 {
-                        config::parse_int_expr(&val).with_context(|| format!("{}", x))?
+                        parse_int_expr(&val).with_context(|| format!("{}", x))?
                     } else {
                         // Could be definitely fixed but not going to atm.
                         // If fixed, should be refactored to share code with upgrade parsing.

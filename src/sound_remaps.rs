@@ -1,13 +1,12 @@
 use anyhow::{anyhow, Context, Error};
 
-use bw_dat::expr::{BoolExpr};
 use bw_dat::Unit;
 use fxhash::FxHashMap as HashMap;
 
 use crate::bw;
-use crate::config::{parse_u32, parse_bool_expr};
+use crate::config::{parse_u32};
+use crate::expr::{BoolExpr, ExprExt, parse_bool_expr};
 use crate::unit;
-use crate::ExprExt;
 
 pub struct SoundRemaps {
     // !0 for no remap, !1 for conditional remaps

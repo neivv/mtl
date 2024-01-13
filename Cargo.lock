@@ -160,7 +160,7 @@ dependencies = [
 
 [[package]]
 name = "mtl"
-version = "0.3.67"
+version = "0.3.68"
 dependencies = [
  "anyhow",
  "arrayvec",
@@ -318,7 +318,7 @@ dependencies = [
 [[package]]
 name = "samase_plugin"
 version = "0.5.0"
-source = "git+https://github.com/neivv/samase_plugin?rev=821c5be0a6aabfa8b5fc5b2af2920dc685393058#821c5be0a6aabfa8b5fc5b2af2920dc685393058"
+source = "git+https://github.com/neivv/samase_plugin?rev=9b88d3aca7445cf07f982fdeca71653d36df0e05#9b88d3aca7445cf07f982fdeca71653d36df0e05"
 dependencies = [
  "byteorder",
  "flate2",
@@ -334,7 +334,7 @@ dependencies = [
 [[package]]
 name = "samase_shim"
 version = "0.5.0"
-source = "git+https://github.com/neivv/samase_plugin?rev=821c5be0a6aabfa8b5fc5b2af2920dc685393058#821c5be0a6aabfa8b5fc5b2af2920dc685393058"
+source = "git+https://github.com/neivv/samase_plugin?rev=9b88d3aca7445cf07f982fdeca71653d36df0e05#9b88d3aca7445cf07f982fdeca71653d36df0e05"
 dependencies = [
  "byteorder",
  "libc",
