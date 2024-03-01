@@ -9,7 +9,7 @@ use libc::c_void;
 
 use crate::samase;
 
-use bw_dat::{DatTable, UnitArray, UnitId, OrderId};
+use bw_dat::{UnitArray, UnitId, OrderId};
 
 pub use bw_dat::structs::*;
 

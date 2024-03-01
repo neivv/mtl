@@ -9,7 +9,7 @@ use winapi::um::heapapi::{GetProcessHeap, HeapFree};
 use winapi::um::processthreadsapi::{GetCurrentProcess, TerminateProcess};
 
 use samase_plugin::{FuncId, VarId};
-use bw_dat::{self, DatTable, ImageId, UnitId};
+use bw_dat::{DatTable, ImageId, UnitId};
 
 use crate::bw;
 use crate::config;

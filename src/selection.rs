@@ -1,4 +1,4 @@
-use arrayvec::{self, ArrayVec};
+use arrayvec::{ArrayVec};
 
 use bw_dat::Unit;
 

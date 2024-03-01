@@ -5,7 +5,6 @@
 #[cfg(target_pointer_width = "32")]
 #[macro_use] extern crate whack;
 
-extern crate bw_dat;
 #[cfg(target_pointer_width = "32")]
 extern crate samase_shim;
 

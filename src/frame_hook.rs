@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::ptr::null_mut;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use bw_dat::{self, Game, Unit, UnitId, order};
+use bw_dat::{Game, Unit, UnitId, order};
 
 use crate::auras;
 use crate::bw;

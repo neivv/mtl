@@ -2,7 +2,7 @@ use std::hash::{Hash, Hasher};
 use std::ptr::null_mut;
 use std::sync::{Mutex, MutexGuard};
 
-use bw_dat::{self, Game, UnitId, Unit, UnitArray, unit, OrderId, order};
+use bw_dat::{Game, UnitId, Unit, UnitArray, unit, OrderId, order};
 use serde::{Serializer, Serialize, Deserializer, Deserialize};
 
 use crate::bw;
