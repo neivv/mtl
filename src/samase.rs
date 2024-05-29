@@ -669,13 +669,17 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_plugin::PluginApi) {
         ((*api).hook_renderer)(0, mem::transmute(render_scr::draw_hook as usize));
     }
 
+    let mut do_run_dialog_hook = config.always_bw;
     if let Some(campaign) = config::campaign() {
         let ok = ((*api).set_campaigns)(campaign.campaigns.as_ptr() as *const *mut c_void);
         if ok == 0 {
             ((*api).warn_unsupported_feature)(b"Campaigns\0".as_ptr());
         }
+        do_run_dialog_hook = true;
         // Ignore failure, used for campaign briefing races which shouldn't be critical
-        ((*api).hook_run_dialog)(crate::campaign_hook::run_dialog_hook);
+    }
+    if do_run_dialog_hook {
+        ((*api).hook_run_dialog)(crate::run_dialog_hook);
     }
     if !config.dont_override_shaders {
         ((*api).hook_file_read)(b"ShadersGLSL\\\0".as_ptr(), render_scr::gl_shader_hook);

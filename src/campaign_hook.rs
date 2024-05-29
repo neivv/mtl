@@ -3,36 +3,32 @@ use libc::c_void;
 use crate::bw;
 use crate::game;
 
+/// Call when dialog is RaceSelection
 pub unsafe extern fn run_dialog_hook(
     raw: *mut c_void,
     unk: usize,
     event_handler: *mut c_void,
     orig: unsafe extern fn(*mut c_void, usize, *mut c_void) -> u32,
 ) -> u32 {
-    let dialog = bw_dat::dialog::Control::new(raw as *mut bw::Control);
-    if dialog.string() == "RaceSelection" {
-        let result = orig(raw, unk, event_handler);
-        // Return value determines briefing room
-        // 6 == protoss, 7 == terran, 8 == zerg,
-        // same on vanilla and bw, even if it seems like bw campaign order
-        if result == 6 || result == 7 || result == 8 {
-            let game = game::get();
-            let map = (**game).campaign_mission;
-            if let Some(mission) = campaign_mission_from_map_id(map) {
-                return match (*mission).race {
-                    0 => 8,
-                    1 => 7,
-                    2 | _ => 6,
-                };
-            } else {
-                // Possibly cinematic?
-                warn!("Couldn't find campaign for mission {:x}", map);
-            }
+    let result = orig(raw, unk, event_handler);
+    // Return value determines briefing room
+    // 6 == protoss, 7 == terran, 8 == zerg,
+    // same on vanilla and bw, even if it seems like bw campaign order
+    if result == 6 || result == 7 || result == 8 {
+        let game = game::get();
+        let map = (**game).campaign_mission;
+        if let Some(mission) = campaign_mission_from_map_id(map) {
+            return match (*mission).race {
+                0 => 8,
+                1 => 7,
+                2 | _ => 6,
+            };
+        } else {
+            // Possibly cinematic?
+            warn!("Couldn't find campaign for mission {:x}", map);
         }
-        result
-    } else {
-        orig(raw, unk, event_handler)
     }
+    result
 }
 
 fn campaign_mission_from_map_id(map: u16) -> Option<*mut bw::CampaignMission> {

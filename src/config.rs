@@ -53,6 +53,7 @@ pub struct Config {
     pub map_dat_files: MapDatFiles,
     pub cmdbtn_tooltip_half_supply: bool,
     pub cmdbtn_force_stat_txt_tooltips: bool,
+    pub always_bw: bool,
     // !0 for no override
     pub sound_remaps: SoundRemaps,
     pub button_colors: Option<ButtonColors>,
@@ -250,6 +251,19 @@ impl Config {
                                 &mut self.dont_override_shaders,
                                 &val,
                                 "dont_override_shaders",
+                            )?
+                        }
+                        x => return Err(anyhow!("unknown key {}", x)),
+                    }
+                }
+            } else if name == "menu" {
+                for &(ref key, ref val) in &section.values {
+                    match &**key {
+                        "always_bw" => {
+                            bool_field(
+                                &mut self.always_bw,
+                                &val,
+                                "always_bw",
                             )?
                         }
                         x => return Err(anyhow!("unknown key {}", x)),
@@ -481,6 +495,7 @@ impl Default for Config {
             map_dat_files: MapDatFiles::default(),
             cmdbtn_tooltip_half_supply: false,
             cmdbtn_force_stat_txt_tooltips: false,
+            always_bw: false,
             upgrades: Upgrades::new(),
             auras: Auras::empty(),
             status_screen_tooltips: status_screen::Tooltips::new(),

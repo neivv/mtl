@@ -280,6 +280,44 @@ unsafe extern fn spawn_dialog_hook(
     result
 }
 
+pub unsafe extern fn run_dialog_hook(
+    raw: *mut c_void,
+    unk: usize,
+    event_handler: *mut c_void,
+    orig: unsafe extern fn(*mut c_void, usize, *mut c_void) -> u32,
+) -> u32 {
+    let dialog = bw_dat::dialog::Dialog::new(raw as *mut bw::Dialog);
+    let ctrl = dialog.as_control();
+    let name = ctrl.string();
+    if name == "RaceSelection" {
+        if config::campaign().is_some() {
+            return campaign_hook::run_dialog_hook(raw, unk, event_handler, orig);
+        }
+    } else if name == "Delete" {
+        let area = (**ctrl).area;
+        let seems_glu_game_mode = area.left == 0 && area.top == 0 && area.right == 359 &&
+            area.bottom == 199 && dialog.children().map(|x| x.id()).eq([6, 2, 7, 3]);
+        if seems_glu_game_mode {
+            // Init event handler, send 2 init events and then a delete event to have the dialog
+            // be properly cleaned up, then return bw button id
+            match is_scr() {
+                false => {
+                    (**ctrl).event_handler = Some(std::mem::transmute(event_handler));
+                }
+                true => {
+                    (*(*ctrl as *mut bw::scr::Control)).event_handler =
+                        Some(std::mem::transmute(event_handler));
+                }
+            };
+            ctrl.send_ext_event(7);
+            ctrl.send_ext_event(0);
+            ctrl.send_ext_event(1);
+            return 7;
+        }
+    }
+    orig(raw, unk, event_handler)
+}
+
 unsafe extern fn play_sound_hook(
     sound: u32,
     volume: f32,
