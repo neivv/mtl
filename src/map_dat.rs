@@ -185,7 +185,10 @@ unsafe fn update_dat_file(index: usize, mut file: &[u8], enabled_ids: &[u16]) {
                 continue;
             }
             if (*table).entry_size != in_size {
-                panic!("Unexpected dat table size {index:x}/{table_n:x} {:x}", in_size);
+                panic!(
+                    "Unexpected dat table size {index:x}/{table_n:x} {:x} {:x}",
+                    (*table).entry_size, in_size,
+                );
             }
             if let Some(data) = file.get(offset..offset.wrapping_add(size)) {
                 let shift = dat_values_per_entry_shift(index, table_n);
