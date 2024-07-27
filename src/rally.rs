@@ -183,7 +183,8 @@ fn clickable_area(unit: Unit) -> bw::Rect {
                 if (**image).flags & 0x20 != 0 {
                     let frame = (**image).frame;
                     let grp = (**image).grp as *const u8;
-                    let frame = grp.add(6 + frame as usize * 8);
+                    let frame_header_size = if cfg!(target_pointer_width = "32") { 8 } else { 12 };
+                    let frame = grp.add(6 + frame as usize * frame_header_size);
                     let map_position = (**image).map_position;
                     let new = bw::Rect {
                         left: map_position.x,
