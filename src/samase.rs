@@ -8,7 +8,7 @@ use libc::c_void;
 use winapi::um::heapapi::{GetProcessHeap, HeapFree};
 use winapi::um::processthreadsapi::{GetCurrentProcess, TerminateProcess};
 
-use samase_plugin::{FuncId, VarId};
+use samase_plugin::{FfiStr, FuncId, VarId};
 use bw_dat::{DatTable, ImageId, UnitId};
 
 use crate::bw;
@@ -119,6 +119,30 @@ static CRASH_WITH_MESSAGE: GlobalFunc<unsafe extern fn(*const u8) -> !> = Global
 pub fn crash_with_message(msg: &str) -> ! {
     let msg = format!("{}\0", msg);
     unsafe { CRASH_WITH_MESSAGE.get()(msg.as_bytes().as_ptr()) }
+}
+
+static CREATE_EXT_UNIT_FIELD:
+    GlobalFunc<unsafe extern fn(*const FfiStr) -> u32> = GlobalFunc::new();
+static READ_EXT_UNIT_FIELD: GlobalFunc<unsafe extern fn(u32, u32) -> u32> = GlobalFunc::new();
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
+pub struct ExtFieldId(pub u32);
+
+pub fn create_extended_unit_field(name: &[u8]) -> ExtFieldId {
+    unsafe {
+        let name_ffi = FfiStr::from_bytes(name);
+        let result = CREATE_EXT_UNIT_FIELD.get_opt().expect("Need newer samase")(&name_ffi);
+        if result == 0 {
+            panic!("Failed to init ext unit field {}", String::from_utf8_lossy(name));
+        }
+        ExtFieldId(result)
+    }
+}
+
+pub fn read_extended_unit_field(unit_index: u32, id: ExtFieldId) -> u32 {
+    unsafe {
+        READ_EXT_UNIT_FIELD.get()(unit_index, id.0)
+    }
 }
 
 unsafe fn init_globals(api: *const samase_plugin::PluginApi) {
@@ -545,6 +569,10 @@ pub unsafe extern fn samase_plugin_init(api: *const samase_plugin::PluginApi) {
     bw_dat::set_extended_arrays(ext_arrays as *mut _, ext_arrays_len);
 
     CRASH_WITH_MESSAGE.set((*api).crash_with_message);
+    if (*api).version >= 43 {
+        CREATE_EXT_UNIT_FIELD.set((*api).create_extended_unit_field);
+        READ_EXT_UNIT_FIELD.set((*api).read_extended_unit_field);
+    }
     READ_VARS.set((*api).read_vars);
     WRITE_VARS.set((*api).write_vars);
     init_globals(api);

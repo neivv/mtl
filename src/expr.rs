@@ -20,6 +20,7 @@ impl expr::CustomState for ExprState {
 #[derive(Debug, Eq, PartialEq, Hash)]
 pub enum Int {
     MaxEnergy,
+    UnitExt(samase::ExtFieldId),
 }
 
 #[derive(Debug, Eq, PartialEq, Hash)]
@@ -34,6 +35,18 @@ impl expr::CustomParser for ExprParser {
     fn parse_int<'a>(&mut self, input: &'a [u8]) -> Option<(Int, &'a [u8])> {
         if let Some(rest) = input.strip_prefix(b"max_energy") {
             return Some((Int::MaxEnergy, rest));
+        }
+        if let Some(rest) = input.strip_prefix(b"unit_ext") {
+            let rest = rest.trim_ascii_start();
+            let (first, rest) = rest.split_first()?;
+            if *first != b'(' {
+                return None;
+            }
+            let end = rest.iter().position(|&x| x == b')')?;
+            let key = rest.get(..end)?.trim_ascii();
+            let rest = rest.get(end + 1..)?;
+            let id = samase::create_extended_unit_field(key);
+            return Some((Int::UnitExt(id), rest));
         }
         None
     }
@@ -139,10 +152,18 @@ impl bw_dat::expr::CustomEval for CustomCtx {
     type State = ExprState;
 
     fn eval_int(&mut self, val: &Int) -> i32 {
-        match val {
+        match *val {
             Int::MaxEnergy => {
                 if let Some(unit) = self.unit {
                     unsafe { samase::unit_max_energy(*unit) as i32 }
+                } else {
+                    0
+                }
+            }
+            Int::UnitExt(field_id) => {
+                if let Some(unit) = self.unit {
+                    let index = bw::unit_array().to_index(unit);
+                    samase::read_extended_unit_field(index, field_id) as i32
                 } else {
                     0
                 }
