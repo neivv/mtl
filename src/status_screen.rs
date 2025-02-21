@@ -26,6 +26,8 @@ pub fn status_screen_dialog_created(dialog: Dialog) {
             let mut draw = None;
             for ctrl in dialog.children().filter(|x| x.control_type() == 2) {
                 let ctrl = *ctrl as *mut bw::scr::Control;
+                // Not comparing function pointers originating from rust
+                #[allow(unpredictable_function_pointer_comparisons)]
                 if draw.is_none() {
                     draw = (*ctrl).draw;
                 } else if (*ctrl).draw != draw {
