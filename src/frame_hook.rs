@@ -136,7 +136,7 @@ fn write_deaths_color(game: Game, player: u8, unit_id: UnitId, value: (f32, f32,
     game.set_unit_deaths(player + 2, unit_id, b);
 }
 
-pub unsafe extern fn frame_hook() {
+pub unsafe extern "C" fn frame_hook() {
     let game = Game::from_ptr(bw::game());
     let unit_array = bw::unit_array();
     let unit_search = UnitSearch::from_bw();

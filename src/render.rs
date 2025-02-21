@@ -190,9 +190,9 @@ fn sprite_to_unit(sprite: *mut bw::Sprite) -> Option<Unit> {
     }
 }
 
-pub unsafe extern fn draw_image_hook(image: *mut c_void, orig: unsafe extern fn(*mut c_void)) {
+pub unsafe extern "C" fn draw_image_hook(image: *mut c_void, orig: unsafe extern "C" fn(*mut c_void)) {
     let image = image as *mut bw::Image;
-    let orig: unsafe extern fn(*mut bw::Image) = mem::transmute(orig);
+    let orig: unsafe extern "C" fn(*mut bw::Image) = mem::transmute(orig);
 
     let game = Game::from_ptr(bw::game());
     let config = crate::config::config();

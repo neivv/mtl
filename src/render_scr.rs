@@ -15,12 +15,12 @@ fn get_draw_commands() -> *mut bw::scr::DrawCommands {
     ptr as *mut bw::scr::DrawCommands
 }
 
-pub unsafe extern fn draw_hook(
+pub unsafe extern "C" fn draw_hook(
     this: *mut c_void,
     commands: *mut bw::scr::DrawCommands,
     width: u32,
     height: u32,
-    orig: unsafe extern fn(*mut c_void, *mut bw::scr::DrawCommands, u32, u32) -> u32,
+    orig: unsafe extern "C" fn(*mut c_void, *mut bw::scr::DrawCommands, u32, u32) -> u32,
 ) -> u32 {
     DRAW_COMMANDS.store(commands as usize, Ordering::Relaxed);
     let len = (*commands).draw_command_count as usize;
@@ -134,7 +134,7 @@ unsafe fn heap_alloc(data: &[u8], out_size: *mut u32) -> *mut u8 {
     out
 }
 
-pub unsafe extern fn gl_shader_hook(filename: *const u8, out_size: *mut u32) -> *mut u8 {
+pub unsafe extern "C" fn gl_shader_hook(filename: *const u8, out_size: *mut u32) -> *mut u8 {
     let len = (0..).find(|&x| *filename.add(x) == 0).unwrap();
     let filename = std::slice::from_raw_parts(filename, len);
     let filename = &filename[b"ShadersGLSL/".len()..];
@@ -158,7 +158,7 @@ pub unsafe extern fn gl_shader_hook(filename: *const u8, out_size: *mut u32) -> 
     heap_alloc(data, out_size)
 }
 
-pub unsafe extern fn d3d_shader_hook(filename: *const u8, out_size: *mut u32) -> *mut u8 {
+pub unsafe extern "C" fn d3d_shader_hook(filename: *const u8, out_size: *mut u32) -> *mut u8 {
     let len = (0..).find(|&x| *filename.add(x) == 0).unwrap();
     let filename = std::slice::from_raw_parts(filename, len);
     let filename = &filename[b"ShadersHLSL/".len()..];

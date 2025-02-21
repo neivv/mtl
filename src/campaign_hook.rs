@@ -4,11 +4,11 @@ use crate::bw;
 use crate::game;
 
 /// Call when dialog is RaceSelection
-pub unsafe extern fn run_dialog_hook(
+pub unsafe extern "C" fn run_dialog_hook(
     raw: *mut c_void,
     unk: usize,
     event_handler: *mut c_void,
-    orig: unsafe extern fn(*mut c_void, usize, *mut c_void) -> u32,
+    orig: unsafe extern "C" fn(*mut c_void, usize, *mut c_void) -> u32,
 ) -> u32 {
     let result = orig(raw, unk, event_handler);
     // Return value determines briefing room

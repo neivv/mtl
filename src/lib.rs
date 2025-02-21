@@ -164,7 +164,7 @@ struct SaveData {
     extended_unit_fields: unit::ExtendedUnitFields,
 }
 
-unsafe extern fn save(set_data: unsafe extern fn(*const u8, usize)) {
+unsafe extern "C" fn save(set_data: unsafe extern "C" fn(*const u8, usize)) {
     let save = SaveData {
         tracked_spells: frame_hook::tracked_spells(),
         upgrade_state_changes: upgrades::global_state_changes().clone(),
@@ -184,7 +184,7 @@ unsafe extern fn save(set_data: unsafe extern fn(*const u8, usize)) {
     }
 }
 
-unsafe extern fn load(ptr: *const u8, len: usize) -> u32 {
+unsafe extern "C" fn load(ptr: *const u8, len: usize) -> u32 {
     let slice = std::slice::from_raw_parts(ptr, len);
     let data: SaveData = match bincode::deserialize(slice) {
         Ok(o) => o,
@@ -202,7 +202,7 @@ unsafe extern fn load(ptr: *const u8, len: usize) -> u32 {
     1
 }
 
-unsafe extern fn init_game() {
+unsafe extern "C" fn init_game() {
     // NOTE: Config cannot be updated at this point to have map-specific data
     // Earliest is init_units_hook
     string_tables::init();
@@ -250,7 +250,7 @@ unsafe fn fix_campaign_music(game: Game) {
 
 // This hook is at init_units, as that's a point when saves have correct map_path in game.
 // During init_game pre hook that path is only valid if there is no save.
-unsafe extern fn init_map_specific_dat(init_units: unsafe extern fn()) {
+unsafe extern "C" fn init_map_specific_dat(init_units: unsafe extern "C" fn()) {
     init_units();
     crate::samase::init_config(false, true);
     let config = config::config();
@@ -260,11 +260,11 @@ unsafe extern fn init_map_specific_dat(init_units: unsafe extern fn()) {
     map_dat::load(&config.map_dat_files);
 }
 
-unsafe extern fn spawn_dialog_hook(
+unsafe extern "C" fn spawn_dialog_hook(
     raw: *mut c_void,
     unk: usize,
     event_handler: *mut c_void,
-    orig: unsafe extern fn(*mut c_void, usize, *mut c_void) -> u32,
+    orig: unsafe extern "C" fn(*mut c_void, usize, *mut c_void) -> u32,
 ) -> u32 {
     let result = orig(raw, unk, event_handler);
     let dialog = bw_dat::dialog::Dialog::new(raw as *mut bw::Dialog);
@@ -280,11 +280,11 @@ unsafe extern fn spawn_dialog_hook(
     result
 }
 
-pub unsafe extern fn run_dialog_hook(
+pub unsafe extern "C" fn run_dialog_hook(
     raw: *mut c_void,
     unk: usize,
     event_handler: *mut c_void,
-    orig: unsafe extern fn(*mut c_void, usize, *mut c_void) -> u32,
+    orig: unsafe extern "C" fn(*mut c_void, usize, *mut c_void) -> u32,
 ) -> u32 {
     let dialog = bw_dat::dialog::Dialog::new(raw as *mut bw::Dialog);
     let ctrl = dialog.as_control();
@@ -320,13 +320,13 @@ pub unsafe extern fn run_dialog_hook(
     orig(raw, unk, event_handler)
 }
 
-unsafe extern fn play_sound_hook(
+unsafe extern "C" fn play_sound_hook(
     sound: u32,
     volume: f32,
     unit: *mut c_void,
     x: *mut i32,
     y: *mut i32,
-    orig: unsafe extern fn(u32, f32, *mut c_void, *mut i32, *mut i32) -> u32,
+    orig: unsafe extern "C" fn(u32, f32, *mut c_void, *mut i32, *mut i32) -> u32,
 ) -> u32 {
     let sound = {
         let config = config::config();

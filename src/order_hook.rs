@@ -76,7 +76,7 @@ fn apply_aura_u8(
     }
 }
 
-pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_void)) {
+pub unsafe extern "C" fn order_hook(u: *mut c_void, orig: unsafe extern "C" fn(*mut c_void)) {
     use bw_dat::order::*;
 
     let config = config();
@@ -421,11 +421,11 @@ pub unsafe extern fn order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_vo
     }
 }
 
-pub unsafe extern fn hidden_order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_void)) {
+pub unsafe extern "C" fn hidden_order_hook(u: *mut c_void, orig: unsafe extern "C" fn(*mut c_void)) {
     order_hook(u, orig);
 }
 
-pub unsafe extern fn secondary_order_hook(u: *mut c_void, orig: unsafe extern fn(*mut c_void)) {
+pub unsafe extern "C" fn secondary_order_hook(u: *mut c_void, orig: unsafe extern "C" fn(*mut c_void)) {
     use bw_dat::order::*;
 
     let unit = Unit::from_ptr(u as *mut bw::Unit).unwrap();

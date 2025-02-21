@@ -10,9 +10,9 @@ use crate::samase;
 static ORIG_TOOLTIP_DRAW_FUNC: AtomicUsize = AtomicUsize::new(0);
 static TEXT_HOOK_MODE: AtomicU8 = AtomicU8::new(0);
 
-pub type TooltipDrawFunc = unsafe extern fn(*mut bw::Control);
+pub type TooltipDrawFunc = unsafe extern "C" fn(*mut bw::Control);
 
-unsafe extern fn draw_tooltip(raw_ctrl: *mut bw::Control) {
+unsafe extern "C" fn draw_tooltip(raw_ctrl: *mut bw::Control) {
     let orig: TooltipDrawFunc = mem::transmute(ORIG_TOOLTIP_DRAW_FUNC.load(Ordering::Relaxed));
     let ctrl = Control::new(raw_ctrl);
     let config = crate::config::config();
@@ -26,7 +26,7 @@ unsafe extern fn draw_tooltip(raw_ctrl: *mut bw::Control) {
     orig(raw_ctrl);
 }
 
-pub unsafe extern fn draw_graphic_layers_hook(param: u32, orig: unsafe extern fn(u32)) {
+pub unsafe extern "C" fn draw_graphic_layers_hook(param: u32, orig: unsafe extern "C" fn(u32)) {
     // Always hook tooltip func, then have the hook check if it is being called on a
     // cmdbtn
     let old_draw_tooltip = samase::get_tooltip_draw_func();
@@ -45,7 +45,7 @@ pub fn set_text_hook_mode(mode: u8) {
     TEXT_HOOK_MODE.store(mode, Ordering::Relaxed);
 }
 
-pub unsafe extern fn layout_draw_text_hook(
+pub unsafe extern "C" fn layout_draw_text_hook(
     a: u32,
     b: u32,
     text: *const u8,
@@ -54,7 +54,7 @@ pub unsafe extern fn layout_draw_text_hook(
     f: *mut u32,
     g: u32,
     h: u32,
-    orig: unsafe extern fn(u32, u32, *const u8, *mut u32, u32, *mut u32, u32, u32) -> *const u8,
+    orig: unsafe extern "C" fn(u32, u32, *const u8, *mut u32, u32, *mut u32, u32, u32) -> *const u8,
 ) -> *const u8 {
     let mode = TEXT_HOOK_MODE.load(Ordering::Relaxed);
     match mode {

@@ -115,15 +115,15 @@ static OPT_GLOBALS: [AtomicU8; GLOBALS.len() - FIRST_OPTIONAL_GLOBAL] = [
     ZERO_U8; GLOBALS.len() - FIRST_OPTIONAL_GLOBAL
 ];
 
-static CRASH_WITH_MESSAGE: GlobalFunc<unsafe extern fn(*const u8) -> !> = GlobalFunc::new();
+static CRASH_WITH_MESSAGE: GlobalFunc<unsafe extern "C" fn(*const u8) -> !> = GlobalFunc::new();
 pub fn crash_with_message(msg: &str) -> ! {
     let msg = format!("{}\0", msg);
     unsafe { CRASH_WITH_MESSAGE.get()(msg.as_bytes().as_ptr()) }
 }
 
 static CREATE_EXT_UNIT_FIELD:
-    GlobalFunc<unsafe extern fn(*const FfiStr) -> u32> = GlobalFunc::new();
-static READ_EXT_UNIT_FIELD: GlobalFunc<unsafe extern fn(u32, u32) -> u32> = GlobalFunc::new();
+    GlobalFunc<unsafe extern "C" fn(*const FfiStr) -> u32> = GlobalFunc::new();
+static READ_EXT_UNIT_FIELD: GlobalFunc<unsafe extern "C" fn(u32, u32) -> u32> = GlobalFunc::new();
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
 pub struct ExtFieldId(pub u32);
@@ -170,7 +170,7 @@ unsafe fn init_globals(api: *const samase_plugin::PluginApi) {
 }
 
 static READ_VARS:
-    GlobalFunc<unsafe extern fn(*const u16, *mut usize, usize)> = GlobalFunc::new();
+    GlobalFunc<unsafe extern "C" fn(*const u16, *mut usize, usize)> = GlobalFunc::new();
 fn read_var(var: VarId) -> usize {
     unsafe {
         let var = var as u16;
@@ -181,7 +181,7 @@ fn read_var(var: VarId) -> usize {
 }
 
 static WRITE_VARS:
-    GlobalFunc<unsafe extern fn(*const u16, *const usize, usize)> = GlobalFunc::new();
+    GlobalFunc<unsafe extern "C" fn(*const u16, *const usize, usize)> = GlobalFunc::new();
 fn write_var(var: VarId, value: usize) {
     unsafe {
         let var = var as u16;
@@ -292,7 +292,7 @@ pub fn misc_ui_state(out: &mut [u8]) {
     out[2] = result[2] as u8;
 }
 
-pub fn get_tooltip_draw_func() -> Option<unsafe extern fn(*mut bw::Control)> {
+pub fn get_tooltip_draw_func() -> Option<unsafe extern "C" fn(*mut bw::Control)> {
     if opt_global!(VarId::TooltipDrawFunc) >= 2 {
         unsafe { Some(mem::transmute(read_var(VarId::TooltipDrawFunc))) }
     } else {
@@ -300,32 +300,32 @@ pub fn get_tooltip_draw_func() -> Option<unsafe extern fn(*mut bw::Control)> {
     }
 }
 
-pub fn set_tooltip_draw_func(new: Option<unsafe extern fn(*mut bw::Control)>) {
+pub fn set_tooltip_draw_func(new: Option<unsafe extern "C" fn(*mut bw::Control)>) {
     if opt_global!(VarId::TooltipDrawFunc) >= 3 {
         unsafe { write_var(VarId::TooltipDrawFunc, mem::transmute(new)); }
     }
 }
 
 static AI_UPDATE_ATTACK_TARGET:
-    GlobalFunc<unsafe extern fn(*mut bw::Unit, u32, u32, u32) -> u32> = GlobalFunc::new();
+    GlobalFunc<unsafe extern "C" fn(*mut bw::Unit, u32, u32, u32) -> u32> = GlobalFunc::new();
 pub unsafe fn ai_update_attack_target(unit: *mut bw::Unit, a1: u32, a2: u32, a3: u32) -> u32 {
     AI_UPDATE_ATTACK_TARGET.get()(unit, a1, a2, a3)
 }
 
 static UPDATE_VISIBILITY_POINT:
-    GlobalFunc<unsafe extern fn(*mut bw::LoneSprite)> = GlobalFunc::new();
+    GlobalFunc<unsafe extern "C" fn(*mut bw::LoneSprite)> = GlobalFunc::new();
 pub unsafe fn update_visibility_point(sprite: *mut bw::LoneSprite) {
     UPDATE_VISIBILITY_POINT.get()(sprite)
 }
 
 static CREATE_LONE_SPRITE:
-    GlobalFunc<extern fn(u32, i32, i32, u32) -> *mut bw::LoneSprite> = GlobalFunc::new();
+    GlobalFunc<extern "C" fn(u32, i32, i32, u32) -> *mut bw::LoneSprite> = GlobalFunc::new();
 pub unsafe fn create_lone_sprite(id: u32, x: i32, y: i32, player: u32) -> *mut bw::LoneSprite {
     CREATE_LONE_SPRITE.get()(id, x, y, player)
 }
 
 static STEP_ISCRIPT_FRAME:
-    GlobalFunc<unsafe extern fn(*mut bw::Image, *mut bw::Iscript, u32, *mut u32)> =
+    GlobalFunc<unsafe extern "C" fn(*mut bw::Image, *mut bw::Iscript, u32, *mut u32)> =
     GlobalFunc::new();
 pub unsafe fn step_iscript_frame(
     image: *mut bw::Image,
@@ -336,19 +336,19 @@ pub unsafe fn step_iscript_frame(
     STEP_ISCRIPT_FRAME.get()(image, iscript, dry_run, speed_out);
 }
 
-static SEND_COMMAND: GlobalFunc<unsafe extern fn(*const u8, u32)> = GlobalFunc::new();
+static SEND_COMMAND: GlobalFunc<unsafe extern "C" fn(*const u8, u32)> = GlobalFunc::new();
 pub unsafe fn send_command(data: &[u8]) {
     SEND_COMMAND.get()(data.as_ptr(), data.len() as u32)
 }
 
 static IS_OUTSIDE_GAME_SCREEN:
-    GlobalFunc<unsafe extern fn(i32, i32) -> u32> = GlobalFunc::new();
+    GlobalFunc<unsafe extern "C" fn(i32, i32) -> u32> = GlobalFunc::new();
 pub unsafe fn is_outside_game_screen(x: i32, y: i32) -> u32 {
     IS_OUTSIDE_GAME_SCREEN.get()(x, y)
 }
 
 static UNIT_ARRAY_LEN:
-    GlobalFunc<unsafe extern fn(*mut *mut bw::Unit, *mut usize)> = GlobalFunc::new();
+    GlobalFunc<unsafe extern "C" fn(*mut *mut bw::Unit, *mut usize)> = GlobalFunc::new();
 pub unsafe fn unit_array() -> (*mut bw::Unit, usize) {
     let mut size = 0usize;
     let mut ptr = null_mut();
@@ -356,7 +356,7 @@ pub unsafe fn unit_array() -> (*mut bw::Unit, usize) {
     (ptr, size)
 }
 
-static GET_SPRITE_POS: GlobalFunc<unsafe extern fn(*mut bw::Sprite, *mut u16)> = GlobalFunc::new();
+static GET_SPRITE_POS: GlobalFunc<unsafe extern "C" fn(*mut bw::Sprite, *mut u16)> = GlobalFunc::new();
 pub unsafe fn get_sprite_pos(sprite: *mut bw::Sprite) -> bw::Point {
     let mut ret = bw::Point {
         x: 0,
@@ -366,14 +366,14 @@ pub unsafe fn get_sprite_pos(sprite: *mut bw::Sprite) -> bw::Point {
     ret
 }
 
-static SET_SPRITE_POS: GlobalFunc<unsafe extern fn(*mut bw::Sprite, *const u16)> =
+static SET_SPRITE_POS: GlobalFunc<unsafe extern "C" fn(*mut bw::Sprite, *const u16)> =
     GlobalFunc::new();
 pub unsafe fn set_sprite_pos(sprite: *mut bw::Sprite, val: &bw::Point) {
     SET_SPRITE_POS.get()(sprite, val as *const bw::Point as *const u16);
 }
 
 static ADD_OVERLAY_ISCRIPT: GlobalFunc<
-    unsafe extern fn(*mut bw::Image, u32, i32, i32, u32),
+    unsafe extern "C" fn(*mut bw::Image, u32, i32, i32, u32),
 > = GlobalFunc::new();
 
 pub unsafe fn add_overlay_iscript(
@@ -401,24 +401,24 @@ fn load_func<T: Copy>(global: &AtomicUsize) -> T {
 }
 
 pub unsafe fn kill_unit(unit: *mut bw::Unit) {
-    load_func::<unsafe extern fn(*mut bw::Unit)>(&KILL_UNIT)(unit)
+    load_func::<unsafe extern "C" fn(*mut bw::Unit)>(&KILL_UNIT)(unit)
 }
 
 pub unsafe fn unit_set_hp(unit: *mut bw::Unit, value: i32) {
-    load_func::<unsafe extern fn(*mut bw::Unit, i32)>(&UNIT_SET_HP)(unit, value)
+    load_func::<unsafe extern "C" fn(*mut bw::Unit, i32)>(&UNIT_SET_HP)(unit, value)
 }
 
 pub unsafe fn unit_max_energy(unit: *mut bw::Unit) -> u32 {
-    load_func::<unsafe extern fn(*mut bw::Unit) -> u32>(&UNIT_MAX_ENERGY)(unit)
+    load_func::<unsafe extern "C" fn(*mut bw::Unit) -> u32>(&UNIT_MAX_ENERGY)(unit)
 }
 
-static GET_REGION: GlobalFunc<unsafe extern fn(u32, u32) -> u32> = GlobalFunc::new();
+static GET_REGION: GlobalFunc<unsafe extern "C" fn(u32, u32) -> u32> = GlobalFunc::new();
 pub fn get_region(x: u32, y: u32) -> u32 {
     unsafe { GET_REGION.get()(x, y) }
 }
 
 static ISSUE_ORDER: GlobalFunc<
-    unsafe extern fn(*mut bw::Unit, u32, u32, u32, *mut bw::Unit, u32)
+    unsafe extern "C" fn(*mut bw::Unit, u32, u32, u32, *mut bw::Unit, u32)
 > = GlobalFunc::new();
 
 static UNITS_DAT: AtomicUsize = AtomicUsize::new(0);
@@ -475,7 +475,7 @@ pub fn issue_order(
     unsafe { ISSUE_ORDER.get()(unit, order.0 as u32, x, y, target, fow_unit.0 as u32) }
 }
 
-static PRINT_TEXT: GlobalFunc<unsafe extern fn(*const u8)> = GlobalFunc::new();
+static PRINT_TEXT: GlobalFunc<unsafe extern "C" fn(*const u8)> = GlobalFunc::new();
 pub fn print_text(msg: *const u8) {
     unsafe {
         if let Some(print) = PRINT_TEXT.get_opt() {
@@ -509,7 +509,7 @@ impl ops::Drop for SamaseBox {
 }
 
 static READ_FILE:
-    GlobalFunc<unsafe extern fn(*const u8, *mut usize) -> *mut u8> = GlobalFunc::new();
+    GlobalFunc<unsafe extern "C" fn(*const u8, *mut usize) -> *mut u8> = GlobalFunc::new();
 pub fn read_file(name: &str) -> Option<SamaseBox> {
     read_file_u8(name.as_bytes())
 }
@@ -526,7 +526,7 @@ pub fn read_file_u8(name: &[u8]) -> Option<SamaseBox> {
     })
 }
 
-static READ_MAP_FILE: GlobalFunc<unsafe extern fn(*const u8, *mut usize) -> *mut u8> =
+static READ_MAP_FILE: GlobalFunc<unsafe extern "C" fn(*const u8, *mut usize) -> *mut u8> =
     GlobalFunc::new();
 
 pub fn read_map_file(name: &str) -> Option<SamaseBox> {
@@ -556,7 +556,7 @@ fn check_version(api_version: u16, required_version: u16) {
 }
 
 #[no_mangle]
-pub unsafe extern fn samase_plugin_init(api: *const samase_plugin::PluginApi) {
+pub unsafe extern "C" fn samase_plugin_init(api: *const samase_plugin::PluginApi) {
     bw_dat::set_is_scr(crate::is_scr());
     crate::init();
 

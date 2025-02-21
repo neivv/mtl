@@ -26,8 +26,8 @@ pub struct CampaignMission {
 pub struct Button {
     pub position: u16,
     pub icon_id: u16,
-    pub condition: unsafe extern fn(u32, u32, *mut Unit),
-    pub action: unsafe extern fn(u32, u32),
+    pub condition: unsafe extern "C" fn(u32, u32, *mut Unit),
+    pub action: unsafe extern "C" fn(u32, u32),
     pub cond_var: u16,
     pub act_var: u16,
     pub enabled_string_id: u16,

@@ -12,9 +12,9 @@ use crate::config::Config;
 use crate::unit_search::UnitSearch;
 use crate::samase::SpriteExt;
 
-pub unsafe extern fn game_screen_rclick(
+pub unsafe extern "C" fn game_screen_rclick(
     raw_event: *mut c_void,
-    orig: unsafe extern fn(*mut c_void),
+    orig: unsafe extern "C" fn(*mut c_void),
 ) {
     let event = Event::new(raw_event as *mut bw::ControlEvent);
     let (x, y) = event.mouse_pos();
@@ -322,7 +322,7 @@ unsafe fn is_clickable_pixel(unit: Unit, point: &bw::Point) -> bool {
     true
 }
 
-pub unsafe extern fn command_length(
+pub unsafe extern "C" fn command_length(
     data: *const u8,
     max_len: u32,
 ) -> u32 {
@@ -335,12 +335,12 @@ pub unsafe extern fn command_length(
     }
 }
 
-pub unsafe extern fn targeted_command_old_hook(
+pub unsafe extern "C" fn targeted_command_old_hook(
     ptr: *const u8,
     len: u32,
     player: u32,
     unique_player: u32,
-    orig: unsafe extern fn(*const u8, u32),
+    orig: unsafe extern "C" fn(*const u8, u32),
 ) {
     let player = player as u8;
     let unique_player = unique_player as u8;
@@ -363,12 +363,12 @@ pub unsafe extern fn targeted_command_old_hook(
     }
 }
 
-pub unsafe extern fn targeted_command_new_hook(
+pub unsafe extern "C" fn targeted_command_new_hook(
     ptr: *const u8,
     len: u32,
     player: u32,
     unique_player: u32,
-    orig: unsafe extern fn(*const u8, u32),
+    orig: unsafe extern "C" fn(*const u8, u32),
 ) {
     let player = player as u8;
     let unique_player = unique_player as u8;
@@ -391,12 +391,12 @@ pub unsafe extern fn targeted_command_new_hook(
     }
 }
 
-pub unsafe extern fn command_handler(
+pub unsafe extern "C" fn command_handler(
     data: *const u8,
     len: u32,
     player: u32,
     unique_player: u32,
-    _orig: unsafe extern fn(*const u8, u32),
+    _orig: unsafe extern "C" fn(*const u8, u32),
 ) {
     let player = player as u8;
     let unique_player = unique_player as u8;
@@ -433,10 +433,10 @@ pub fn minimap_dialog_created(dialog: Dialog) {
     }
 }
 
-unsafe extern fn minimap_image_event_handler(
+unsafe extern "C" fn minimap_image_event_handler(
     ctrl: *mut bw::Control,
     event: *mut bw::ControlEvent,
-    orig: unsafe extern fn(*mut bw::Control, *mut bw::ControlEvent) -> u32,
+    orig: unsafe extern "C" fn(*mut bw::Control, *mut bw::ControlEvent) -> u32,
 ) -> u32 {
     {
         let event = Event::new(event);
