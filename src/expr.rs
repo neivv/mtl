@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Error};
-use bw_dat::{Unit, Game};
+use bw_dat::{Unit, Game, WeaponId};
 use bw_dat::expr::{self, Expr, CustomBoolExpr, CustomIntExpr};
 
 use crate::bw;
@@ -20,6 +20,8 @@ impl expr::CustomState for ExprState {
 #[derive(Debug, Eq, PartialEq, Hash)]
 pub enum Int {
     MaxEnergy,
+    /// Weapon id for weapon tooltips, -1 otherwise
+    WeaponId,
     UnitExt(samase::ExtFieldId),
 }
 
@@ -35,6 +37,9 @@ impl expr::CustomParser for ExprParser {
     fn parse_int<'a>(&mut self, input: &'a [u8]) -> Option<(Int, &'a [u8])> {
         if let Some(rest) = input.strip_prefix(b"max_energy") {
             return Some((Int::MaxEnergy, rest));
+        }
+        if let Some(rest) = input.strip_prefix(b"weapon_id") {
+            return Some((Int::WeaponId, rest));
         }
         if let Some(rest) = input.strip_prefix(b"unit_ext") {
             let rest = rest.trim_ascii_start();
@@ -83,6 +88,22 @@ pub fn parse_int_expr(text: &str) -> Result<IntExpr, Error> {
         })
 }
 
+pub fn parse_int_expr_allow_trailing_text(text: &str) -> Result<(IntExpr, &str), Error> {
+    let mut parser = ExprParser {
+    };
+    CustomIntExpr::parse_part_custom(text.as_bytes(), &mut parser)
+        .map_err(|e| e.into())
+        .and_then(|x| {
+            // Bit unideal to have to scan rest of the text to prove it's utf8 again
+            // but of well.
+            if let Ok(rest) = std::str::from_utf8(x.1) {
+                Ok((x.0, rest))
+            } else {
+                Err(anyhow!("Failed to parse expression at '{}'", String::from_utf8_lossy(x.1)))
+            }
+        })
+}
+
 pub fn parse_bool_expr(text: &str) -> Result<BoolExpr, Error> {
     let mut parser = ExprParser {
     };
@@ -99,12 +120,20 @@ pub fn parse_bool_expr(text: &str) -> Result<BoolExpr, Error> {
 
 pub trait ExprExt {
     type Ret;
-    fn eval_unit(&self, unit: bw_dat::Unit, game: Game) -> Self::Ret;
+    fn eval_unit(&self, unit: bw_dat::Unit, game: Game) -> Self::Ret {
+        self.eval_unit_weapon(unit, game, None)
+    }
+    fn eval_unit_weapon(
+        &self,
+        unit: bw_dat::Unit,
+        game: Game,
+        weapon: Option<WeaponId>,
+    ) -> Self::Ret;
 }
 
 impl ExprExt for BoolExpr {
     type Ret = bool;
-    fn eval_unit(&self, unit: bw_dat::Unit, game: Game) -> bool {
+    fn eval_unit_weapon(&self, unit: bw_dat::Unit, game: Game, weapon: Option<WeaponId>) -> bool {
         let mut ctx = bw_dat::expr::EvalCtx {
             unit: Some(unit),
             game: Some(game),
@@ -117,6 +146,7 @@ impl ExprExt for BoolExpr {
             },
             custom: CustomCtx {
                 unit: Some(unit),
+                weapon,
             },
         };
         ctx.eval_bool(self)
@@ -125,7 +155,8 @@ impl ExprExt for BoolExpr {
 
 impl ExprExt for IntExpr {
     type Ret = i32;
-    fn eval_unit(&self, unit: bw_dat::Unit, game: Game) -> i32 {
+
+    fn eval_unit_weapon(&self, unit: bw_dat::Unit, game: Game, weapon: Option<WeaponId>) -> i32 {
         let mut ctx = bw_dat::expr::EvalCtx {
             unit: Some(unit),
             game: Some(game),
@@ -138,6 +169,7 @@ impl ExprExt for IntExpr {
             },
             custom: CustomCtx {
                 unit: Some(unit),
+                weapon,
             },
         };
         ctx.eval_int(self)
@@ -146,6 +178,7 @@ impl ExprExt for IntExpr {
 
 pub struct CustomCtx {
     unit: Option<Unit>,
+    weapon: Option<WeaponId>,
 }
 
 impl bw_dat::expr::CustomEval for CustomCtx {
@@ -158,6 +191,13 @@ impl bw_dat::expr::CustomEval for CustomCtx {
                     unsafe { samase::unit_max_energy(*unit) as i32 }
                 } else {
                     0
+                }
+            }
+            Int::WeaponId => {
+                if let Some(weapon) = self.weapon {
+                    weapon.0 as i32
+                } else {
+                    -1
                 }
             }
             Int::UnitExt(field_id) => {

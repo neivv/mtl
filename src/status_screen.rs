@@ -11,7 +11,7 @@ use bw_dat::{Game, Unit, UnitId, WeaponId, unit, upgrade};
 
 use crate::bw;
 use crate::config::{self, Config};
-use crate::expr::{BoolExpr, ExprExt, parse_bool_expr};
+use crate::expr::{BoolExpr, IntExpr, ExprExt, parse_bool_expr, parse_int_expr_allow_trailing_text};
 use crate::string_tables::{self, StringTable};
 use crate::tooltip::{self, TooltipDrawFunc};
 
@@ -151,8 +151,10 @@ enum TooltipPart {
     Text(String),
     Unit(UnitVariable, Option<UnitId>),
     Weapon(WeaponVariable, Option<WeaponId>),
+    Expression(IntExpr, Vec<(i32, Tooltip)>, Option<Tooltip>),
 }
 
+#[derive(Eq, PartialEq, Debug)]
 struct Tooltip {
     parts: Vec<TooltipPart>,
 }
@@ -441,12 +443,7 @@ impl Tooltip {
                         add_text(&mut parts, "{");
                         text = &text[2..];
                     } else {
-                        let end = match bytes.iter().position(|&x| x == b'}') {
-                            Some(s) => s,
-                            None => {
-                                return Err(anyhow!("Unmatched {{. Use {{{{ if you want the text to have a single {{"));
-                            }
-                        };
+                        let end = find_end_brace(bytes)?;
                         let var = &text[1..end];
                         let var = parse_var(var)?;
                         parts.push(var);
@@ -595,9 +592,52 @@ impl Tooltip {
                         }
                     }
                 }
+                TooltipPart::Expression(expr, cases, default) => {
+                    let value = expr.eval_unit_weapon(unit, game, weapon);
+                    let tooltip = match cases.iter().find(|x| x.0 == value) {
+                        Some(s) => Some(&s.1),
+                        None => default.as_ref(),
+                    };
+                    if let Some(tooltip) = tooltip {
+                        tooltip.format(game, stat_txt, unit, weapon, out);
+                    } else {
+                        let _ = write!(out, "{}", value);
+                    }
+                }
             }
         }
     }
+}
+
+/// Bytes should be at initial {
+/// Considers inner {}, returns index of the },
+/// and ignores {{ and }}
+fn find_end_brace(bytes: &[u8]) -> Result<usize, Error> {
+    debug_assert!(bytes[0] == b'{');
+    let mut pos = 1;
+    let mut stack = 0;
+    while let Some(&next) = bytes.get(pos) {
+        if next == b'}' {
+            if bytes.get(pos + 1).is_some_and(|&x| x == b'}') {
+                pos += 2;
+                continue;
+            } else {
+                if stack == 0 {
+                    return Ok(pos);
+                }
+                stack -= 1;
+            }
+        } else if next == b'{' {
+            if bytes.get(pos + 1).is_some_and(|&x| x == b'{') {
+                pos += 2;
+                continue;
+            } else {
+                stack += 1;
+            }
+        }
+        pos += 1;
+    }
+    Err(anyhow!("Unmatched {{. Use {{{{ if you want the text to have a single {{"))
 }
 
 fn init_name_string<'a>(buf: &'a mut [u8; 32], base: &[u8], value: u8) -> &'a [u8] {
@@ -680,6 +720,9 @@ fn parse_var(var: &str) -> Result<TooltipPart, Error> {
         Weapon(WeaponVariable),
         Unit(UnitVariable),
     }
+    if var.starts_with("expr") {
+        return parse_expr(var);
+    }
     let (name, id) = match var.as_bytes().iter().position(|&x| x == b'@') {
         Some(s) => (&var[..s], Some(config::parse_u16(&var[s + 1..])?)),
         None => (var, None)
@@ -707,6 +750,48 @@ fn parse_var(var: &str) -> Result<TooltipPart, Error> {
         Var::Unit(var) => Ok(TooltipPart::Unit(var, id.map(|x| UnitId(x)))),
         Var::Weapon(var) => Ok(TooltipPart::Weapon(var, id.map(|x| WeaponId(x)))),
     }
+}
+
+#[cold]
+fn expected(text: &str, what: &str) -> Error {
+    anyhow!("Expected {what} at '{text}'")
+}
+
+fn parse_expr(text: &str) -> Result<TooltipPart, Error> {
+    let text = text.strip_prefix("expr")
+        .ok_or_else(|| expected(text, "expr"))?;
+    let text = text.trim_ascii_start();
+    let text = text.strip_prefix("(")
+        .ok_or_else(|| expected(text, "("))?;
+    let (expr, text) = parse_int_expr_allow_trailing_text(text)?;
+    let text = text.trim_ascii_start();
+    let text = text.strip_prefix(")")
+        .ok_or_else(|| expected(text, "')' after expression"))?;
+    let mut default = None;
+    let mut cases = Vec::new();
+    for case in text.split(",") {
+        if case.is_empty() {
+            continue;
+        }
+        if let Some((key, val)) = case.split_once('=') {
+            let key = key.trim_ascii();
+            let val = val.trim_ascii();
+            let child_tooltip = Tooltip::parse(val)?;
+            if key == "*" {
+                default = Some(child_tooltip);
+            } else {
+                let num = key.parse::<i32>()
+                    .map_err(|_| expected(key, "integer constant"))?;
+                cases.push((num, child_tooltip));
+            }
+        } else {
+            if case.trim_ascii().is_empty() {
+                continue;
+            }
+            return Err(anyhow!("Expected 'value = text', got '{}'", case));
+        }
+    }
+    Ok(TooltipPart::Expression(expr, cases, default))
 }
 
 #[test]
@@ -744,5 +829,45 @@ fn tooltip_vars() {
         TooltipPart::Weapon(WeaponVariable::DamageType, Some(WeaponId(50))),
         TooltipPart::Text(", ".into()),
         TooltipPart::Unit(UnitVariable::BaseArmor, Some(UnitId(1))),
+    ]);
+}
+
+#[test]
+fn tooltip_exprs() {
+    use crate::expr::parse_int_expr;
+    let tooltip = Tooltip::parse("Color: {expr(player),0=red,1 = blue}").unwrap();
+    let player = parse_int_expr("player").unwrap();
+    let cases = vec![
+        (0, Tooltip { parts: vec![TooltipPart::Text("red".into())] }),
+        (1, Tooltip { parts: vec![TooltipPart::Text("blue".into())] }),
+    ];
+    assert_eq!(tooltip.parts, vec![
+        TooltipPart::Text("Color: ".into()),
+        TooltipPart::Expression(player, cases, None),
+    ]);
+
+    let tooltip = Tooltip::parse(
+        "Color: {expr(player),5 = blue ,0=red? {expr(player)},1 = blue, * = idk {expr(player)} }"
+    ).unwrap();
+    let player = parse_int_expr("player").unwrap();
+    let cases = vec![
+        (5, Tooltip { parts: vec![TooltipPart::Text("blue".into())] }),
+        (0, Tooltip {
+            parts: vec![
+                TooltipPart::Text("red? ".into()),
+                TooltipPart::Expression(parse_int_expr("player").unwrap(), vec![], None),
+            ],
+        }),
+        (1, Tooltip { parts: vec![TooltipPart::Text("blue".into())] }),
+    ];
+    let default = Tooltip {
+        parts: vec![
+            TooltipPart::Text("idk ".into()),
+            TooltipPart::Expression(parse_int_expr("player").unwrap(), vec![], None),
+        ],
+    };
+    assert_eq!(tooltip.parts, vec![
+        TooltipPart::Text("Color: ".into()),
+        TooltipPart::Expression(player, cases, Some(default)),
     ]);
 }
