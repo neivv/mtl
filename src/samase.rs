@@ -390,6 +390,12 @@ static KILL_UNIT: AtomicUsize = AtomicUsize::new(0);
 static UNIT_SET_HP: AtomicUsize = AtomicUsize::new(0);
 static UNIT_MAX_ENERGY: AtomicUsize = AtomicUsize::new(0);
 
+static FUNCS: &[(&AtomicUsize, FuncId)] = &[
+    (&KILL_UNIT, FuncId::KillUnit),
+    (&UNIT_SET_HP, FuncId::UnitSetHp),
+    (&UNIT_MAX_ENERGY, FuncId::UnitMaxEnergy),
+];
+
 #[inline]
 fn load_func<T: Copy>(global: &AtomicUsize) -> T {
     let value = global.load(Ordering::Relaxed);
@@ -397,6 +403,24 @@ fn load_func<T: Copy>(global: &AtomicUsize) -> T {
     assert!(mem::size_of::<T>() == mem::size_of::<fn()>());
     unsafe {
         mem::transmute_copy(&value)
+    }
+}
+
+unsafe fn init_funcs(api: *const samase_plugin::PluginApi) {
+    let max_func = FUNCS.iter().map(|x| x.1 as u16).max().unwrap_or(0);
+    if max_func >= (*api).max_func_id {
+        fatal(&format!(
+            "Newer samase is required. (Largest function id is {}, this plugin requires {})",
+            (*api).max_func_id, max_func,
+        ));
+    }
+    for &(global, func_id) in FUNCS {
+        let func = ((*api).get_func)(func_id as u16);
+        if let Some(f) = func {
+            global.store(f as usize, Ordering::Relaxed);
+        } else {
+            fatal(&format!("Func {} not found", func_id as u16));
+        }
     }
 }
 
@@ -649,26 +673,7 @@ pub unsafe extern "C" fn samase_plugin_init(api: *const samase_plugin::PluginApi
     SET_SPRITE_POS.set_required(((*api).set_sprite_position)());
     ADD_OVERLAY_ISCRIPT.set_required(((*api).add_overlay_iscript)());
 
-    static FUNCS: &[(&AtomicUsize, FuncId)] = &[
-        (&KILL_UNIT, FuncId::KillUnit),
-        (&UNIT_SET_HP, FuncId::UnitSetHp),
-        (&UNIT_MAX_ENERGY, FuncId::UnitMaxEnergy),
-    ];
-    let max_func = FUNCS.iter().map(|x| x.1 as u16).max().unwrap_or(0);
-    if max_func >= (*api).max_func_id {
-        fatal(&format!(
-            "Newer samase is required. (Largest function id is {}, this plugin requires {})",
-            (*api).max_func_id, max_func,
-        ));
-    }
-    for &(global, func_id) in FUNCS {
-        let func = ((*api).get_func)(func_id as u16);
-        if let Some(f) = func {
-            global.store(f as usize, Ordering::Relaxed);
-        } else {
-            fatal(&format!("Func {} not found", func_id as u16));
-        }
-    }
+    init_funcs(api);
 
     if let Some(tunit) = read_file("game\\tunit.pcx") {
         if let Err(e) = crate::unit_pcolor_fix::init_unit_colors(&tunit) {
