@@ -92,7 +92,8 @@ impl TrackImageRender {
     pub unsafe fn mark_hp_bar(&self) {
         let old_len = self.old_command_count as usize;
         let new_len = (*self.draw_commands).draw_command_count as usize;
-        for cmd in &mut (*self.draw_commands).commands[old_len..new_len] {
+        let commands = &mut (*self.draw_commands).commands;
+        for cmd in &mut commands[old_len..new_len] {
             // Tells to not apply lighting later on at draw_hook
             cmd.shader_constants[3] = -4.0;
         }
@@ -101,7 +102,8 @@ impl TrackImageRender {
     pub unsafe fn set_multiply(&self, color: (f32, f32, f32)) {
         let old_len = self.old_command_count as usize;
         let new_len = (*self.draw_commands).draw_command_count as usize;
-        for cmd in &mut (*self.draw_commands).commands[old_len..new_len] {
+        let commands = &mut (*self.draw_commands).commands;
+        for cmd in &mut commands[old_len..new_len] {
             cmd.shader_constants[0] = color.0;
             cmd.shader_constants[1] = color.1;
             cmd.shader_constants[2] = color.2;
@@ -111,7 +113,8 @@ impl TrackImageRender {
     pub unsafe fn set_player_color(&self, color: (f32, f32, f32)) {
         let old_len = self.old_command_count as usize;
         let new_len = (*self.draw_commands).draw_command_count as usize;
-        for cmd in &mut (*self.draw_commands).commands[old_len..new_len] {
+        let commands = &mut (*self.draw_commands).commands;
+        for cmd in &mut commands[old_len..new_len] {
             cmd.shader_constants[8] = color.0;
             cmd.shader_constants[9] = color.1;
             cmd.shader_constants[10] = color.2;
