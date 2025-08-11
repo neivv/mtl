@@ -38,9 +38,14 @@ smallvec = "1.0"
 thread_local = "1.0"
 vec_map = "0.8.0"
 
-[dependencies.winapi]
-version = "0.3"
-features = ["heapapi", "processthreadsapi", "sysinfoapi", "winuser", "winerror"]
+[dependencies.windows-sys]
+version = "0.60"
+features = [
+    "Win32_System_Memory",
+    "Win32_System_Threading",
+    "Win32_System_SystemInformation",
+    "Win32_UI_WindowsAndMessaging",
+]
 
 [target.'cfg(target_arch = "x86")'.dependencies.samase_shim]
 git = "https://github.com/neivv/samase_plugin"
@@ -63,9 +68,10 @@ rev = "2d1adbae09d75bdaa2af65b0af12760740cd3d2b"
 version = "0.2.0"
 features = ["serde1"]
 
-[build-dependencies]
-scopeguard = "1.1"
-
-[build-dependencies.winapi]
-version = "0.3"
-features = ["d3dcompiler"]
+[build-dependencies.windows]
+version = "0.61"
+features = [
+    "Win32_Graphics",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D_Fxc",
+]

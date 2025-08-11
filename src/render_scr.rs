@@ -129,7 +129,7 @@ impl TrackImageRender {
 }
 
 unsafe fn heap_alloc(data: &[u8], out_size: *mut u32) -> *mut u8 {
-    use winapi::um::heapapi::{GetProcessHeap, HeapAlloc};
+    use windows_sys::Win32::System::Memory::{GetProcessHeap, HeapAlloc};
     let out = HeapAlloc(GetProcessHeap(), 0, data.len()) as *mut u8;
     *out_size = data.len() as u32;
     std::ptr::copy_nonoverlapping(data.as_ptr(), out, data.len());

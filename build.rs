@@ -1,12 +1,14 @@
+use std::cell::RefCell;
 use std::fs;
+use std::ffi::c_void;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::ptr::{null, null_mut};
 
-use winapi::um::d3dcompiler::*;
-use winapi::um::d3dcommon::*;
-use winapi::um::winnt::HRESULT;
-use winapi::shared::winerror::{E_FAIL, S_OK};
+use windows::core::{PCSTR};
+use windows::Win32::Graphics::Direct3D::*;
+use windows::Win32::Graphics::Direct3D::Fxc::*;
+use windows::Win32::Foundation::{E_FAIL};
 
 static SOURCES: &[(&str, &str, &[(&str, &str)])] = &[
     ("water", "water.hlsl", &[]),
@@ -89,162 +91,136 @@ fn compile(bytes: &[u8], in_defines: &[(&str, &str)], model: ShaderModel) -> io:
             let name = format!("{}\0", name);
             let val = format!("{}\0", val);
             defines.push(D3D_SHADER_MACRO {
-                Name: name.as_ptr() as *const i8,
-                Definition: val.as_ptr() as *const i8,
+                Name: PCSTR(name.as_ptr()),
+                Definition: PCSTR(val.as_ptr()),
             });
             strings.push(name);
             strings.push(val);
         }
         defines.push(D3D_SHADER_MACRO {
-            Name: null(),
-            Definition: null(),
+            Name: PCSTR(null()),
+            Definition: PCSTR(null()),
         });
-        let mut code = null_mut();
-        let mut errors = null_mut();
+        let mut code = None;
+        let mut errors = None;
         let include = IncludeHandler::new(Path::new("src/shaders/d3d11").into());
+        let include = ID3DInclude::new(&include);
         let model_string = match model {
-            ShaderModel::Sm4 => "ps_4_0\0".as_ptr() as *const i8,
-            ShaderModel::Sm5 => "ps_5_0\0".as_ptr() as *const i8,
+            ShaderModel::Sm4 => windows::core::s!("ps_4_0"),
+            ShaderModel::Sm5 => windows::core::s!("ps_5_0"),
         };
         let error = D3DCompile2(
             bytes.as_ptr() as *const _,
             bytes.len(),
-            null(),
-            defines.as_ptr(),
-            include.0 as *mut ID3DInclude,
-            b"main\0".as_ptr() as *const i8,
+            None,
+            Some(defines.as_ptr()),
+            &*include,
+            windows::core::s!("main"),
             model_string,
             D3DCOMPILE_OPTIMIZATION_LEVEL3 | D3DCOMPILE_WARNINGS_ARE_ERRORS,
             0,
             0,
-            null(),
+            None,
             0,
             &mut code,
-            &mut errors,
+            Some(&raw mut errors),
         );
-        scopeguard::defer! {
-            if !code.is_null() {
-                (*code).Release();
-            }
-            if !errors.is_null() {
-                (*errors).Release();
-            }
-        }
-        if error != 0 {
-            if !errors.is_null() {
-                let errors = blob_to_bytes(errors);
+        if let Err(error) = error {
+            if let Some(errors) = errors {
+                let errors = blob_to_bytes(&errors);
                 println!("ERRORS:\n{}", String::from_utf8_lossy(&errors));
             }
-            return Err(io::Error::from_raw_os_error(error));
+            return Err(io::Error::from_raw_os_error(error.code().0));
         }
-        Ok(blob_to_bytes(code))
+        Ok(blob_to_bytes(code.as_ref().unwrap()))
     }
 }
 
 fn disassemble(bytes: &[u8]) -> io::Result<Vec<u8>> {
     unsafe {
-        let mut blob = std::ptr::null_mut();
-        let error = D3DDisassemble(
+        let result = D3DDisassemble(
             bytes.as_ptr() as *const _,
             bytes.len(),
             0,
-            b"\0".as_ptr() as *const _,
-            &mut blob,
+            windows::core::s!(""),
         );
-        if error != 0 {
-            return Err(io::Error::from_raw_os_error(error).into());
+        match result {
+            Ok(blob) => {
+                Ok(blob_to_bytes(&blob))
+            }
+            Err(error) => {
+                return Err(io::Error::from_raw_os_error(error.code().0).into());
+            }
         }
-        scopeguard::defer! {
-            (*blob).Release();
-        }
-        Ok(blob_to_bytes(blob))
     }
 }
 
-unsafe fn blob_to_bytes(blob: *mut ID3D10Blob) -> Vec<u8> {
+unsafe fn blob_to_bytes(blob: &ID3DBlob) -> Vec<u8> {
     let slice = std::slice::from_raw_parts(
-        (*blob).GetBufferPointer() as *const u8,
-        (*blob).GetBufferSize(),
+        blob.GetBufferPointer() as *const u8,
+        blob.GetBufferSize(),
     );
     slice.into()
 }
 
-static INCLUDE_VTABLE: ID3DIncludeVtbl = ID3DIncludeVtbl {
-    Open: IncludeHandler::open,
-    Close: IncludeHandler::close,
-};
-
-#[repr(C)]
 struct IncludeHandler {
-    interface: ID3DInclude,
     path: PathBuf,
-    buffers: Vec<Vec<u8>>,
-}
-
-struct IncludeHandlerHandle(*mut IncludeHandler);
-
-impl Drop for IncludeHandlerHandle {
-    fn drop(&mut self) {
-        unsafe { drop(Box::from_raw(self.0)); }
-    }
+    buffers: RefCell<Vec<Vec<u8>>>,
 }
 
 impl IncludeHandler {
-    fn new(path: PathBuf) -> IncludeHandlerHandle {
-        let ptr = Box::into_raw(Box::new(IncludeHandler {
-            interface: ID3DInclude {
-                lpVtbl: &INCLUDE_VTABLE,
-            },
+    fn new(path: PathBuf) -> IncludeHandler {
+        IncludeHandler {
             path,
-            buffers: Vec::new(),
-        }));
-        IncludeHandlerHandle(ptr)
+            buffers: RefCell::new(Vec::new()),
+        }
     }
+}
 
-    unsafe extern "system" fn open(
-        s: *mut ID3DInclude,
+impl ID3DInclude_Impl for IncludeHandler {
+    fn Open(
+        &self,
         _include_type: D3D_INCLUDE_TYPE,
-        filename: *const i8,
-        _parent_data: *const winapi::ctypes::c_void,
-        out_data: *mut *const winapi::ctypes::c_void,
+        filename: &PCSTR,
+        _parent_data: *const c_void,
+        out_data: *mut *mut c_void,
         out_size: *mut u32,
-    ) -> HRESULT {
-        *out_data = null_mut();
-        *out_size = 0;
-        let s = s as *mut IncludeHandler;
-        let filename_len = (0..).position(|i| *filename.add(i) == 0).unwrap();
-        let filename = std::slice::from_raw_parts(filename as *const u8, filename_len);
-        let filename = match std::str::from_utf8(filename) {
-            Ok(o) => o,
-            Err(_) => return E_FAIL,
-        };
-        let path = (*s).path.join(filename);
-        println!("cargo:rerun-if-changed={}", path.to_str().unwrap());
-        let result = match fs::read(&path) {
-            Ok(o) => o,
-            Err(e) => {
-                println!("Reading include {} failed: {:?}", path.display(), e);
-                return E_FAIL;
-            }
-        };
-        let ptr = result.as_ptr();
-        let len = result.len();
-        (*s).buffers.push(result);
-        *out_data = ptr as *const _;
-        *out_size = len as u32;
-        S_OK
+    ) -> Result<(), windows::core::Error> {
+        unsafe {
+            *out_data = null_mut();
+            *out_size = 0;
+            let filename = match filename.to_string() {
+                Ok(o) => o,
+                Err(_) => return Err(E_FAIL.into()),
+            };
+            let path = self.path.join(&filename);
+            println!("cargo:rerun-if-changed={}", path.to_str().unwrap());
+            let result = match fs::read(&path) {
+                Ok(o) => o,
+                Err(e) => {
+                    println!("Reading include {} failed: {:?}", path.display(), e);
+                    return Err(E_FAIL.into());
+                }
+            };
+            let ptr = result.as_ptr();
+            let len = result.len();
+            self.buffers.borrow_mut().push(result);
+            *out_data = ptr as *mut _;
+            *out_size = len as u32;
+            Ok(())
+        }
     }
 
-    unsafe extern "system" fn close(
-        s: *mut ID3DInclude,
-        data: *const winapi::ctypes::c_void,
-    ) -> HRESULT {
-        let s = s as *mut IncludeHandler;
-        let pos = match (*s).buffers.iter().position(|x| x.as_ptr() == data as *const u8) {
+    fn Close(
+        &self,
+        data: *const c_void,
+    ) -> Result<(), windows::core::Error> {
+        let mut buffers = self.buffers.borrow_mut();
+        let pos = match buffers.iter().position(|x| x.as_ptr() == data as *const u8) {
             Some(s) => s,
-            None => return E_FAIL,
+            None => return Err(E_FAIL.into()),
         };
-        (*s).buffers.swap_remove(pos);
-        S_OK
+        buffers.swap_remove(pos);
+        Ok(())
     }
 }

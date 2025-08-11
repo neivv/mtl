@@ -4,8 +4,8 @@ use std::ops;
 use std::ptr::{NonNull, null_mut};
 use std::sync::atomic::{AtomicUsize, AtomicU8, Ordering};
 
-use winapi::um::heapapi::{GetProcessHeap, HeapFree};
-use winapi::um::processthreadsapi::{GetCurrentProcess, TerminateProcess};
+use windows_sys::Win32::System::Memory::{GetProcessHeap, HeapFree};
+use windows_sys::Win32::System::Threading::{GetCurrentProcess, TerminateProcess};
 
 use samase_plugin::{FfiStr, FuncId, VarId};
 use bw_dat::{DatTable, ImageId, UnitId};
