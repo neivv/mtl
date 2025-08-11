@@ -1,7 +1,6 @@
+use std::ffi::c_void;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::ptr::null_mut;
-
-use libc::c_void;
 
 use crate::bw;
 use crate::config;

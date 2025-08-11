@@ -1,9 +1,8 @@
 use std::cell::RefCell;
+use std::ffi::c_void;
 use std::mem;
 use std::ptr::null_mut;
 use std::sync::{Mutex, MutexGuard};
-
-use libc::c_void;
 
 use bw_dat::{Game, Unit};
 

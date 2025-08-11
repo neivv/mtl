@@ -1,5 +1,4 @@
 #[macro_use] extern crate log;
-#[macro_use] extern crate scopeguard;
 #[macro_use] extern crate serde_derive;
 
 #[cfg(target_pointer_width = "32")]
@@ -47,7 +46,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(target_pointer_width = "32")]
 use std::sync::Mutex;
 
-use libc::c_void;
+use std::ffi::c_void;
 
 use bw_dat::{Game};
 

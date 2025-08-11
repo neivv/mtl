@@ -1,9 +1,8 @@
+use std::ffi::c_void;
 use std::mem;
 use std::ops;
 use std::ptr::{NonNull, null_mut};
 use std::sync::atomic::{AtomicUsize, AtomicU8, Ordering};
-
-use libc::c_void;
 
 use winapi::um::heapapi::{GetProcessHeap, HeapFree};
 use winapi::um::processthreadsapi::{GetCurrentProcess, TerminateProcess};

@@ -29,11 +29,9 @@ byteorder = "1.1"
 fern = "0.6"
 fxhash = "0.2"
 json = "0.12"
-libc = "0.2"
 log = "0.4"
 pcx = "0.2"
 rand = "0.7"
-scopeguard = "1.1"
 serde = "1.0.15"
 serde_derive = "1.0.15"
 smallvec = "1.0"
@@ -42,24 +40,24 @@ vec_map = "0.8.0"
 
 [dependencies.winapi]
 version = "0.3"
-features = ["heapapi", "libloaderapi", "processthreadsapi", "sysinfoapi", "winuser", "winerror"]
+features = ["heapapi", "processthreadsapi", "sysinfoapi", "winuser", "winerror"]
 
 [target.'cfg(target_arch = "x86")'.dependencies.samase_shim]
 git = "https://github.com/neivv/samase_plugin"
-rev = "e962ef0ed9e04298e78d052737462cbbf2c50b5d"
+rev = "a3fcdd6abf077589e24f1226e1749a19cb8ef26a"
 
 [dependencies.samase_plugin]
 git = "https://github.com/neivv/samase_plugin"
-rev = "e962ef0ed9e04298e78d052737462cbbf2c50b5d"
+rev = "a3fcdd6abf077589e24f1226e1749a19cb8ef26a"
 
 [dependencies.bw_dat]
 git = "https://github.com/neivv/aise"
-rev = "67fedb4fcc4554610ef101ccd7dfd34469fdc8ef"
+rev = "42fba4276cbe30e73baefc7f3ad07cadaa2aa2b1"
 features = ["serde"]
 
 [target.'cfg(target_arch = "x86")'.dependencies.whack]
 git = "https://github.com/neivv/whack/"
-rev = "ccd95f5cfa37622bc3ec3d4b0974ab9b631b59b2"
+rev = "2d1adbae09d75bdaa2af65b0af12760740cd3d2b"
 
 [dependencies.rand_xorshift]
 version = "0.2.0"

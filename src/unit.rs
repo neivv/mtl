@@ -1,4 +1,3 @@
-use std::hash::{Hash, Hasher};
 use std::ptr::null_mut;
 use std::sync::{Mutex, MutexGuard};
 
@@ -9,16 +8,7 @@ use crate::bw;
 use crate::samase;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct HashableUnit(pub Unit);
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct SerializableUnit(pub Unit);
-
-impl Hash for HashableUnit {
-    fn hash<H: Hasher>(&self, hasher: &mut H) {
-        hasher.write_usize((*self.0) as usize);
-    }
-}
 
 impl Serialize for SerializableUnit {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {

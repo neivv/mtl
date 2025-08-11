@@ -1,11 +1,10 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 
+use std::ffi::c_void;
 use std::ptr::null_mut;
 use std::slice;
 use std::sync::atomic::{AtomicUsize, Ordering};
-
-use libc::c_void;
 
 use crate::samase;
 

@@ -1,8 +1,7 @@
+use std::ffi::c_void;
 use std::ptr::null_mut;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard};
-
-use libc::c_void;
 
 use bw_dat::unit as unit_id;
 use bw_dat::{

@@ -1,8 +1,8 @@
+use std::ffi::c_void;
 use std::ptr::null_mut;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use byteorder::{ByteOrder, LittleEndian};
-use libc::c_void;
 
 use bw_dat::dialog::{Control, Dialog, Event, EventHandler};
 use bw_dat::{Game, unit, Unit, UnitId, order, OrderId, Sprite};
