@@ -19,7 +19,7 @@ pub unsafe fn images_dat_attack_overlay(
     let frame = (*image).frame;
     if let Some(ext_array) = bw_dat::extended_array(0x11) {
         // Read from samase extdat overlays
-        let index = image_id as usize * 6 + 1;
+        let index = image_id as usize * 6 + 0;
         let start = ext_array.pointer.cast::<usize>();
         let len = ext_array.end.cast::<usize>().offset_from_unsigned(start);
         if index >= len {
