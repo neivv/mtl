@@ -20,6 +20,10 @@ impl expr::CustomState for ExprState {
 #[derive(Debug, Eq, PartialEq, Hash)]
 pub enum Int {
     MaxEnergy,
+    /// Weapon id
+    AttackRange(Box<IntExpr>),
+    /// Ignore blind
+    SightRange(bool),
     /// Weapon id for weapon tooltips, -1 otherwise
     WeaponId,
     UnitExt(samase::ExtFieldId),
@@ -38,6 +42,12 @@ impl expr::CustomParser for ExprParser {
         if let Some(rest) = input.strip_prefix(b"max_energy") {
             return Some((Int::MaxEnergy, rest));
         }
+        if let Some(rest) = input.strip_prefix(b"sight_range_ignore_blind") {
+            return Some((Int::SightRange(true), rest));
+        }
+        if let Some(rest) = input.strip_prefix(b"sight_range") {
+            return Some((Int::SightRange(false), rest));
+        }
         if let Some(rest) = input.strip_prefix(b"weapon_id") {
             return Some((Int::WeaponId, rest));
         }
@@ -52,6 +62,20 @@ impl expr::CustomParser for ExprParser {
             let rest = rest.get(end + 1..)?;
             let id = samase::create_extended_unit_field(key);
             return Some((Int::UnitExt(id), rest));
+        }
+        if let Some(rest) = input.strip_prefix(b"attack_range") {
+            let rest = rest.trim_ascii_start();
+            let (first, rest) = rest.split_first()?;
+            if *first != b'(' {
+                return None;
+            }
+            let (expr, rest) = CustomIntExpr::parse_part_custom(rest, self).ok()?;
+            let rest = rest.trim_ascii_start();
+            let (first, rest) = rest.split_first()?;
+            if *first != b')' {
+                return None;
+            }
+            return Some((Int::AttackRange(Box::new(expr)), rest));
         }
         None
     }
@@ -89,10 +113,7 @@ pub fn parse_int_expr(text: &str) -> Result<IntExpr, Error> {
 }
 
 pub fn parse_int_expr_allow_trailing_text(text: &str) -> Result<(IntExpr, &str), Error> {
-    let mut parser = ExprParser {
-    };
-    CustomIntExpr::parse_part_custom(text.as_bytes(), &mut parser)
-        .map_err(|e| e.into())
+    parse_int_expr_allow_trailing_text_u8(text.as_bytes())
         .and_then(|x| {
             // Bit unideal to have to scan rest of the text to prove it's utf8 again
             // but of well.
@@ -102,6 +123,13 @@ pub fn parse_int_expr_allow_trailing_text(text: &str) -> Result<(IntExpr, &str),
                 Err(anyhow!("Failed to parse expression at '{}'", String::from_utf8_lossy(x.1)))
             }
         })
+}
+
+pub fn parse_int_expr_allow_trailing_text_u8(text: &[u8]) -> Result<(IntExpr, &[u8]), Error> {
+    let mut parser = ExprParser {
+    };
+    CustomIntExpr::parse_part_custom(text, &mut parser)
+        .map_err(|e| e.into())
 }
 
 pub fn parse_bool_expr(text: &str) -> Result<BoolExpr, Error> {
@@ -147,6 +175,7 @@ impl ExprExt for BoolExpr {
             custom: CustomCtx {
                 unit: Some(unit),
                 weapon,
+                game,
             },
         };
         ctx.eval_bool(self)
@@ -157,28 +186,38 @@ impl ExprExt for IntExpr {
     type Ret = i32;
 
     fn eval_unit_weapon(&self, unit: bw_dat::Unit, game: Game, weapon: Option<WeaponId>) -> i32 {
-        let mut ctx = bw_dat::expr::EvalCtx {
+        let custom = CustomCtx {
             unit: Some(unit),
-            game: Some(game),
-            map_tile_flags: if self.required_context()
+            weapon,
+            game,
+        };
+        custom.eval_i32(self)
+    }
+}
+
+#[derive(Clone)]
+pub struct CustomCtx {
+    unit: Option<Unit>,
+    weapon: Option<WeaponId>,
+    game: Game,
+}
+
+impl CustomCtx {
+    fn eval_i32(&self, int: &IntExpr) -> i32 {
+        let mut ctx = bw_dat::expr::EvalCtx {
+            unit: self.unit,
+            game: Some(self.game),
+            map_tile_flags: if int.required_context()
                 .contains(bw_dat::expr::RequiredContext::MAP_TILE_FLAGS)
             {
                 Some(bw::map_tile_flags())
             } else {
                 None
             },
-            custom: CustomCtx {
-                unit: Some(unit),
-                weapon,
-            },
+            custom: self.clone(),
         };
-        ctx.eval_int(self)
+        ctx.eval_int(int)
     }
-}
-
-pub struct CustomCtx {
-    unit: Option<Unit>,
-    weapon: Option<WeaponId>,
 }
 
 impl bw_dat::expr::CustomEval for CustomCtx {
@@ -199,6 +238,21 @@ impl bw_dat::expr::CustomEval for CustomCtx {
                 } else {
                     -1
                 }
+            }
+            Int::SightRange(ignore_blind) => {
+                if let Some(unit) = self.unit {
+                    unsafe { samase::unit_sight_range(*unit, ignore_blind) as i32 }
+                } else {
+                    -1
+                }
+            }
+            Int::AttackRange(ref weapon_id) => {
+                if let Some(unit) = self.unit {
+                    if let Some(weapon_id) = WeaponId::optional(self.eval_i32(weapon_id) as u32) {
+                        return unsafe { samase::unit_attack_range(*unit, weapon_id) as i32 };
+                    }
+                }
+                -1
             }
             Int::UnitExt(field_id) => {
                 if let Some(unit) = self.unit {

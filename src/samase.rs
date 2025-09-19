@@ -388,11 +388,15 @@ pub unsafe fn add_overlay_iscript(
 static KILL_UNIT: AtomicUsize = AtomicUsize::new(0);
 static UNIT_SET_HP: AtomicUsize = AtomicUsize::new(0);
 static UNIT_MAX_ENERGY: AtomicUsize = AtomicUsize::new(0);
+static UNIT_ATTACK_RANGE: AtomicUsize = AtomicUsize::new(0);
+static UNIT_SIGHT_RANGE: AtomicUsize = AtomicUsize::new(0);
 
 static FUNCS: &[(&AtomicUsize, FuncId)] = &[
     (&KILL_UNIT, FuncId::KillUnit),
     (&UNIT_SET_HP, FuncId::UnitSetHp),
     (&UNIT_MAX_ENERGY, FuncId::UnitMaxEnergy),
+    (&UNIT_ATTACK_RANGE, FuncId::UnitAttackRange),
+    (&UNIT_SIGHT_RANGE, FuncId::UnitSightRange),
 ];
 
 #[inline]
@@ -433,6 +437,16 @@ pub unsafe fn unit_set_hp(unit: *mut bw::Unit, value: i32) {
 
 pub unsafe fn unit_max_energy(unit: *mut bw::Unit) -> u32 {
     load_func::<unsafe extern "C" fn(*mut bw::Unit) -> u32>(&UNIT_MAX_ENERGY)(unit)
+}
+
+pub unsafe fn unit_attack_range(unit: *mut bw::Unit, weapon: bw_dat::WeaponId) -> u32 {
+    load_func::<unsafe extern "C" fn(*mut bw::Unit, u32) -> u32>(&UNIT_ATTACK_RANGE)
+        (unit, weapon.0 as u32)
+}
+
+pub unsafe fn unit_sight_range(unit: *mut bw::Unit, ignore_blind: bool) -> u32 {
+    load_func::<unsafe extern "C" fn(*mut bw::Unit, u32) -> u32>(&UNIT_SIGHT_RANGE)
+        (unit, ignore_blind as u32)
 }
 
 static GET_REGION: GlobalFunc<unsafe extern "C" fn(u32, u32) -> u32> = GlobalFunc::new();
