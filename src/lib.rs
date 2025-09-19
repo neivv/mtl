@@ -1,3 +1,5 @@
+#![allow(unsafe_op_in_unsafe_fn)]
+
 #[macro_use] extern crate log;
 #[macro_use] extern crate serde_derive;
 
@@ -111,9 +113,9 @@ fn is_scr() -> bool {
 }
 
 #[cfg(target_pointer_width = "32")]
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(non_snake_case)]
-pub extern fn Initialize() {
+pub extern "C" fn Initialize() {
     // 1.16.1 init
     unsafe {
         let f: fn() = || {

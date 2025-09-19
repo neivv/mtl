@@ -232,7 +232,7 @@ unsafe fn find_clicked_unit(search: &UnitSearch, player: u8, point: &bw::Point) 
             units.push((unit, sort_order));
         }
     }
-    let (mut best, mut best_sort_order) = units.first()?;
+    let &(mut best, mut best_sort_order) = units.first()?;
     let mut best_clickable_sort_order = (0, 0);
     let mut best_clickable = None;
     if is_clickable_pixel(best, point) {

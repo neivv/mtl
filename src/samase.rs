@@ -592,7 +592,7 @@ fn check_version(api_version: u16, required_version: u16) {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn samase_plugin_init(api: *const samase_plugin::PluginApi) {
     bw_dat::set_is_scr(crate::is_scr());
     crate::init();

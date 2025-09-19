@@ -405,7 +405,7 @@ impl Tooltip {
             // If the last part was already text merges with that
             let last_text = parts.last_mut()
                 .and_then(|part| match part {
-                    TooltipPart::Text(ref mut text) => Some(text),
+                    TooltipPart::Text(text) => Some(text),
                     _ => None,
                 });
             if let Some(last) = last_text {

@@ -156,11 +156,13 @@ fn disassemble(bytes: &[u8]) -> io::Result<Vec<u8>> {
 }
 
 unsafe fn blob_to_bytes(blob: &ID3DBlob) -> Vec<u8> {
-    let slice = std::slice::from_raw_parts(
-        blob.GetBufferPointer() as *const u8,
-        blob.GetBufferSize(),
-    );
-    slice.into()
+    unsafe {
+        let slice = std::slice::from_raw_parts(
+            blob.GetBufferPointer() as *const u8,
+            blob.GetBufferSize(),
+        );
+        slice.into()
+    }
 }
 
 struct IncludeHandler {
