@@ -716,10 +716,10 @@ pub unsafe extern "C" fn samase_plugin_init(api: *const samase_plugin::PluginApi
     plugin_api_hook(
         api,
         FuncId::ShowInfoMessageWithSound,
-        crate::show_info_message_with_sound_hook as usize,
+        crate::show_info_message_with_sound_hook as *const() as _,
     );
     if crate::is_scr() {
-        ((*api).hook_renderer)(0, mem::transmute(render_scr::draw_hook as usize));
+        ((*api).hook_renderer)(0, mem::transmute(render_scr::draw_hook as *const() as usize));
     }
 
     let mut do_run_dialog_hook = config.always_bw;
