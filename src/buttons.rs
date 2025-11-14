@@ -115,7 +115,7 @@ pub unsafe fn draw_tooltip_hook(
         if !ptr.is_null() {
             let button = ptr as *const bw::Button;
             let string_id = (*button).enabled_string_id;
-            if let Some(string) = stat_txt().by_index(string_id) {
+            if let Some(string) = stat_txt().by_index(string_id as u32) {
                 let is_train_string = string.as_bytes().get(1).filter(|&&c| c == 1).is_some();
                 let is_upgrade_string = string.as_bytes().get(1).filter(|&&c| c == 2).is_some();
                 if is_train_string && config.cmdbtn_tooltip_half_supply {
@@ -244,7 +244,7 @@ pub fn tooltip_text_hook(buffer: &mut ArrayVec<u8, 512>, draw: u32) -> bool {
         if pos == 1 {
             let string_id = MAIN_TEXT_STRING.load(Ordering::Relaxed);
             let stat_txt = stat_txt();
-            let string = stat_txt.by_index(string_id)
+            let string = stat_txt.by_index(string_id as u32)
                 .and_then(|x| x.get(2..))
                 .unwrap_or("???");
             let _ = write!(buffer, "{}", string);

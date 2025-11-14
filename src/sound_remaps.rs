@@ -4,34 +4,43 @@ use bw_dat::Unit;
 use fxhash::FxHashMap as HashMap;
 
 use crate::bw;
-use crate::config::{parse_u32};
+use crate::config::{ConfigNeedReinit, parse_u32};
 use crate::expr::{BoolExpr, ExprExt, parse_bool_expr};
 use crate::unit;
+use crate::string_tables;
 
+/// Also used for info msg remaps
 pub struct SoundRemaps {
     // !0 for no remap, !1 for conditional remaps
     simple: Vec<u32>,
     conditions: HashMap<u32, Vec<(u32, BoolExpr)>>,
+    name: &'static str,
 }
 
 impl SoundRemaps {
-    pub fn new() -> SoundRemaps {
+    pub fn new(name: &'static str) -> SoundRemaps {
         SoundRemaps {
             simple: Vec::new(),
             conditions: HashMap::default(),
+            name,
         }
     }
 
-    pub fn parse_config(&mut self, values: &[(String, String)]) -> Result<(), Error> {
+    pub fn parse_config(
+        &mut self,
+        values: &[(String, String)],
+    ) -> Result<ConfigNeedReinit, Error> {
+        let mut need_reinit = ConfigNeedReinit::No;
         for &(ref key, ref val) in values {
-            let source = parse_u32(key)
-                .with_context(|| format!("Invalid sound id \"{}\"", key))? as usize;
+            let source = self.parse_u32(key, &mut need_reinit)? as usize;
             let (val, condition) = match val.split_once(|x: char| x.is_whitespace()) {
                 Some((val, rest)) => {
                     let rest = rest.trim();
                     if let Some(rest) = rest.strip_prefix("if ") {
                         let condition = parse_bool_expr(rest)
-                            .with_context(|| format!("Invalid sound condition \"{}\"", rest))?;
+                            .with_context(|| {
+                                format!("Invalid {} condition \"{}\"", self.name, rest)
+                            })?;
                         (val, Some(condition))
                     } else {
                         return Err(anyhow!("Expected 'if' or nothing, got {rest}"));
@@ -39,8 +48,7 @@ impl SoundRemaps {
                 }
                 None => (&**val, None),
             };
-            let dest = parse_u32(val)
-                .with_context(|| format!("Invalid sound id \"{}\"", val))?;
+            let dest = self.parse_u32(val, &mut need_reinit)?;
             if self.simple.len() <= source {
                 self.simple.resize_with(source + 1, || !0);
             }
@@ -51,7 +59,30 @@ impl SoundRemaps {
                 self.simple[source] = dest;
             }
         }
-        Ok(())
+        Ok(need_reinit)
+    }
+
+    fn parse_u32(&self, val: &str, need_reinit: &mut ConfigNeedReinit) -> Result<u32, Error> {
+        let result = match parse_u32(val) {
+            Ok(o) => Ok(o),
+            Err(e) => {
+                if self.name == "message" {
+                    // Lookup stat_txt
+                    let stat_txt = string_tables::stat_txt();
+                    if !stat_txt.is_inited() {
+                        *need_reinit = ConfigNeedReinit::Yes;
+                        return Ok(0);
+                    }
+                    if let Some(val) = stat_txt.key_to_index(val.as_bytes()) {
+                        return Ok(val);
+                    }
+                } else {
+                    // Could lookup sfx.json but lazy
+                }
+                Err(e)
+            }
+        };
+        result.map_err(|_| anyhow!("Invalid {} id \"{}\"", self.name, val))
     }
 
     pub fn remap(&self, sound: u32, unit: Option<Unit>) -> u32 {

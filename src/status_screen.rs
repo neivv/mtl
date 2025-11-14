@@ -504,7 +504,7 @@ impl Tooltip {
                         }
                         UnitVariable::ArmorUpgrade => {
                             let upgrade_name = id.armor_upgrade()
-                                .and_then(|upgrade| stat_txt.by_index(upgrade.label() as u16))
+                                .and_then(|upgrade| stat_txt.by_index(upgrade.label()))
                                 .unwrap_or("???");
                             let _ = write!(out, "{}", upgrade_name);
                         }
@@ -551,7 +551,7 @@ impl Tooltip {
                     };
                     match *var {
                         WeaponVariable::WeaponName => {
-                            let name = stat_txt.by_index(id.label() as u16)
+                            let name = stat_txt.by_index(id.label())
                                 .unwrap_or("???");
                             let _ = write!(out, "{}", name);
                         }
@@ -562,7 +562,7 @@ impl Tooltip {
                         }
                         WeaponVariable::DamageUpgrade => {
                             let upgrade_name = id.upgrade()
-                                .and_then(|upgrade| stat_txt.by_index(upgrade.label() as u16))
+                                .and_then(|upgrade| stat_txt.by_index(upgrade.label()))
                                 .unwrap_or("???");
                             let _ = write!(out, "{}", upgrade_name);
                         }

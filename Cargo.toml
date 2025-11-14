@@ -1,6 +1,6 @@
 [package]
 name = "mtl"
-version = "0.3.76"
+version = "0.3.78"
 authors = ["Markus Heikkinen <ittevien@gmail.com>"]
 edition = "2024"
 
@@ -49,11 +49,11 @@ features = [
 
 [target.'cfg(target_arch = "x86")'.dependencies.samase_shim]
 git = "https://github.com/neivv/samase_plugin"
-rev = "a3fcdd6abf077589e24f1226e1749a19cb8ef26a"
+rev = "41e2098015ee56061a672a62ae3d85f3bb14d240"
 
 [dependencies.samase_plugin]
 git = "https://github.com/neivv/samase_plugin"
-rev = "a3fcdd6abf077589e24f1226e1749a19cb8ef26a"
+rev = "41e2098015ee56061a672a62ae3d85f3bb14d240"
 
 [dependencies.bw_dat]
 git = "https://github.com/neivv/aise"

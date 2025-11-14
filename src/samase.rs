@@ -638,8 +638,11 @@ pub unsafe extern "C" fn samase_plugin_init(api: *const samase_plugin::PluginApi
     bw_dat::init_orders(orders_dat as *const _, dat_len);
     ORDERS_DAT.store(orders_dat as usize, Ordering::Relaxed);
 
-    init_config(true, false);
-    //((*api).hook_on_first_file_access)(init_config);
+    crate::string_tables::init();
+    let reinit = init_config(true, true, false);
+    if reinit == config::ConfigNeedReinit::Yes {
+        ((*api).hook_on_first_file_access)(init_config_on_first_file_access);
+    }
     let config = config::config();
     let result = ((*api).hook_step_objects)(crate::frame_hook::frame_hook, 0);
     if result == 0 {
@@ -710,6 +713,11 @@ pub unsafe extern "C" fn samase_plugin_init(api: *const samase_plugin::PluginApi
 
     ((*api).hook_draw_image)(render::draw_image_hook);
     ((*api).hook_play_sound)(crate::play_sound_hook);
+    plugin_api_hook(
+        api,
+        FuncId::ShowInfoMessageWithSound,
+        crate::show_info_message_with_sound_hook as usize,
+    );
     if crate::is_scr() {
         ((*api).hook_renderer)(0, mem::transmute(render_scr::draw_hook as usize));
     }
@@ -753,6 +761,17 @@ pub unsafe extern "C" fn samase_plugin_init(api: *const samase_plugin::PluginApi
         if ok != 0 {
             ((*api).hook_draw_graphic_layers)(crate::tooltip::draw_graphic_layers_hook);
         }
+    }
+}
+
+unsafe fn plugin_api_hook(
+    api: *const samase_plugin::PluginApi,
+    func: FuncId,
+    f: usize,
+) {
+    let ok = ((*api).hook_func)(func as u16, f);
+    if ok == 0 {
+        error!("Failed to hook func {func:?}");
     }
 }
 
@@ -868,11 +887,28 @@ mod prism {
     }
 }
 
-pub unsafe fn init_config(exit_on_error: bool, load_map_ini: bool) {
+/// This needs to exist for config sections (info_message_remaps) that read stat_txt
+/// that may not be provided by user.
+pub unsafe extern "C" fn init_config_on_first_file_access() {
+    crate::string_tables::init();
+    let _ = init_config(false, true, false);
+}
+
+pub unsafe fn init_config(
+    for_patch: bool,
+    exit_on_error: bool,
+    load_map_ini: bool,
+) -> config::ConfigNeedReinit {
+    let ret;
     loop {
         match read_config(load_map_ini) {
-            Ok(o) => {
+            Ok((o, reinit)) => {
+                if !for_patch && reinit == config::ConfigNeedReinit::Yes {
+                    // ?? Reinit should only be needed when doing first patch load
+                    panic!("Some config files were not properly loaded (stat_txt error?)");
+                }
                 config::set_config(o);
+                ret = reinit;
                 break;
             }
             Err(msg) => {
@@ -881,14 +917,14 @@ pub unsafe fn init_config(exit_on_error: bool, load_map_ini: bool) {
                     if exit_on_error {
                         TerminateProcess(GetCurrentProcess(), 0x42302aef);
                     } else {
-                        return;
+                        return config::ConfigNeedReinit::No;
                     }
                 }
             }
         }
     }
     // Only load campaigns on init as they can't be patched afterwards (ithink?)
-    if exit_on_error {
+    if for_patch {
         loop {
             match read_campaign_ini() {
                 Ok(o) => {
@@ -903,16 +939,17 @@ pub unsafe fn init_config(exit_on_error: bool, load_map_ini: bool) {
                         if exit_on_error {
                             TerminateProcess(GetCurrentProcess(), 0x42302aef);
                         } else {
-                            return;
+                            return config::ConfigNeedReinit::No;
                         }
                     }
                 }
             }
         }
     }
+    ret
 }
 
-fn read_config(load_map_ini: bool) -> Result<config::Config, String> {
+fn read_config(load_map_ini: bool) -> Result<(config::Config, config::ConfigNeedReinit), String> {
     let config_slice = match read_file("samase/mtl.ini") {
         Some(s) => s,
         None => return Err(format!("Configuration file samase/mtl.ini not found.")),
@@ -924,15 +961,23 @@ fn read_config(load_map_ini: bool) -> Result<config::Config, String> {
         }
     }
     let mut config = config::Config::default();
+    let mut need_reinit = config::ConfigNeedReinit::No;
     let result = config.update(&config_slice)
-        .and_then(|()| {
+        .and_then(|reinit| {
+            need_reinit |= reinit;
             if let Some(map_ini) = read_map_file("samase\\mtl_map.ini") {
-                return config.update(&map_ini);
+                return match config.update(&map_ini) {
+                    Ok(reinit) => {
+                        need_reinit |= reinit;
+                        Ok(())
+                    }
+                    Err(e) => Err(e),
+                };
             }
             Ok(())
         });
     match result {
-        Ok(()) => Ok(config),
+        Ok(()) => Ok((config, need_reinit)),
         Err(e) => {
             use std::fmt::Write;
             let mut msg = String::new();

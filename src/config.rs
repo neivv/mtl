@@ -56,6 +56,7 @@ pub struct Config {
     pub always_bw: bool,
     // !0 for no override
     pub sound_remaps: SoundRemaps,
+    pub info_message_remaps: SoundRemaps,
     pub button_colors: Option<ButtonColors>,
     rallies: Rallies,
 }
@@ -97,6 +98,22 @@ pub enum OrderOrRclick {
     Order(OrderId),
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+#[must_use]
+pub enum ConfigNeedReinit {
+    /// Need to reload config after game files (stat_txt) become accessible
+    Yes,
+    No,
+}
+
+impl std::ops::BitOrAssign for ConfigNeedReinit {
+    fn bitor_assign(&mut self, rhs: Self) {
+        if rhs == ConfigNeedReinit::Yes {
+            *self = rhs;
+        }
+    }
+}
+
 impl Config {
     pub fn requires_rclick_hook(&self) -> bool {
         !self.rallies.can_rally.is_empty()
@@ -120,7 +137,8 @@ impl Config {
         self.status_screen_tooltips.has_any()
     }
 
-    pub fn update(&mut self, mut data: &[u8]) -> Result<(), Error> {
+    pub fn update(&mut self, mut data: &[u8]) -> Result<ConfigNeedReinit, Error> {
+        let mut need_reinit = ConfigNeedReinit::No;
         let error_invalid_field = |name: &'static str, val: &str| {
             anyhow!("Invalid field {} = {}", name, val)
         };
@@ -362,7 +380,9 @@ impl Config {
             } else if name == "aura" {
                 self.auras.parse_aura_config(&section.values)?;
             } else if name == "sound_remaps" {
-                self.sound_remaps.parse_config(&section.values)?;
+                need_reinit |= self.sound_remaps.parse_config(&section.values)?;
+            } else if name == "info_message_remaps" {
+                need_reinit |= self.info_message_remaps.parse_config(&section.values)?;
             } else if name.starts_with("upgrade") {
                 let mut tokens = name.split(".").skip(1);
                 let generic_error = || {
@@ -480,7 +500,7 @@ impl Config {
             (id as usize, upgrade)
         }).collect();
         self.upgrades.update(upgrades);
-        Ok(())
+        Ok(need_reinit)
     }
 }
 
@@ -502,7 +522,8 @@ impl Default for Config {
             lighting: None,
             button_colors: None,
             bunker_units: Vec::new(),
-            sound_remaps: SoundRemaps::new(),
+            sound_remaps: SoundRemaps::new("sound"),
+            info_message_remaps: SoundRemaps::new("message"),
             rallies: Rallies {
                 can_rally: Vec::new(),
                 default_order: None,
@@ -983,5 +1004,6 @@ source_condition = (upgrade(player, 57) == 2) && (ground_cooldown == 2)
 target_condition = (unit_id == 65 || unit_id == 66 || unit_id == 67 || unit_id == 68 || unit_id == 70 || unit_id == 71 || unit_id == 72 || unit_id == 73 || unit_id == 77 || unit_id == 78 || unit_id == 79 || unit_id == 80 || unit_id == 81 || unit_id == 82 || unit_id == 83 || unit_id == 86 || unit_id == 87 || unit_id == 88 || unit_id == 92)
     "###;
     let mut config = Config::default();
-    config.update(text).unwrap();
+    let need_reinit = config.update(text).unwrap();
+    assert!(need_reinit == ConfigNeedReinit::No);
 }

@@ -1,4 +1,4 @@
-use std::sync::{Arc, RwLock, RwLockReadGuard};
+use std::sync::{RwLock, RwLockReadGuard};
 
 use fxhash::FxHashMap;
 use json::JsonValue;
@@ -6,19 +6,27 @@ use json::JsonValue;
 use crate::samase;
 
 pub struct StringTable {
-    by_index: Vec<Option<Arc<String>>>,
+    by_index: Vec<Option<String>>,
     // Option to allow simple static construction
-    by_key: Option<FxHashMap<Vec<u8>, Arc<String>>>,
+    by_key: Option<FxHashMap<Vec<u8>, u32>>,
 }
 
 impl StringTable {
-    pub fn by_index(&self, index: u16) -> Option<&str> {
+    pub fn by_index(&self, index: u32) -> Option<&str> {
         // 0 is always null string wherever tbl indices are used.
-        self.by_index.get(index.checked_sub(1)? as usize).and_then(|x| x.as_ref()).map(|x| &***x)
+        self.by_index.get(index.checked_sub(1)? as usize).and_then(|x| x.as_ref()).map(|x| &**x)
+    }
+
+    pub fn key_to_index(&self, key: &[u8]) -> Option<u32> {
+        self.by_key.as_ref()?.get(key).copied()
     }
 
     pub fn by_key(&self, key: &[u8]) -> Option<&str> {
-        self.by_key.as_ref()?.get(key).map(|x| &***x)
+        self.by_index(self.key_to_index(key)?)
+    }
+
+    pub fn is_inited(&self) -> bool {
+        self.by_key.is_some()
     }
 }
 
@@ -123,9 +131,10 @@ pub fn init() {
         let key = obj.remove("Key").take_string();
         let val = obj.remove("Value").take_string();
         if let (Some(key), Some(val)) = (key, val) {
-            let val = Arc::new(val);
-            by_index.push(Some(val.clone()));
-            by_key.insert(key.into_bytes(), val);
+            by_index.push(Some(val));
+            // Indices start from 1, not 0
+            let index = u32::try_from(by_index.len()).unwrap();
+            by_key.insert(key.into_bytes(), index);
         } else {
             by_index.push(None);
         }

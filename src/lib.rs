@@ -253,7 +253,7 @@ unsafe fn fix_campaign_music(game: Game) {
 // During init_game pre hook that path is only valid if there is no save.
 unsafe extern "C" fn init_map_specific_dat(init_units: unsafe extern "C" fn()) {
     init_units();
-    crate::samase::init_config(false, true);
+    let _ = crate::samase::init_config(false, false, true);
     let config = config::config();
     if !config.map_dat_files.enable {
         return;
@@ -339,4 +339,22 @@ unsafe extern "C" fn play_sound_hook(
     } else {
         0
     }
+}
+
+unsafe extern "C" fn show_info_message_with_sound_hook(
+    player: u8,
+    sound: u32,
+    message: u32,
+    orig: unsafe extern "C" fn(u8, u32, u32),
+) {
+    if player != bw::local_player_id() || bw::is_replay() {
+        return;
+    }
+    // Don't remap sounds here, play_sound_hook will get called inside orig anyway
+    let message = {
+        let config = config::config();
+        // Unit = None causes remap to just pick some local player unit which works for this
+        config.info_message_remaps.remap(message, None)
+    };
+    orig(player, sound, message)
 }
