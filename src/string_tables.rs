@@ -54,7 +54,10 @@ fn fix_stat_txt_escapes(mut input: &[u8]) -> Vec<u8> {
             }
         };
         out.extend_from_slice(&input[..backslash_index + 1]);
-        if input.get(backslash_index + 1).cloned() == Some(b'\\') {
+        if let Some(text) = input.get(backslash_index + 1..backslash_index + 3) &&
+            text[0] == b'\\' &&
+            matches!(text[1], b'n' | b'u' | b'\\' | b'/' | b'b' | b'f' | b'r' | b't')
+        {
             input = &input[backslash_index + 2..];
         } else {
             input = &input[backslash_index + 1..];
@@ -74,7 +77,7 @@ fn test_fix_stat_txt_escapes() {
       {
         "id": "FIRST_UNIT_STRING-1",
         "Key": "FIRST_UNIT_STRING-1",
-        "Value": "Terran Ghost\\u0000*\\u0000Ground Units"
+        "Value": "Terran Ghost\\u0000*\\u0000Ground \\Units"
       },
     ]"#;
     let expected = br#"[
@@ -86,7 +89,7 @@ fn test_fix_stat_txt_escapes() {
       {
         "id": "FIRST_UNIT_STRING-1",
         "Key": "FIRST_UNIT_STRING-1",
-        "Value": "Terran Ghost\u0000*\u0000Ground Units"
+        "Value": "Terran Ghost\u0000*\u0000Ground \\Units"
       },
     ]"#;
     let fixed = fix_stat_txt_escapes(&text[..]);
