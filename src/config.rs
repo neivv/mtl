@@ -547,7 +547,7 @@ static CAMPAIGN: Mutex<Option<Arc<Campaign>>> = Mutex::new(None);
 fn bool_field(out: &mut bool, value: &str, field: &'static str) -> Result<(), Error> {
     match value {
         "true" | "True" | "1" | "y" | "Y" => *out = true,
-        "false" | "False" | "0" | "n" | "N" => *out = true,
+        "false" | "False" | "0" | "n" | "N" => *out = false,
         _ => {
             return Err(anyhow!("Invalid value `{}` for bool {}", value, field));
         }
